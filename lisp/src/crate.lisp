@@ -7,6 +7,12 @@
 ;;;
 ;;; All load/reload/restore paths serialize on *registry-lock*. Wrapper CALLS
 ;;; never take it: they only touch their immutable gen-ctx and per-cell locks.
+;;;
+;;; Generation commit is two-phase (DESIGN.md §8 M2, no half-generation ban):
+;;; PREPARE-BINDINGS does everything that can signal — symbol resolution,
+;;; ownership checks, wrapper compilation — then COMMIT-BINDINGS publishes,
+;;; with no signaling path. A bad manifest leaves the previous API fully
+;;; intact.
 
 (defclass crate ()
   ((name :initarg :name :reader crate-name)
@@ -15,6 +21,7 @@
    (lib-handle :initform nil :accessor crate-lib-handle)
    (prefix :initform nil :accessor crate-prefix)
    (manifest :initform nil :accessor crate-manifest)
+   (manifest-source :initform nil :accessor crate-manifest-source)
    (source-path :initform nil :accessor crate-source-path)
    (cache-path :initform nil :accessor crate-cache-path)
    (last-error-ptr :initform nil :accessor crate-last-error-ptr)
@@ -108,7 +115,7 @@ use but can still be freed."
                                         (get-universal-time))
                                 (cache-directory))))
     (uiop:copy-file path copy)
-    (multiple-value-bind (lib manifest)
+    (multiple-value-bind (lib manifest raw)
         (%open-and-verify provisional copy prefix-guess)
       (let ((canonical (manifest-crate manifest)))
         (when (and crate-arg
@@ -123,7 +130,7 @@ use but can still be freed."
                                               :name canonical
                                               :package (ensure-crate-package
                                                         (or package (string-upcase canonical))))))))
-          (%commit-generation crate path lib manifest copy)
+          (%commit-generation crate path lib manifest raw copy)
           crate)))))
 
 (defun %open-and-verify (display-name copy prefix)
@@ -136,39 +143,117 @@ use but can still be freed."
          (abi (cffi:foreign-funcall-pointer abi-ptr () :uint32)))
     (unless (= abi +abi-version+)
       (error 'abi-mismatch-error :expected +abi-version+ :actual abi))
-    (let ((manifest (%read-library-manifest lib prefix)))
+    (multiple-value-bind (manifest raw) (%read-library-manifest lib prefix)
       (unless (= (manifest-abi manifest) abi)
         (error 'abi-mismatch-error :expected abi :actual (manifest-abi manifest)
                                    :message "manifest :abi disagrees with abi_version()"))
-      (values lib manifest))))
+      (let ((target (manifest-target manifest)))
+        (when target
+          (multiple-value-bind (ok host) (target-compatible-p target)
+            (unless ok
+              (error 'abi-mismatch-error
+                     :expected host :actual target
+                     :message "artifact was built for a different target")))))
+      (values lib manifest raw))))
 
 (defun %read-library-manifest (lib prefix)
+  "Returns (values parsed-manifest raw-string). The raw string is kept for
+the golden-snapshot byte-identity gate (DESIGN.md §8 M3)."
   (let ((mptr (or (dlsym-ptr lib (concatenate 'string prefix "manifest"))
                   (error 'manifest-error
                          :message (format nil "no ~Amanifest symbol" prefix)))))
     (cffi:with-foreign-object (len 'uintptr)
-      (let ((sptr (cffi:foreign-funcall-pointer mptr () :pointer len :pointer)))
-        (parse-manifest (foreign-utf8 sptr (cffi:mem-ref len 'uintptr)))))))
+      (let* ((sptr (cffi:foreign-funcall-pointer mptr () :pointer len :pointer))
+             (raw (foreign-utf8 sptr (cffi:mem-ref len 'uintptr))))
+        (values (parse-manifest raw) raw)))))
 
-(defun %commit-generation (crate path lib manifest copy)
-  "Commit LIB as CRATE's next generation and regenerate all bindings from an
-immutable snapshot of the new generation's pointers."
-  (let ((gen (1+ (crate-generation crate))))
+(defun %commit-generation (crate path lib manifest raw copy)
+  "Commit LIB as CRATE's next generation. Phase 1 (everything that can
+signal) runs first against an immutable snapshot; only then are the crate's
+slots and the package mutated."
+  (let* ((gen (1+ (crate-generation crate)))
+         (prefix (manifest-prefix manifest))
+         (resolve (lambda (short)
+                    (let ((full (concatenate 'string prefix short)))
+                      (or (dlsym-ptr lib full)
+                          (error 'manifest-error
+                                 :message (format nil "symbol ~A not found in crate ~A"
+                                                  full (crate-name crate)))))))
+         (last-error-ptr (funcall resolve "last_error"))
+         (dealloc-ptr (funcall resolve "dealloc"))
+         (frees (loop for h in (manifest-handles manifest)
+                      collect (cons (handle-spec-rust-name h)
+                                    (funcall resolve (handle-spec-free h)))))
+         (ctx (%make-gen-ctx gen *session* last-error-ptr dealloc-ptr frees))
+         (prepared (prepare-bindings crate manifest ctx resolve)))
+    ;; Nothing below signals.
     (setf (crate-generation crate) gen
           (crate-lib-handle crate) lib
-          (crate-prefix crate) (manifest-prefix manifest)
+          (crate-prefix crate) prefix
           (crate-manifest crate) manifest
+          (crate-manifest-source crate) raw
           (crate-source-path crate) path
           (crate-cache-path crate) copy
-          (crate-last-error-ptr crate) (crate-resolve-symbol crate "last_error")
-          (crate-dealloc-ptr crate) (crate-resolve-symbol crate "dealloc")
-          (crate-handle-frees crate)
-          (loop for h in (manifest-handles manifest)
-                collect (cons (handle-spec-rust-name h)
-                              (crate-resolve-symbol crate (handle-spec-free h)))))
-    (regenerate-bindings crate)
+          (crate-last-error-ptr crate) last-error-ptr
+          (crate-dealloc-ptr crate) dealloc-ptr
+          (crate-handle-frees crate) frees)
+    (commit-bindings crate prepared)
     (%sweep-crate-cache (crate-name crate) copy)
     crate))
+
+(defun prepare-bindings (crate manifest ctx resolve)
+  "Phase 1 of binding generation: ownership checks, symbol resolution and
+wrapper compilation — everything that can signal. Mutates nothing except
+interning symbols (harmless). A failure leaves the crate's existing API
+fully intact (half-generated packages are banned — DESIGN.md §8 M2)."
+  (let* ((pkg (crate-package crate))
+         (class-name-for
+           (lambda (rust-name)
+             (let ((h (find rust-name (manifest-handles manifest)
+                            :key #'handle-spec-rust-name :test #'string=)))
+               (unless h
+                 (error 'manifest-error
+                        :message (format nil "unknown handle type ~S" rust-name)))
+               (intern (string-upcase (handle-spec-lisp-name h)) pkg))))
+         (classes
+           (loop for h in (manifest-handles manifest)
+                 for class-sym = (intern (string-upcase (handle-spec-lisp-name h)) pkg)
+                 ;; a shared :package must not let two crates silently share
+                 ;; one class — the class IS the type gate between families
+                 do (let ((owner (get class-sym '%rulisp-class-owner)))
+                      (when (and owner (string/= owner (crate-name crate)))
+                        (error 'manifest-error
+                               :message (format nil "handle class ~S already belongs to crate ~S"
+                                                class-sym owner))))
+                 collect class-sym))
+         (fns
+           (loop for f in (manifest-functions manifest)
+                 collect (let* ((sym (intern (string-upcase (fn-spec-lisp-name f)) pkg))
+                                (qualified (format nil "~(~A~):~(~A~)"
+                                                   (package-name pkg)
+                                                   (fn-spec-lisp-name f)))
+                                (fn-ptr (funcall resolve (fn-spec-symbol f)))
+                                (form (wrapper-form f class-name-for qualified)))
+                           (cons sym (funcall (compile nil form) crate ctx fn-ptr))))))
+    (list classes fns)))
+
+(defun commit-bindings (crate prepared)
+  "Phase 2: publish a prepared binding set. No signaling path in here.
+Wrappers of a previous generation are replaced; exports that vanished are
+fmakunbound."
+  (destructuring-bind (classes fns) prepared
+    (let ((pkg (crate-package crate)))
+      (dolist (class-sym classes)
+        (setf (get class-sym '%rulisp-class-owner) (crate-name crate))
+        (eval `(defclass ,class-sym (handle) ()))
+        (export class-sym pkg))
+      (let ((new-symbols (mapcar #'car fns)))
+        (loop for (sym . fn) in fns
+              do (setf (symbol-function sym) fn)
+                 (export sym pkg))
+        (dolist (sym (set-difference (crate-symbols crate) new-symbols))
+          (fmakunbound sym))
+        (setf (crate-symbols crate) new-symbols)))))
 
 (defun %sweep-crate-cache (name current-copy)
   "Delete this crate's older cache copies. Unlinking a still-mapped file is
@@ -179,68 +264,6 @@ OS processes reference no live mapping at all."
       (when (and (uiop:string-prefix-p prefix (file-namestring f))
                  (not (equal (namestring f) (namestring current-copy))))
         (ignore-errors (delete-file f))))))
-
-(defun crate-resolve-symbol (crate short-name)
-  "Resolve <prefix><short-name> against the crate's CURRENT dlopen handle
-only — never the global namespace (two generations export identical names)."
-  (let ((full (concatenate 'string (crate-prefix crate) short-name)))
-    (or (dlsym-ptr (crate-lib-handle crate) full)
-        (error 'manifest-error
-               :message (format nil "symbol ~A not found in crate ~A"
-                                full (crate-name crate))))))
-
-(defun make-wrapper (crate ctx fspec class-name-for)
-  "Compile FSPEC's wrapper and close it over CRATE, the immutable generation
-context CTX, and the fn pointer resolved against the generation being
-committed."
-  (let* ((qualified (format nil "~(~A~):~(~A~)"
-                            (package-name (crate-package crate))
-                            (fn-spec-lisp-name fspec)))
-         (fn-ptr (crate-resolve-symbol crate (fn-spec-symbol fspec)))
-         (form (wrapper-form fspec class-name-for qualified)))
-    (funcall (compile nil form) crate ctx fn-ptr)))
-
-(defun regenerate-bindings (crate)
-  "(Re)generate handle classes and wrapper functions from the crate's current
-manifest into its package. Wrappers of a previous generation are replaced;
-exports that vanished are fmakunbound."
-  (let* ((pkg (crate-package crate))
-         (manifest (crate-manifest crate))
-         (ctx (%make-gen-ctx (crate-generation crate)
-                             *session*
-                             (crate-last-error-ptr crate)
-                             (crate-dealloc-ptr crate)
-                             (crate-handle-frees crate)))
-         (class-name-for
-           (lambda (rust-name)
-             (let ((h (find rust-name (manifest-handles manifest)
-                            :key #'handle-spec-rust-name :test #'string=)))
-               (unless h
-                 (error 'manifest-error
-                        :message (format nil "unknown handle type ~S" rust-name)))
-               (intern (string-upcase (handle-spec-lisp-name h)) pkg))))
-         (old-symbols (crate-symbols crate))
-         (new-symbols '()))
-    (dolist (h (manifest-handles manifest))
-      (let* ((class-sym (intern (string-upcase (handle-spec-lisp-name h)) pkg))
-             (owner (get class-sym '%rulisp-class-owner)))
-        ;; a shared :package must not let two crates silently share one class
-        ;; — the class IS the type gate between handle families
-        (when (and owner (string/= owner (crate-name crate)))
-          (error 'manifest-error
-                 :message (format nil "handle class ~S already belongs to crate ~S"
-                                  class-sym owner)))
-        (setf (get class-sym '%rulisp-class-owner) (crate-name crate))
-        (eval `(defclass ,class-sym (handle) ()))
-        (export class-sym pkg)))
-    (dolist (f (manifest-functions manifest))
-      (let ((sym (intern (string-upcase (fn-spec-lisp-name f)) pkg)))
-        (setf (symbol-function sym) (make-wrapper crate ctx f class-name-for))
-        (export sym pkg)
-        (push sym new-symbols)))
-    (dolist (sym (set-difference old-symbols new-symbols))
-      (fmakunbound sym))
-    (setf (crate-symbols crate) new-symbols)))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Image dump / restore (DESIGN.md §6.5)

@@ -228,10 +228,18 @@ FSPEC against one immutable generation context."
              (body `(let ((%status ,call))
                       (if (zerop %status)
                           ,ok-form
-                          (signal-crate-status %status %ctx ,qualified
-                                               ,(if (plusp n-callbacks)
-                                                    '*callback-stash*
-                                                    nil)))))
+                          (restart-case
+                              (signal-crate-status %status %ctx ,qualified
+                                                   ,(if (plusp n-callbacks)
+                                                        '*callback-stash*
+                                                        nil))
+                            (use-value (%v)
+                              :report "Return a value from the call instead."
+                              :interactive (lambda ()
+                                             (format *query-io* "~&Value to return: ")
+                                             (finish-output *query-io*)
+                                             (list (read *query-io*)))
+                              %v)))))
              (body (funcall out-wrap body))
              (body (reduce (lambda (inner w) (funcall w inner))
                            wrappers :initial-value body)))

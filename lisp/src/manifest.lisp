@@ -91,6 +91,23 @@
      :lisp-name (%getf-string p :lisp-name)
      :free (%getf-string p :free))))
 
+(defun target-compatible-p (triple)
+  "Loose compatibility check between a Rust target TRIPLE and the running
+Lisp host: architecture and OS tokens must match; unknown tokens pass (we
+refuse only what we can positively identify as wrong). Returns
+(values ok-p host-description)."
+  (let* ((arch (subseq triple 0 (or (position #\- triple) (length triple))))
+         (arch-ok (cond ((string= arch "x86_64") (member :x86-64 *features*))
+                        ((string= arch "aarch64") (or (member :arm64 *features*)
+                                                      (member :aarch64 *features*)))
+                        (t t)))
+         (os-ok (cond ((search "linux" triple) (member :linux *features*))
+                      ((search "darwin" triple) (uiop:os-macosx-p))
+                      ((search "windows" triple) (uiop:os-windows-p))
+                      (t t))))
+    (values (and arch-ok os-ok t)
+            (format nil "~(~A ~A~)" (uiop:architecture) (uiop:operating-system)))))
+
 (defun parse-manifest (string)
   (let ((form (%sanitize (%safe-read string))))
     (unless (and (consp form) (eq (car form) :rulisp-manifest))

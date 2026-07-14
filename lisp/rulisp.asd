@@ -19,4 +19,5 @@
   :depends-on (#:rulisp #:fiveam)
   :pathname "../tests/suite/"
   :serial t
-  :components ((:file "m1")))
+  :components ((:file "m1")
+               (:file "m2")))
