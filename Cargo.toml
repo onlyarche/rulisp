@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rulisp",
+    "crates/rulisp-macros",
+    "crates/rulisp-runtime",
+    "tests/m1-handwritten",
+]

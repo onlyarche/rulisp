@@ -1,0 +1,11 @@
+[package]
+name = "rulisp-macros"
+version = "0.1.0"
+edition = "2021"
+description = "Proc-macros for rulisp glue crates (empty shell until M3)"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]

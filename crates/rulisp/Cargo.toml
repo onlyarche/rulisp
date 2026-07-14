@@ -1,0 +1,9 @@
+[package]
+name = "rulisp"
+version = "0.1.0"
+edition = "2021"
+description = "Write Rust, call it from Common Lisp: user-facing crate for rulisp glue crates"
+license = "MIT"
+
+[dependencies]
+rulisp-runtime = { path = "../rulisp-runtime" }

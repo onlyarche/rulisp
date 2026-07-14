@@ -1,0 +1,10 @@
+/target/
+tests/m1-handwritten/target/
+tests/m1-handwritten/target-abort-check/
+*.fasl
+*.fas
+*.lib
+*.o
+*.so
+*.dylib
+!tests/golden/*

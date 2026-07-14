@@ -1,0 +1,18 @@
+[package]
+name = "wordbag"
+version = "0.1.0"
+edition = "2021"
+description = "M1 ABI oracle: hand-written shims that #[rulisp::export] must reproduce in M3"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+# Flipped by the M1 live-reload test: rebuild with --features alt-greeting,
+# reload-crate, observe new behavior without restarting the Lisp image.
+alt-greeting = []
+
+[dependencies]
+rulisp = { path = "../../crates/rulisp" }
+rulisp-runtime = { path = "../../crates/rulisp-runtime" }
