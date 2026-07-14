@@ -1,0 +1,35 @@
+error[E0277]: `Rc<Vec<u8>>` cannot be shared between threads safely
+ --> tests/ui/non_send_handle.rs:7:12
+  |
+7 | pub struct Bad {
+  |            ^^^ `Rc<Vec<u8>>` cannot be shared between threads safely
+  |
+  = help: within `Bad`, the trait `Sync` is not implemented for `Rc<Vec<u8>>`
+note: required because it appears within the type `Bad`
+ --> tests/ui/non_send_handle.rs:7:12
+  |
+7 | pub struct Bad {
+  |            ^^^
+note: required by a bound in `HandleType`
+ --> src/lib.rs
+  |
+  | pub trait HandleType: Send + Sync + 'static {
+  |                              ^^^^ required by this bound in `HandleType`
+
+error[E0277]: `Rc<Vec<u8>>` cannot be sent between threads safely
+ --> tests/ui/non_send_handle.rs:7:12
+  |
+7 | pub struct Bad {
+  |            ^^^ `Rc<Vec<u8>>` cannot be sent between threads safely
+  |
+  = help: within `Bad`, the trait `Send` is not implemented for `Rc<Vec<u8>>`
+note: required because it appears within the type `Bad`
+ --> tests/ui/non_send_handle.rs:7:12
+  |
+7 | pub struct Bad {
+  |            ^^^
+note: required by a bound in `HandleType`
+ --> src/lib.rs
+  |
+  | pub trait HandleType: Send + Sync + 'static {
+  |                       ^^^^ required by this bound in `HandleType`

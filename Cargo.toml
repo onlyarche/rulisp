@@ -4,5 +4,9 @@ members = [
     "crates/rulisp",
     "crates/rulisp-macros",
     "crates/rulisp-runtime",
-    "tests/m1-handwritten",
+    "examples/wordbag",
 ]
+# tests/m1-handwritten (the ABI oracle) is deliberately NOT a member: it must
+# keep the package name "wordbag" (same artifact + manifest as the macro
+# version in examples/) and one workspace cannot hold two packages with one
+# name. It builds standalone via its own [workspace] table.

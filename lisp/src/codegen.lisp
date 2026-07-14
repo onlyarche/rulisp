@@ -11,12 +11,14 @@
 ;;; never mix generations inside a single call (confirmed-UB otherwise).
 
 (defstruct (gen-ctx (:constructor %make-gen-ctx
-                        (generation session last-error-ptr dealloc-ptr free-table)))
+                        (generation session last-error-ptr dealloc-ptr free-table
+                         error-conditions)))
   generation                 ; the generation this wrapper/ctx was born in
   session                    ; *session* at birth; gates dead-image closures
   last-error-ptr
   dealloc-ptr
-  free-table)                ; alist rust-name → birth generation's free shim
+  free-table                 ; alist rust-name → birth generation's free shim
+  error-conditions)          ; alist rust error type string → condition class symbol
 
 (defvar *live-callback* nil
   "Bound around a foreign call that passes a callback: the trampoline reads
@@ -258,7 +260,13 @@ FSPEC against one immutable generation context."
   (case status
     (1 (multiple-value-bind (type msg)
            (read-crate-last-error (gen-ctx-last-error-ptr ctx))
-         (error 'rust-error :rust-type type :message msg :function-name fn-name)))
+         ;; typed conditions: a rust error type listed in the manifest's
+         ;; :errors signals its generated condition class (subclass of
+         ;; rust-error), so handlers can discriminate without string checks
+         (let ((class (or (cdr (assoc type (gen-ctx-error-conditions ctx)
+                                      :test #'string=))
+                          'rust-error)))
+           (error class :rust-type type :message msg :function-name fn-name))))
     (2 (multiple-value-bind (type msg)
            (read-crate-last-error (gen-ctx-last-error-ptr ctx))
          (declare (ignore type))

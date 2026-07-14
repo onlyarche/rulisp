@@ -16,10 +16,15 @@ compile_error!(
      your Cargo profile."
 );
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicI64, Ordering};
+
+mod meta;
+pub use meta::{
+    render_manifest, FnMeta, HandleMeta, ParamMeta, ParamTy, ResultTy, TARGET,
+};
 
 /// Bumped only on a wire-format break of the C ABI protocol (DESIGN.md §4).
 pub const ABI_VERSION: u32 = 1;
@@ -72,6 +77,26 @@ pub unsafe fn read_last_error(
             *msg_len = e.1.len();
         }
     });
+}
+
+thread_local! {
+    // Set by Callback::call when the Lisp trampoline reports a stashed
+    // condition; cleared by the owning shim at entry. Lets the generated
+    // shim map a propagated CallbackError (`f.call(..)?`) to STATUS_CB_ERR
+    // so the CL wrapper re-signals the original condition (DESIGN.md §4.7).
+    static CB_TUNNEL: Cell<bool> = const { Cell::new(false) };
+}
+
+pub fn set_callback_tunnel() {
+    CB_TUNNEL.with(|c| c.set(true));
+}
+
+pub fn clear_callback_tunnel() {
+    CB_TUNNEL.with(|c| c.set(false));
+}
+
+pub fn callback_tunnel() -> bool {
+    CB_TUNNEL.with(|c| c.get())
 }
 
 /// Wraps a shim body: catches panics, records them in the last-error slot,

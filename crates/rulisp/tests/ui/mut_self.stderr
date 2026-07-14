@@ -1,0 +1,5 @@
+error: rulisp: &mut self methods are not supported (v1) — use interior mutability (Mutex/RwLock/atomics)
+  --> tests/ui/mut_self.rs:13:17
+   |
+13 |     pub fn bump(&mut self) {}
+   |                 ^

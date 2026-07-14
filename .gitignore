@@ -1,6 +1,8 @@
 /target/
 tests/m1-handwritten/target/
 tests/m1-handwritten/target-abort-check/
+examples/wordbag/target/
+examples/wordbag/target-abort-check/
 *.fasl
 *.fas
 *.lib

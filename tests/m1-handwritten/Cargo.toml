@@ -16,3 +16,7 @@ alt-greeting = []
 [dependencies]
 rulisp = { path = "../../crates/rulisp" }
 rulisp-runtime = { path = "../../crates/rulisp-runtime" }
+
+# standalone: kept out of the root workspace on purpose — the macro-based
+# examples/wordbag carries the same package name (see root Cargo.toml)
+[workspace]

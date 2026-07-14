@@ -1,0 +1,54 @@
+error[E0277]: `*const ()` cannot be sent between threads safely
+ --> tests/ui/stored_callback.rs:7:15
+  |
+7 | static STASH: Mutex<Option<Callback<'static, (&'static str,), ()>>> = Mutex::new(None);
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `*const ()` cannot be sent between threads safely
+  |
+  = help: within `Option<rulisp::Callback<'static, (&'static str,), ()>>`, the trait `Send` is not implemented for `*const ()`
+note: required because it appears within the type `rulisp::Callback<'static, (&'static str,), ()>`
+ --> src/lib.rs
+  |
+  | pub struct Callback<'a, A, R> {
+  |            ^^^^^^^^
+note: required because it appears within the type `Option<rulisp::Callback<'static, (&'static str,), ()>>`
+ --> $RUST/core/src/option.rs
+  = note: required for `std::sync::Mutex<Option<rulisp::Callback<'static, (&'static str,), ()>>>` to implement `Sync`
+  = note: shared static variables must have a type that implements `Sync`
+
+error[E0277]: `*mut ()` cannot be sent between threads safely
+ --> tests/ui/stored_callback.rs:7:15
+  |
+7 | static STASH: Mutex<Option<Callback<'static, (&'static str,), ()>>> = Mutex::new(None);
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `*mut ()` cannot be sent between threads safely
+  |
+  = help: within `Option<rulisp::Callback<'static, (&'static str,), ()>>`, the trait `Send` is not implemented for `*mut ()`
+  = note: required because it appears within the type `(*mut (), &'static (), fn((&'static str,)))`
+note: required because it appears within the type `PhantomData<(*mut (), &'static (), fn((&'static str,)))>`
+ --> $RUST/core/src/marker.rs
+note: required because it appears within the type `rulisp::Callback<'static, (&'static str,), ()>`
+ --> src/lib.rs
+  |
+  | pub struct Callback<'a, A, R> {
+  |            ^^^^^^^^
+note: required because it appears within the type `Option<rulisp::Callback<'static, (&'static str,), ()>>`
+ --> $RUST/core/src/option.rs
+  = note: required for `std::sync::Mutex<Option<rulisp::Callback<'static, (&'static str,), ()>>>` to implement `Sync`
+  = note: shared static variables must have a type that implements `Sync`
+
+error[E0521]: borrowed data escapes outside of function
+  --> tests/ui/stored_callback.rs:11:6
+   |
+10 | pub fn keep(f: Callback<(&str,), ()>) {
+   |             -
+   |             |
+   |             `f` is a reference that is only valid in the function body
+   |             has type `rulisp::Callback<'1, (&str,), ()>`
+11 |     *STASH.lock().unwrap() = Some(f);
+   |      ^^^^^^^^^^^^
+   |      |
+   |      `f` escapes the function body here
+   |      argument requires that `'1` must outlive `'static`
+   |
+   = note: requirement occurs because of the type `std::sync::Mutex<Option<rulisp::Callback<'_, (&str,), ()>>>`, which makes the generic argument `Option<rulisp::Callback<'_, (&str,), ()>>` invariant
+   = note: the struct `std::sync::Mutex<T>` is invariant over the parameter `T`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance

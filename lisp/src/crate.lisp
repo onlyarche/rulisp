@@ -184,7 +184,11 @@ slots and the package mutated."
          (frees (loop for h in (manifest-handles manifest)
                       collect (cons (handle-spec-rust-name h)
                                     (funcall resolve (handle-spec-free h)))))
-         (ctx (%make-gen-ctx gen *session* last-error-ptr dealloc-ptr frees))
+         (err-conds (loop for e in (manifest-errors manifest)
+                          collect (cons e (intern (camel-to-kebab e)
+                                                  (crate-package crate)))))
+         (ctx (%make-gen-ctx gen *session* last-error-ptr dealloc-ptr frees
+                             err-conds))
          (prepared (prepare-bindings crate manifest ctx resolve)))
     ;; Nothing below signals.
     (setf (crate-generation crate) gen
@@ -235,14 +239,19 @@ fully intact (half-generated packages are banned — DESIGN.md §8 M2)."
                                 (fn-ptr (funcall resolve (fn-spec-symbol f)))
                                 (form (wrapper-form f class-name-for qualified)))
                            (cons sym (funcall (compile nil form) crate ctx fn-ptr))))))
-    (list classes fns)))
+    (list classes fns (gen-ctx-error-conditions ctx))))
 
 (defun commit-bindings (crate prepared)
   "Phase 2: publish a prepared binding set. No signaling path in here.
 Wrappers of a previous generation are replaced; exports that vanished are
 fmakunbound."
-  (destructuring-bind (classes fns) prepared
+  (destructuring-bind (classes fns error-conditions) prepared
     (let ((pkg (crate-package crate)))
+      ;; typed condition classes from the manifest's :errors (M3): additive,
+      ;; each a subclass of rust-error so generic handlers keep working
+      (loop for (nil . cond-sym) in error-conditions
+            do (eval `(define-condition ,cond-sym (rust-error) ()))
+               (export cond-sym pkg))
       (dolist (class-sym classes)
         (setf (get class-sym '%rulisp-class-owner) (crate-name crate))
         (eval `(defclass ,class-sym (handle) ()))

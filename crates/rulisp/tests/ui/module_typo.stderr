@@ -1,0 +1,23 @@
+error[E0425]: cannot find value `__RULISP_META_GREEET` in this scope
+  --> tests/ui/module_typo.rs:9:1
+   |
+ 4 |   #[rulisp::export]
+   |   ----------------- similarly named constant `__RULISP_META_GREET` defined here
+...
+ 9 | / rulisp::module! {
+10 | |     name: "rulisp-tests",
+11 | |     handles: [],
+12 | |     fns: [greeet],
+13 | | }
+   | |_^
+   |
+   = note: this error originates in the macro `rulisp::module` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: a constant with a similar name exists
+   |
+ 9 - rulisp::module! {
+10 -     name: "rulisp-tests",
+11 -     handles: [],
+12 -     fns: [greeet],
+13 - }
+ 9 + __RULISP_META_GREET
+   |

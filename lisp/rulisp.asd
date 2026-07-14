@@ -20,4 +20,5 @@
   :pathname "../tests/suite/"
   :serial t
   :components ((:file "m1")
-               (:file "m2")))
+               (:file "m2")
+               (:file "m3")))

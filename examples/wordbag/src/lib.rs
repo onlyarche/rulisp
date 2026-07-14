@@ -1,0 +1,171 @@
+//! The macro-based twin of tests/m1-handwritten: plain Rust + rulisp macros,
+//! zero hand-written `extern "C"`. Must be observably identical to the
+//! oracle — same exported surface, same manifest bytes (tests/golden/).
+
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Mutex;
+
+use rulisp::prelude::*;
+
+/// Live WordBag instances (inc in constructor, dec in Drop): lets tests prove
+/// GC-driven finalization and deferred-free timing.
+static LIVE_WORD_BAGS: AtomicI64 = AtomicI64::new(0);
+
+/// Incremented by `CbGuard::drop`: proves Rust destructors run when a Lisp
+/// callback error unwinds `for_each_word` early.
+static CB_GUARD_DROPS: AtomicI64 = AtomicI64::new(0);
+
+// ---------------------------------------------------------------------------
+// Plain functions
+// ---------------------------------------------------------------------------
+
+#[rulisp::export]
+pub fn add(a: i64, b: i64) -> i64 {
+    a.wrapping_add(b)
+}
+
+#[rulisp::export]
+pub fn always_panic() {
+    panic!("boom: intentional panic from wordbag");
+}
+
+#[derive(Debug)]
+pub enum ParseError {
+    Invalid(String),
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::Invalid(s) => write!(f, "invalid digit found in string: {s:?}"),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+#[rulisp::export]
+pub fn parse_number(s: &str) -> Result<i64, ParseError> {
+    s.trim()
+        .parse()
+        .map_err(|_| ParseError::Invalid(s.to_owned()))
+}
+
+#[cfg(not(feature = "alt-greeting"))]
+const GREETING: &str = "Hello";
+#[cfg(feature = "alt-greeting")]
+const GREETING: &str = "Hi";
+
+#[rulisp::export]
+pub fn greet(name: &str) -> String {
+    format!("{GREETING}, {name}!")
+}
+
+#[rulisp::export]
+pub fn echo(s: &str) -> String {
+    s.to_owned()
+}
+
+// ---------------------------------------------------------------------------
+// WordBag handle
+// ---------------------------------------------------------------------------
+
+#[rulisp::handle]
+pub struct WordBag {
+    words: Mutex<Vec<String>>,
+}
+
+impl Drop for WordBag {
+    fn drop(&mut self) {
+        LIVE_WORD_BAGS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[rulisp::export]
+impl WordBag {
+    #[rulisp(constructor)]
+    pub fn new() -> WordBag {
+        LIVE_WORD_BAGS.fetch_add(1, Ordering::SeqCst);
+        WordBag {
+            words: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub fn add(&self, word: &str) -> Result<(), Error> {
+        if word.is_empty() {
+            return Err(Error::msg("empty word not allowed"));
+        }
+        self.words.lock().unwrap().push(word.to_owned());
+        Ok(())
+    }
+
+    pub fn len(&self) -> u64 {
+        self.words.lock().unwrap().len() as u64
+    }
+
+    /// Parks the caller inside a foreign call so tests can race rulisp:free
+    /// against an in-flight method.
+    pub fn slow_len(&self, millis: u64) -> u64 {
+        std::thread::sleep(std::time::Duration::from_millis(millis));
+        self.words.lock().unwrap().len() as u64
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Callback
+// ---------------------------------------------------------------------------
+
+struct CbGuard;
+
+impl Drop for CbGuard {
+    fn drop(&mut self) {
+        CB_GUARD_DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[rulisp::export]
+pub fn for_each_word(bag: &WordBag, f: Callback<(&str,), ()>) -> Result<u64, Error> {
+    let _guard = CbGuard;
+    // snapshot: never hold the Mutex across a callback — a reentrant
+    // word-bag-len on the same bag must not deadlock in Rust
+    let words: Vec<String> = bag.words.lock().unwrap().clone();
+    for w in &words {
+        f.call((w.as_str(),))?;
+    }
+    Ok(words.len() as u64)
+}
+
+// ---------------------------------------------------------------------------
+// Test-only introspection exports
+// ---------------------------------------------------------------------------
+
+#[rulisp::export]
+pub fn test_live_allocations() -> i64 {
+    rulisp::runtime::LIVE_ALLOCATIONS.load(Ordering::SeqCst)
+}
+
+#[rulisp::export]
+pub fn test_live_word_bags() -> i64 {
+    LIVE_WORD_BAGS.load(Ordering::SeqCst)
+}
+
+#[rulisp::export]
+pub fn test_cb_guard_drops() -> i64 {
+    CB_GUARD_DROPS.load(Ordering::SeqCst)
+}
+
+// ---------------------------------------------------------------------------
+// Module registry: entries are const paths — a typo is a compile error.
+// The fns order is the manifest order (byte-pinned by tests/golden/).
+// ---------------------------------------------------------------------------
+
+rulisp::module! {
+    name: "wordbag",
+    handles: [WordBag],
+    fns: [
+        add, always_panic, parse_number, greet, echo,
+        WordBag::new, WordBag::add, WordBag::len, WordBag::slow_len,
+        for_each_word,
+        test_live_allocations, test_live_word_bags, test_cb_guard_drops,
+    ],
+}

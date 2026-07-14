@@ -6,4 +6,8 @@ description = "Write Rust, call it from Common Lisp: user-facing crate for rulis
 license = "MIT"
 
 [dependencies]
+rulisp-macros = { path = "../rulisp-macros" }
 rulisp-runtime = { path = "../rulisp-runtime" }
+
+[dev-dependencies]
+trybuild = "1"

@@ -91,6 +91,15 @@
      :lisp-name (%getf-string p :lisp-name)
      :free (%getf-string p :free))))
 
+(defun camel-to-kebab (s)
+  "\"ParseError\" → \"PARSE-ERROR\" (condition class naming)."
+  (with-output-to-string (out)
+    (loop for ch across s
+          for i from 0
+          do (when (and (plusp i) (upper-case-p ch))
+               (write-char #\- out))
+             (write-char (char-upcase ch) out))))
+
 (defun target-compatible-p (triple)
   "Loose compatibility check between a Rust target TRIPLE and the running
 Lisp host: architecture and OS tokens must match; unknown tokens pass (we
