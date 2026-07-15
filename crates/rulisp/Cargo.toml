@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "Write Rust, call it from Common Lisp: user-facing crate for rulisp glue crates"
 license = "MIT"
+keywords = ["lisp", "common-lisp", "ffi", "bindings"]
+categories = ["development-tools::ffi"]
 
 [dependencies]
-rulisp-macros = { path = "../rulisp-macros" }
-rulisp-runtime = { path = "../rulisp-runtime" }
+rulisp-macros = { path = "../rulisp-macros", version = "0.1.0" }
+rulisp-runtime = { path = "../rulisp-runtime", version = "0.1.0" }
 
 [dev-dependencies]
 trybuild = "1"

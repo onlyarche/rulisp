@@ -3,6 +3,10 @@
 
 (require :asdf)
 
+#-quicklisp
+(let ((q (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+  (when (probe-file q) (load q)))
+
 (let* ((here (uiop:pathname-directory-pathname *load-truename*)) ; tests/
        (root (uiop:pathname-parent-directory-pathname here)))
   (push (merge-pathnames "lisp/" root) asdf:*central-registry*))

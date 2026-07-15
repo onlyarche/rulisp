@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Support runtime linked into every rulisp cdylib: status codes, last-error TLS, universal deallocator, shim helpers"
 license = "MIT"
+keywords = ["lisp", "common-lisp", "ffi"]
+categories = ["development-tools::ffi"]
 
 [dependencies]

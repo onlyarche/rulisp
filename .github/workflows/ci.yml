@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    name: cargo tests (golden manifest + trybuild)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace
+      - name: build the ABI oracle (standalone crate)
+        run: cargo build --manifest-path tests/m1-handwritten/Cargo.toml
+
+  sbcl-linux:
+    name: SBCL / Linux x86-64 (required)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y sbcl
+      - name: install quicklisp
+        run: |
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)'
+      - name: oracle gate (hand-written shims)
+        run: make test-m2
+      - name: full gate (macro pipeline + hardening)
+        run: make test-m4
+
+  ccl-linux:
+    name: CCL / Linux x86-64 (required)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: install ccl
+        run: |
+          curl -sL -o ccl.tar.gz https://github.com/Clozure/ccl/releases/download/v1.13/ccl-1.13-linuxx86.tar.gz
+          tar xzf ccl.tar.gz -C "$HOME"
+      - run: sudo apt-get update && sudo apt-get install -y sbcl # quicklisp installer convenience
+      - name: install quicklisp
+        run: |
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)'
+      - run: make test-ccl CCL="$HOME/ccl/lx86cl64"
+
+  sbcl-macos:
+    name: SBCL / macOS arm64 (required)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: brew install sbcl
+      - name: install quicklisp
+        run: |
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)'
+      - run: make test-m4
+
+  ecl-linux:
+    name: ECL / Linux (best-effort, may fail)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y ecl sbcl
+      - name: install quicklisp
+        run: |
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)'
+      - run: ecl --load tests/run-m4.lisp

@@ -238,7 +238,18 @@ fully intact (half-generated packages are banned — DESIGN.md §8 M2)."
                                                    (fn-spec-lisp-name f)))
                                 (fn-ptr (funcall resolve (fn-spec-symbol f)))
                                 (form (wrapper-form f class-name-for qualified)))
-                           (cons sym (funcall (compile nil form) crate ctx fn-ptr))))))
+                           ;; muffle forward-reference warnings: wrappers
+                           ;; mention handle classes that COMMIT defines later
+                           ;; (prepare must not mutate the package). Only
+                           ;; muffle when the restart exists — some hosts
+                           ;; signal warnings without it.
+                           (cons sym (funcall (handler-bind
+                                                  ((warning
+                                                     (lambda (w)
+                                                       (when (find-restart 'muffle-warning w)
+                                                         (muffle-warning w)))))
+                                                (compile nil form))
+                                              crate ctx fn-ptr))))))
     (list classes fns (gen-ctx-error-conditions ctx))))
 
 (defun commit-bindings (crate prepared)

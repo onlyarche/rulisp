@@ -16,6 +16,15 @@ test-m3:
 	$(CARGO) test --workspace
 	$(SBCL) --non-interactive --load tests/run-m3.lisp
 
+test-m4:
+	$(CARGO) test --workspace
+	$(SBCL) --non-interactive --load tests/run-m4.lisp
+
+# best-effort second implementation (download CCL, then: make test-ccl)
+CCL ?= $(HOME)/ccl/lx86cl64
+test-ccl:
+	$(CCL) --batch --load tests/run-m4.lisp
+
 clean:
 	$(CARGO) clean
 	rm -rf tests/m1-handwritten/target tests/m1-handwritten/target-abort-check

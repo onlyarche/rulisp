@@ -21,4 +21,5 @@
   :serial t
   :components ((:file "m1")
                (:file "m2")
-               (:file "m3")))
+               (:file "m3")
+               (:file "m4")))
