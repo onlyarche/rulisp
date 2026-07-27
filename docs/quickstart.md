@@ -7,12 +7,10 @@ snippet below is taken from a real session.
 
 ## Prerequisites
 
-- A Rust toolchain (`cargo` on PATH or in `~/.cargo/bin`)
-- SBCL (or CCL) with Quicklisp
-- This repository, with the `rulisp` ASDF system findable:
-  ```lisp
-  (push #p"/path/to/rulisp/lisp/" asdf:*central-registry*)
-  ```
+A Rust toolchain, SBCL (or CCL) with Quicklisp, and this repository set up
+so ASDF finds the `rulisp` system — full per-platform instructions
+(Linux/macOS, dependencies, troubleshooting) are in
+[installation.md](installation.md).
 
 ## 1. The glue crate
 
