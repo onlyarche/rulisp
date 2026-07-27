@@ -30,7 +30,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-rulisp = { path = "/path/to/rulisp/crates/rulisp" }  # or a crates.io version
+rulisp = "0.1"
 regex = "1"
 ```
 
