@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Proc-macros for rulisp glue crates: #[rulisp::handle], #[rulisp::export], rulisp::module!"
 license = "MIT"
+repository = "https://github.com/onlyarche/rulisp"
 keywords = ["lisp", "common-lisp", "ffi", "proc-macro"]
 categories = ["development-tools::ffi"]
 

@@ -81,7 +81,7 @@ Until the Quicklisp/Ultralisp registration lands, clone into Quicklisp's
 `local-projects` (ASDF finds `lisp/rulisp.asd` there automatically):
 
 ```sh
-git clone <repository-url> ~/quicklisp/local-projects/rulisp
+git clone https://github.com/onlyarche/rulisp ~/quicklisp/local-projects/rulisp
 ```
 
 then:
