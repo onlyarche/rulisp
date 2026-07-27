@@ -45,10 +45,8 @@ of the tested matrix.
 
 ## macOS
 
-> Status: expected to work (dylib naming, `:target` checks and the ad-hoc
-> code-signing done by Apple's linker are all accounted for), but not yet
-> CI-verified — reports welcome. On Apple Silicon use SBCL; Clozure CL has
-> no native arm64 macOS build.
+> Status: CI-verified on macOS arm64 with SBCL (full suite green). On
+> Apple Silicon use SBCL; Clozure CL has no native arm64 macOS build.
 
 ```sh
 # 1. linker (if you don't have Xcode CLT yet)

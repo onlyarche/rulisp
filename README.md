@@ -92,11 +92,11 @@ wrapping the real `regex` crate in 10 minutes (the finished example is
 
 ## Status
 
-v0.1.0. Tested: SBCL 2.1+ and Clozure CL 1.13 on Linux x86-64
-(101/99 checks green respectively — races, nested callbacks, reload,
-dump/restore, 10k-op fuzz). macOS is expected to work (target checks and
-dylib handling are in place) but not yet CI-verified. Windows: v1 does not
-support it.
+v0.1.0. CI-verified matrix: SBCL on Linux x86-64 and macOS arm64, and
+Clozure CL 1.13 on Linux x86-64 (races, nested callbacks, reload,
+dump/restore, 10k-op fuzz — all green). Known limitation: ECL currently
+segfaults on the callback path (best-effort target, under investigation).
+Windows: v1 does not support it.
 
 Requirements: a Rust toolchain (`cargo`), CFFI-capable Lisp, Quicklisp
 (deps: cffi, babel, trivial-garbage, bordeaux-threads).
