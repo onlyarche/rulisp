@@ -83,8 +83,11 @@ The hard problems are handled structurally, not by convention:
 - **Image dump/restore** (`save-lisp-and-die`) invalidates every pre-dump
   handle via a session counter and regenerates all bindings on startup.
 
-The full contract is in [BOUNDARY.md](BOUNDARY.md); architecture and
-rationale in [DESIGN.md](DESIGN.md) (Korean).
+**Start here: [docs/quickstart.md](docs/quickstart.md)** — wrapping the
+real `regex` crate in 10 minutes (the finished example is
+[`examples/rx/`](examples/rx/)). The full contract is in
+[BOUNDARY.md](BOUNDARY.md); architecture and rationale in
+[DESIGN.md](DESIGN.md) (Korean).
 
 ## Status
 
