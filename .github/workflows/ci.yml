@@ -78,4 +78,8 @@ jobs:
           curl -sO https://beta.quicklisp.org/quicklisp.lisp
           sbcl --non-interactive --load quicklisp.lisp \
                --eval '(quicklisp-quickstart:install)'
-      - run: ecl --load tests/run-m4.lisp
+      # ecl exits 0 even after landing in the debugger on EOF — require the
+      # suite's own summary line so a crashed run cannot show green
+      - run: |
+          ecl --norc --load tests/run-m4.lisp 2>&1 | tee ecl.log
+          grep -q "Pass: " ecl.log && ! grep -qE "Fail: *[1-9]" ecl.log

@@ -124,7 +124,15 @@
 
 (test fx.golden-manifest
   (ensure-crate)
-  (let ((golden (asdf:system-relative-pathname
-                 :rulisp "../tests/golden/wordbag.manifest.sexp")))
-    (is (string= (uiop:read-file-string golden)
+  ;; :target is host-dependent — golden was frozen on x86_64 Linux;
+  ;; substitute this build's target, compare everything else byte for byte
+  (let* ((golden (uiop:read-file-string
+                  (asdf:system-relative-pathname
+                   :rulisp "../tests/golden/wordbag.manifest.sexp")))
+         (target (rulisp::manifest-target
+                  (rulisp::crate-manifest rulisp/test::*crate*)))
+         (golden (if (search "x86_64-unknown-linux-gnu" golden)
+                     (string-replace-once "x86_64-unknown-linux-gnu" target golden)
+                     golden)))
+    (is (string= golden
                  (rulisp::crate-manifest-source rulisp/test::*crate*)))))

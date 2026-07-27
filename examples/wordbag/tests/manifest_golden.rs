@@ -3,7 +3,11 @@
 
 #[test]
 fn manifest_matches_golden() {
-    let golden = include_str!("../../../tests/golden/wordbag.manifest.sexp");
+    // :target is inherently host-dependent — the golden was frozen on
+    // x86_64 Linux; substitute the build target, everything else is
+    // compared byte for byte.
+    let golden = include_str!("../../../tests/golden/wordbag.manifest.sexp")
+        .replace("x86_64-unknown-linux-gnu", rulisp::runtime::TARGET);
     let rendered = wordbag::__rulisp_manifest_str();
     assert!(
         rendered == golden,

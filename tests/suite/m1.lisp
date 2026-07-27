@@ -284,6 +284,9 @@ generation let a stale wrapper dereference a new generation's handle — UB)."
     (with-open-file (out script :direction :output :if-exists :supersede)
       (format out "~
 (require :asdf)
+#-quicklisp
+(let ((q (merge-pathnames \"quicklisp/setup.lisp\" (user-homedir-pathname))))
+  (when (probe-file q) (load q)))
 (push ~S asdf:*central-registry*)
 (ql:quickload '(:cffi :babel :trivial-garbage :bordeaux-threads) :silent t)
 (asdf:load-system :rulisp)
