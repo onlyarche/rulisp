@@ -6,6 +6,7 @@ members = [
     "crates/rulisp-runtime",
     "examples/wordbag",
     "examples/rx",
+    "examples/wasm",
 ]
 # tests/m1-handwritten (the ABI oracle) is deliberately NOT a member: it must
 # keep the package name "wordbag" (same artifact + manifest as the macro

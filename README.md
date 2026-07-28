@@ -88,9 +88,13 @@ setup, dependencies), then [docs/quickstart.md](docs/quickstart.md) —
 wrapping the real `regex` crate in 10 minutes (the finished example is
 [`examples/rx/`](examples/rx/)). [docs/usage.md](docs/usage.md) explains
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
-toolchain needed) vs building your own. The full contract is in
-[BOUNDARY.md](BOUNDARY.md); architecture and rationale in
-[DESIGN.md](DESIGN.md) (Korean).
+toolchain needed) vs building your own. For something bigger,
+[`examples/wasm/`](examples/wasm/) gives Common Lisp a WebAssembly runtime
+in ~120 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
+their exports, and watch wasm traps arrive as Lisp conditions (built on
+the signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why
+that matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
+architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
 
 ## Status
 

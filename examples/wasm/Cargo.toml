@@ -1,0 +1,18 @@
+[package]
+name = "wasm"
+version = "0.1.0"
+edition = "2021"
+description = "rulisp example: a WebAssembly runtime for Common Lisp (wasmi-based)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rulisp = { path = "../../crates/rulisp" }
+# wasmi, not wasmtime, on purpose: wasmi is a pure interpreter that installs
+# NO signal handlers — wasmtime's signal-based trap handling conflicts with
+# SBCL's signal-driven GC (see BOUNDARY.md §7, "audit dependencies for
+# sigaction").
+wasmi = "0.50"
+wat = "1"
