@@ -10,10 +10,14 @@
 //! v1 scope: exports taking/returning i32/i64 (Lisp side speaks i64 and
 //! values are coerced per the function's actual signature). Host functions
 //! calling back into Lisp need stored callbacks — a v0.2 rulisp feature.
+//!
+//! Fuel metering: construct with a fuel budget and every wasm instruction
+//! consumes fuel — runaway guest code traps with a condition instead of
+//! hanging the image. A CPU bound no raw FFI call can ever offer.
 
 use std::sync::Mutex;
 
-use wasmi::{Engine, Linker, Module, Store, Val};
+use wasmi::{Config, Engine, Linker, Module, Store, Val};
 
 #[derive(Debug)]
 pub struct WasmError(String);
@@ -39,17 +43,25 @@ pub struct Wasm {
 
 #[rulisp::export]
 impl Wasm {
-    /// (wasm:make-wasm "/path/to/module.wat") — .wat text or .wasm binary.
+    /// (wasm:make-wasm "/path/to/module.wat" 1000000) — .wat text or .wasm
+    /// binary. FUEL > 0 enables metering with that budget: every guest
+    /// instruction consumes fuel and running out traps (a condition, not a
+    /// hang). FUEL = 0 runs unmetered.
     #[rulisp(constructor)]
-    pub fn load(path: &str) -> Result<Wasm, WasmError> {
+    pub fn load(path: &str, fuel: u64) -> Result<Wasm, WasmError> {
         let bytes = if path.ends_with(".wat") {
             wat::parse_file(path).map_err(|e| WasmError(e.to_string()))?
         } else {
             std::fs::read(path).map_err(|e| WasmError(e.to_string()))?
         };
-        let engine = Engine::default();
+        let mut config = Config::default();
+        config.consume_fuel(fuel > 0);
+        let engine = Engine::new(&config);
         let module = Module::new(&engine, &bytes)?;
         let mut store = Store::new(&engine, ());
+        if fuel > 0 {
+            store.set_fuel(fuel)?;
+        }
         let linker: Linker<()> = Linker::new(&engine);
         let instance = linker.instantiate_and_start(&mut store, &module)?;
         Ok(Wasm {
@@ -78,6 +90,18 @@ impl Wasm {
 
     pub fn call2(&self, name: &str, a: i64, b: i64) -> Result<i64, WasmError> {
         self.call(name, &[a, b])
+    }
+
+    /// Top up the fuel budget (metered instances only).
+    pub fn refuel(&self, fuel: u64) -> Result<(), WasmError> {
+        let (store, _) = &mut *self.inner.lock().unwrap();
+        store.set_fuel(fuel).map_err(Into::into)
+    }
+
+    /// Remaining fuel; signals on an unmetered instance.
+    pub fn fuel_left(&self) -> Result<u64, WasmError> {
+        let (store, _) = &*self.inner.lock().unwrap();
+        store.get_fuel().map_err(Into::into)
     }
 }
 
@@ -127,5 +151,6 @@ rulisp::module! {
     handles: [Wasm],
     fns: [
         Wasm::load, Wasm::exports, Wasm::call0, Wasm::call1, Wasm::call2,
+        Wasm::refuel, Wasm::fuel_left,
     ],
 }

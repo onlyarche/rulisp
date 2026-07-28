@@ -90,10 +90,11 @@ wrapping the real `regex` crate in 10 minutes (the finished example is
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
 toolchain needed) vs building your own. For something bigger,
 [`examples/wasm/`](examples/wasm/) gives Common Lisp a WebAssembly runtime
-in ~120 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
-their exports, and watch wasm traps arrive as Lisp conditions (built on
-the signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why
-that matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
+in ~140 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
+their exports under a fuel-metered CPU budget (runaway guest code traps as
+a condition instead of hanging the image), and watch wasm traps arrive as
+Lisp conditions (built on the signal-handler-free `wasmi` interpreter —
+see BOUNDARY.md §7 for why that matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
 architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
 
 ## Status
@@ -119,9 +120,10 @@ constructors), synchronous same-thread callbacks, `Result` errors → typed
 conditions, live reload, image dump/restore, `use-value`/`retry-build`
 restarts.
 
-Out (v0.2 candidates, wire-compatible): `Vec<u8>`/`:bytes`/`Option`,
-constructor `&key` arguments, async/stored callbacks, Windows,
-prebuilt-binary distribution ([docs/distribution.md](docs/distribution.md)).
+Out for now — see [ROADMAP.md](ROADMAP.md): `:bytes`/`Option`, stored and
+cross-thread callbacks, constructor `&key` arguments, Windows,
+prebuilt-binary distribution tooling
+([docs/distribution.md](docs/distribution.md)).
 
 rulisp is for writing glue crates — it does not auto-bind arbitrary
 existing crates, by design (neither does PyO3).
