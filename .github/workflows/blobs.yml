@@ -1,0 +1,39 @@
+name: blobs
+
+# Prebuilt per-platform artifacts for the no-Rust-toolchain path
+# (rulisp:load-blob-crate — see docs/distribution.md). Runs on demand and on
+# release tags; artifacts are named lib<crate>-<os>-<arch>.<ext>.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suffix: linux-x86_64
+            ext: so
+          - os: macos-latest
+            suffix: darwin-arm64
+            ext: dylib
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p wordbag -p rx -p wasm
+      - name: collect blobs
+        run: |
+          mkdir -p blobs
+          for c in wordbag rx wasm; do
+            cp "target/release/lib${c}.${{ matrix.ext }}" \
+               "blobs/lib${c}-${{ matrix.suffix }}.${{ matrix.ext }}"
+          done
+          ls -la blobs/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blobs-${{ matrix.suffix }}
+          path: blobs/

@@ -4,15 +4,15 @@ error[E0277]: `*const ()` cannot be sent between threads safely
 7 | static STASH: Mutex<Option<Callback<'static, (&'static str,), ()>>> = Mutex::new(None);
   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `*const ()` cannot be sent between threads safely
   |
-  = help: within `Option<rulisp::Callback<'static, (&'static str,), ()>>`, the trait `Send` is not implemented for `*const ()`
+  = help: within `std::option::Option<rulisp::Callback<'static, (&'static str,), ()>>`, the trait `Send` is not implemented for `*const ()`
 note: required because it appears within the type `rulisp::Callback<'static, (&'static str,), ()>`
  --> src/lib.rs
   |
   | pub struct Callback<'a, A, R> {
   |            ^^^^^^^^
-note: required because it appears within the type `Option<rulisp::Callback<'static, (&'static str,), ()>>`
+note: required because it appears within the type `std::option::Option<rulisp::Callback<'static, (&'static str,), ()>>`
  --> $RUST/core/src/option.rs
-  = note: required for `std::sync::Mutex<Option<rulisp::Callback<'static, (&'static str,), ()>>>` to implement `Sync`
+  = note: required for `std::sync::Mutex<std::option::Option<rulisp::Callback<'static, (&'static str,), ()>>>` to implement `Sync`
   = note: shared static variables must have a type that implements `Sync`
 
 error[E0277]: `*mut ()` cannot be sent between threads safely
@@ -21,7 +21,7 @@ error[E0277]: `*mut ()` cannot be sent between threads safely
 7 | static STASH: Mutex<Option<Callback<'static, (&'static str,), ()>>> = Mutex::new(None);
   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `*mut ()` cannot be sent between threads safely
   |
-  = help: within `Option<rulisp::Callback<'static, (&'static str,), ()>>`, the trait `Send` is not implemented for `*mut ()`
+  = help: within `std::option::Option<rulisp::Callback<'static, (&'static str,), ()>>`, the trait `Send` is not implemented for `*mut ()`
   = note: required because it appears within the type `(*mut (), &'static (), fn((&'static str,)))`
 note: required because it appears within the type `PhantomData<(*mut (), &'static (), fn((&'static str,)))>`
  --> $RUST/core/src/marker.rs
@@ -30,9 +30,9 @@ note: required because it appears within the type `rulisp::Callback<'static, (&'
   |
   | pub struct Callback<'a, A, R> {
   |            ^^^^^^^^
-note: required because it appears within the type `Option<rulisp::Callback<'static, (&'static str,), ()>>`
+note: required because it appears within the type `std::option::Option<rulisp::Callback<'static, (&'static str,), ()>>`
  --> $RUST/core/src/option.rs
-  = note: required for `std::sync::Mutex<Option<rulisp::Callback<'static, (&'static str,), ()>>>` to implement `Sync`
+  = note: required for `std::sync::Mutex<std::option::Option<rulisp::Callback<'static, (&'static str,), ()>>>` to implement `Sync`
   = note: shared static variables must have a type that implements `Sync`
 
 error[E0521]: borrowed data escapes outside of function
@@ -49,6 +49,6 @@ error[E0521]: borrowed data escapes outside of function
    |      `f` escapes the function body here
    |      argument requires that `'1` must outlive `'static`
    |
-   = note: requirement occurs because of the type `std::sync::Mutex<Option<rulisp::Callback<'_, (&str,), ()>>>`, which makes the generic argument `Option<rulisp::Callback<'_, (&str,), ()>>` invariant
+   = note: requirement occurs because of the type `std::sync::Mutex<std::option::Option<rulisp::Callback<'_, (&str,), ()>>>`, which makes the generic argument `std::option::Option<rulisp::Callback<'_, (&str,), ()>>` invariant
    = note: the struct `std::sync::Mutex<T>` is invariant over the parameter `T`
    = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance

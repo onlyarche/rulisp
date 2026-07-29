@@ -44,6 +44,29 @@ every-other-status discipline.")
 (defun handle-type-p (ty) (and (consp ty) (eq (car ty) :handle)))
 (defun callback-type-p (ty) (and (consp ty) (eq (car ty) :callback)))
 (defun stored-callback-type-p (ty) (and (consp ty) (eq (car ty) :stored-callback)))
+(defun option-type-p (ty) (and (consp ty) (eq (car ty) :option)))
+(defun vec-type-p (ty) (and (consp ty) (eq (car ty) :vec)))
+
+(defparameter +vec-elt-types+
+  ;; element token → (cffi-type byte-size lisp-element-type coercer-form)
+  '((:i8 :int8 1 (signed-byte 8) #'identity)
+    (:i16 :int16 2 (signed-byte 16) #'identity)
+    (:i32 :int32 4 (signed-byte 32) #'identity)
+    (:i64 :int64 8 (signed-byte 64) #'identity)
+    (:u8 :uint8 1 (unsigned-byte 8) #'identity)
+    (:u16 :uint16 2 (unsigned-byte 16) #'identity)
+    (:u32 :uint32 4 (unsigned-byte 32) #'identity)
+    (:u64 :uint64 8 (unsigned-byte 64) #'identity)
+    (:f32 :float 4 single-float (lambda (x) (coerce x 'single-float)))
+    (:f64 :double 8 double-float (lambda (x) (coerce x 'double-float)))))
+
+(defun vec-elt-info (tok)
+  "Returns (values cffi-type byte-size lisp-element-type coercer-form)."
+  (let ((entry (assoc tok +vec-elt-types+)))
+    (unless entry
+      (error 'manifest-error
+             :message (format nil "unsupported (:vec ~S) element type" tok)))
+    (values (second entry) (third entry) (fourth entry) (fifth entry))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Callback trampolines: one cffi:defcallback per signature shape, shared
@@ -196,6 +219,38 @@ conditions are warned and reported as status 1; a dead id is status 2."
        (values (lambda (body) `(cffi:with-foreign-object (,o :uint8) ,body))
                `(:pointer ,o)
                `(plusp (cffi:mem-ref ,o :uint8)))))
+    ((option-type-p result)
+     (let ((inner (second result))
+           (some (gensym "SOME")))
+       (cond
+         ((member inner '(:string :bytes))
+          (let ((op (gensym "OUTP")) (ol (gensym "OUTL"))
+                (taker (if (eq inner :string) '%take-string-result '%take-bytes-result)))
+            (values (lambda (body)
+                      `(cffi:with-foreign-objects
+                           ((,some :uint8) (,op :pointer) (,ol 'uintptr))
+                         ,body))
+                    `(:pointer ,some :pointer ,op :pointer ,ol)
+                    `(when (plusp (cffi:mem-ref ,some :uint8))
+                       (,taker %ctx (cffi:mem-ref ,op :pointer)
+                               (cffi:mem-ref ,ol 'uintptr))))))
+         (t
+          (let ((o (gensym "OUT")) (cty (scalar-cffi inner)))
+            (values (lambda (body)
+                      `(cffi:with-foreign-objects ((,some :uint8) (,o ,cty)) ,body))
+                    `(:pointer ,some :pointer ,o)
+                    `(when (plusp (cffi:mem-ref ,some :uint8))
+                       (cffi:mem-ref ,o ,cty))))))))
+    ((vec-type-p result)
+     (multiple-value-bind (cty size lisp-ty coercer) (vec-elt-info (second result))
+       (declare (ignore coercer))
+       (let ((op (gensym "OUTP")) (ol (gensym "OUTL")))
+         (values (lambda (body)
+                   `(cffi:with-foreign-objects ((,op :pointer) (,ol 'uintptr)) ,body))
+                 `(:pointer ,op :pointer ,ol)
+                 `(%take-vec-result %ctx (cffi:mem-ref ,op :pointer)
+                                    (cffi:mem-ref ,ol 'uintptr)
+                                    ,cty ,size ',lisp-ty)))))
     (t
      (let ((o (gensym "OUT")) (cty (scalar-cffi result)))
        (values (lambda (body) `(cffi:with-foreign-object (,o ,cty) ,body))
@@ -215,6 +270,17 @@ ALLOCATING generation's dealloc."
   (unwind-protect
        (foreign-octets ptr len)
     (call-dealloc (gen-ctx-dealloc-ptr ctx) ptr len)))
+
+(defun %take-vec-result (ctx ptr len cffi-type elt-size lisp-type)
+  "Copy a Rust-owned Vec<scalar> (LEN elements) into a specialized Lisp
+vector, then release via dealloc(ptr, len*size, align=size)."
+  (unwind-protect
+       (let ((v (make-array len :element-type lisp-type)))
+         (dotimes (i len)
+           (setf (aref v i) (cffi:mem-aref ptr cffi-type i)))
+         v)
+    (call-dealloc-layout (gen-ctx-dealloc-ptr ctx) ptr
+                         (* len elt-size) elt-size)))
 
 (defun %make-crate-handle (crate ctx class rust-name ptr)
   "Stamp the new cell with the wrapper's BIRTH generation and the birth
@@ -260,6 +326,36 @@ FSPEC against one immutable generation context."
                             `(call-with-bytes-arg ,s (lambda (,bp ,bl) ,inner))))
                         wrappers)
                   (setf call-args (append call-args `(:pointer ,ptr uintptr ,len)))))
+               ((option-type-p ty)
+                (let ((inner-ty (second ty)))
+                  (cond
+                    ((member inner-ty '(:string :bytes))
+                     (let ((pres (gensym "PRES")) (ptr (gensym "PTR")) (len (gensym "LEN"))
+                           (helper (if (eq inner-ty :string)
+                                       'call-with-optional-utf8-arg
+                                       'call-with-optional-bytes-arg)))
+                       (push (let ((s sym) (h helper) (bp pres) (bq ptr) (bl len))
+                               (lambda (inner)
+                                 `(,h ,s (lambda (,bp ,bq ,bl) ,inner))))
+                             wrappers)
+                       (setf call-args
+                             (append call-args
+                                     `(:uint8 ,pres :pointer ,ptr uintptr ,len)))))
+                    (t                  ; optional scalar: nil = None
+                     (setf call-args
+                           (append call-args
+                                   (list :uint8 `(if (null ,sym) 0 1)
+                                         (scalar-cffi inner-ty) `(if (null ,sym) 0 ,sym))))))))
+               ((vec-type-p ty)
+                (multiple-value-bind (cty size lisp-ty coercer) (vec-elt-info (second ty))
+                  (declare (ignore size lisp-ty))
+                  (let ((ptr (gensym "PTR")) (len (gensym "LEN")))
+                    (push (let ((s sym) (bp ptr) (bl len))
+                            (lambda (inner)
+                              `(call-with-vec-arg ,s ,cty ,coercer
+                                                  (lambda (,bp ,bl) ,inner))))
+                          wrappers)
+                    (setf call-args (append call-args `(:pointer ,ptr uintptr ,len))))))
                ((handle-type-p ty)
                 (let ((cell (gensym "CELL"))
                       (class (funcall class-name-for (second ty))))

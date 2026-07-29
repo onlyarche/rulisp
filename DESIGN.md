@@ -512,4 +512,6 @@ CL 의존성: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads`, `uiop` (+�
 
 9. **v0.2 저장형 콜백 (2026-07-29)** — §4.7이 예약해 둔 `userdata` 슬롯이 레지스트리 ID가 되어 **ABI 1 무변경**으로 저장형 콜백 도입. CL `rulisp:callback` → `callback-token`(토큰 생존 = 등록 유지; GC/명시 해제 후의 호출은 경고 + 에러 status로 **안전 실패** — UB 불가). Rust `StoredCallback<A>`는 숫자 2개(Copy·Send·Sync)로 저장·복제·임의 스레드 호출 가능. 에러 규약: 재signal할 프레임이 없을 수 있으므로 condition은 경고 후 status 1(죽은 ID는 2), 터널/스태시 불관여. 크로스스레드는 SBCL과 **CCL 양쪽에서 실증**(리서치의 미검증 항목 해소). 수요 사례 회수: wasm 호스트 함수(`guest.wat`의 `host.notify` → Lisp 클로저; 클로저의 condition은 게스트 트랩으로).
 
+10. **v0.2 마무리 (2026-07-29)** — (a) `(:option T)`: present 플래그(u8) + 기존 값 표현, Lisp NIL ↔ None; `Option<bool>`은 nil 모호성 때문에 컴파일 거부. (b) `(:vec S)`: 요소 단위 `(ptr,len)` + `dealloc(ptr, len*size, align)` — 범용 dealloc의 (size,align) 시그니처가 이번에 제값을 함. (c) 생성자 `&key`는 **근거와 함께 재이연**: rx dogfooding에서 위치 인자가 명백히 우월((rx:make-regex "[0-9]+"))하여 전제가 기각됨 — 다인자 수요 출현 시 옵트인 속성으로 재검토(ROADMAP §3). (d) 배포: `load-blob-crate` + `lib<name>-<os>-<arch>.<ext>` 규약 + blobs.yml(CI 아티팩트). (e) 큐 폴링은 5줄짜리 사용자 패턴으로 문서화(usage.md) — 전용 헬퍼는 불필요 판정.
+
 원본 자료: 리서치 5종 + 종합(`wbqzsl9yo.output`), 설계 3안 + 판정 2건(`w1bva0j8v.output`), M1 리뷰 18건(`weic0xw2b.output`) — 세션 산출물 디렉터리에 보존.

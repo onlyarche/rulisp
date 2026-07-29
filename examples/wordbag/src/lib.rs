@@ -78,6 +78,24 @@ pub fn rev(data: &[u8]) -> Vec<u8> {
     v
 }
 
+#[rulisp::export]
+pub fn find(data: &[u8], b: u8) -> Option<u64> {
+    data.iter().position(|&x| x == b).map(|i| i as u64)
+}
+
+#[rulisp::export]
+pub fn greet_opt(name: Option<&str>) -> String {
+    match name {
+        Some(n) => format!("Hello, {n}!"),
+        None => "Hello, anonymous!".to_string(),
+    }
+}
+
+#[rulisp::export]
+pub fn deltas(xs: &[i64]) -> Vec<i64> {
+    xs.windows(2).map(|w| w[1] - w[0]).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).
@@ -213,6 +231,7 @@ rulisp::module! {
     handles: [WordBag],
     fns: [
         add, always_panic, parse_number, greet, echo, sum, rev,
+        find, greet_opt, deltas,
         set_notifier, clear_notifier, notify, notify_from_thread,
         WordBag::new, WordBag::add, WordBag::len, WordBag::slow_len,
         for_each_word,

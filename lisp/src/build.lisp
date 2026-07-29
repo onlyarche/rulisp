@@ -52,6 +52,37 @@
                :command (format nil "~{~A~^ ~}" cmd)
                :stderr err)))))
 
+(defun host-blob-suffix ()
+  "Platform tag for prebuilt artifacts: \"<os>-<arch>\", e.g.
+\"linux-x86_64\" or \"darwin-arm64\"."
+  (format nil "~A-~A"
+          (cond ((uiop:os-macosx-p) "darwin")
+                ((member :linux *features*) "linux")
+                (t "unknown"))
+          (cond ((member :x86-64 *features*) "x86_64")
+                ((or (member :arm64 *features*) (member :aarch64 *features*))
+                 "arm64")
+                (t "unknown"))))
+
+(defun blob-file-name (name)
+  (format nil "lib~A-~A.~A"
+          (substitute #\_ #\- name)
+          (host-blob-suffix)
+          (if (uiop:os-macosx-p) "dylib" "so")))
+
+(defun load-blob-crate (directory name &key package)
+  "Load the prebuilt per-platform artifact lib<name>-<os>-<arch>.<ext> from
+DIRECTORY (e.g. CI-built blobs committed in a repo — the Shirakumo pattern,
+docs/distribution.md). The end user needs no Rust toolchain."
+  (let* ((file (blob-file-name name))
+         (path (merge-pathnames file (uiop:ensure-directory-pathname directory))))
+    (unless (probe-file path)
+      (error 'crate-not-loaded-error
+             :name name
+             :message (format nil "no prebuilt artifact ~A for this platform (~A)"
+                              file (host-blob-suffix))))
+    (load-crate path :crate name :package package)))
+
 (defun use-crate (crate-dir &key (profile :dev) package features)
   "cargo build CRATE-DIR (a rulisp glue crate), then LOAD-CRATE the artifact.
 PROFILE: :dev (default) or :release. FEATURES: list of cargo feature name

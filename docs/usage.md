@@ -32,6 +32,15 @@ committed in a library's repo (see [distribution.md](distribution.md)).
 (mylib:do-something "input")
 ```
 
+When the artifacts follow the blob naming convention
+(`lib<name>-<os>-<arch>.<ext>`, e.g. `libwordbag-linux-x86_64.so` — what
+`.github/workflows/blobs.yml` produces), one call picks the right file for
+the host, with a clear condition when the platform isn't covered:
+
+```lisp
+(rulisp:load-blob-crate #p"/path/to/blobs/" "mylib")
+```
+
 Two things to know:
 
 1. **Not any Rust `.so` works.** The library must be a rulisp glue crate —
@@ -80,6 +89,31 @@ without restarting the REPL:
 
 A failed build signals `rulisp:build-error` carrying cargo's stderr, with
 a `retry-build` restart.
+
+## High-frequency events: the queue-polling pattern
+
+Stored callbacks run your closure on whatever thread Rust invokes from.
+For high-frequency event streams (async runtimes, watchers), keep the
+callback body minimal — push into a queue, process from a Lisp thread:
+
+```lisp
+(defvar *events* '())
+(defvar *events-lock* (bt:make-lock))
+
+(mylib:on-event (rulisp:callback
+                  (lambda (x)
+                    (bt:with-lock-held (*events-lock*)
+                      (push x *events*)))))
+
+;; drain from any Lisp thread, at your own pace
+(defun drain-events ()
+  (bt:with-lock-held (*events-lock*)
+    (shiftf *events* '())))
+```
+
+This keeps foreign-thread time short and moves real work onto threads you
+control. (A dedicated helper was considered and skipped — the pattern is
+five lines of user code.)
 
 ## Why rulisp lives in two package registries
 

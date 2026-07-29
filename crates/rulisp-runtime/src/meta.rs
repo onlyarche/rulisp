@@ -24,6 +24,10 @@ pub enum ParamTy {
         params: &'static [ParamTy],
         result: &'static str,
     },
+    /// v0.2: `Option<inner>` — inner is Scalar/Str/Bytes.
+    Option(&'static ParamTy),
+    /// v0.2: `&[scalar]` — the token is the element's, e.g. ":i64".
+    Vec(&'static str),
 }
 
 #[derive(Clone, Copy)]
@@ -33,6 +37,10 @@ pub enum ResultTy {
     Str,
     Bytes,
     Handle(&'static str),
+    /// v0.2: `Option<inner>` — inner is Scalar/Str/Bytes.
+    Option(&'static ResultTy),
+    /// v0.2: `Vec<scalar>` — the token is the element's.
+    Vec(&'static str),
 }
 
 pub struct ParamMeta {
@@ -102,6 +110,16 @@ fn render_ty(ty: &ParamTy, out: &mut String) {
             out.push_str(result);
             out.push(')');
         }
+        ParamTy::Option(inner) => {
+            out.push_str("(:option ");
+            render_ty(inner, out);
+            out.push(')');
+        }
+        ParamTy::Vec(tok) => {
+            out.push_str("(:vec ");
+            out.push_str(tok);
+            out.push(')');
+        }
         ParamTy::StoredCallback { params, result } => {
             out.push_str("(:stored-callback :params (");
             for (i, p) in params.iter().enumerate() {
@@ -135,6 +153,16 @@ fn render_result(r: &ResultTy, out: &mut String) {
             out.push_str("(:handle \"");
             out.push_str(n);
             out.push_str("\")");
+        }
+        ResultTy::Option(inner) => {
+            out.push_str("(:option ");
+            render_result(inner, out);
+            out.push(')');
+        }
+        ResultTy::Vec(tok) => {
+            out.push_str("(:vec ");
+            out.push_str(tok);
+            out.push(')');
         }
     }
 }

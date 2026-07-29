@@ -328,6 +328,80 @@ pub unsafe extern "C" fn wordbag_rulisp_for_each_word(
     })
 }
 
+/// pub fn find(data: &[u8], b: u8) -> Option<u64>   (v0.2 (:option ...))
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_find(
+    data_ptr: *const u8,
+    data_len: usize,
+    b: u8,
+    some_out: *mut u8,
+    out: *mut u64,
+) -> i32 {
+    rt::shim(|| {
+        let data = unsafe { rt::bytes_arg(data_ptr, data_len) };
+        match data.iter().position(|&x| x == b) {
+            Some(i) => unsafe {
+                *some_out = 1;
+                *out = i as u64;
+            },
+            None => unsafe { *some_out = 0 },
+        }
+        rt::STATUS_OK
+    })
+}
+
+/// pub fn greet_opt(name: Option<&str>) -> String   (v0.2 optional param)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_greet_opt(
+    name_present: u8,
+    name_ptr: *const u8,
+    name_len: usize,
+    out_ptr: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    rt::shim(|| {
+        let name = if name_present != 0 {
+            match unsafe { rt::str_arg(name_ptr, name_len) } {
+                Ok(s) => Some(s),
+                Err(status) => return status,
+            }
+        } else {
+            None
+        };
+        let s = match name {
+            Some(n) => format!("Hello, {n}!"),
+            None => "Hello, anonymous!".to_string(),
+        };
+        let (p, l) = rt::string_into_raw(s);
+        unsafe {
+            *out_ptr = p;
+            *out_len = l;
+        }
+        rt::STATUS_OK
+    })
+}
+
+/// pub fn deltas(xs: &[i64]) -> Vec<i64>   (v0.2 (:vec ...): elements on the
+/// wire, freed via dealloc(ptr, len * size, align))
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_deltas(
+    xs_ptr: *const i64,
+    xs_len: usize,
+    out_ptr: *mut *mut i64,
+    out_len: *mut usize,
+) -> i32 {
+    rt::shim(|| {
+        let xs = unsafe { rt::slice_arg(xs_ptr, xs_len) };
+        let v: Vec<i64> = xs.windows(2).map(|w| w[1] - w[0]).collect();
+        let (p, l) = rt::vec_into_raw(v);
+        unsafe {
+            *out_ptr = p;
+            *out_len = l;
+        }
+        rt::STATUS_OK
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).

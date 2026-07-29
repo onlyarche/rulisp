@@ -120,15 +120,16 @@ make test-ccl   # same suites on Clozure CL
 ## Scope (v0.1)
 
 In: scalars, `bool`, `&str`/`String`, `&[u8]`/`Vec<u8>` byte buffers,
-opaque handles (`&self` methods, constructors), borrowed same-thread
-callbacks AND stored any-thread callbacks (`StoredCallback` +
-`rulisp:callback` tokens — fail-safe lifetime, verified cross-thread on
-SBCL and CCL), `Result` errors → typed conditions, live reload, image
+`Option<T>` (NIL ↔ None), `&[scalar]`/`Vec<scalar>` vectors, opaque
+handles (`&self` methods, constructors), borrowed same-thread callbacks
+AND stored any-thread callbacks (`StoredCallback` + `rulisp:callback`
+tokens — fail-safe lifetime, verified cross-thread on SBCL and CCL),
+`Result` errors → typed conditions, prebuilt-blob loading
+(`load-blob-crate`, no Rust toolchain needed), live reload, image
 dump/restore, `use-value`/`retry-build` restarts.
 
-Out for now — see [ROADMAP.md](ROADMAP.md): `Option`/`Vec<T>`,
-constructor `&key` arguments, Windows, prebuilt-binary distribution
-tooling ([docs/distribution.md](docs/distribution.md)).
+Out for now — see [ROADMAP.md](ROADMAP.md): Windows, ECL callbacks, a
+worked Deploy example, `Vec<String>`/nested containers.
 
 rulisp is for writing glue crates — it does not auto-bind arbitrary
 existing crates, by design (neither does PyO3).

@@ -34,6 +34,12 @@ impl Regex {
         self.inner.replace_all(text, replacement).into_owned()
     }
 
+    /// First match as (:option :string): NIL when there is none — no more
+    /// sentinel values (v0.2).
+    pub fn first_match(&self, text: &str) -> Option<String> {
+        self.inner.find(text).map(|m| m.as_str().to_owned())
+    }
+
     /// Iterate matches into a Lisp closure; a condition signaled inside the
     /// closure aborts iteration and re-signals in the caller.
     pub fn for_each_match(&self, text: &str, f: Callback<(&str,), ()>) -> Result<u64, Error> {
@@ -56,7 +62,7 @@ rulisp::module! {
     handles: [Regex],
     fns: [
         Regex::new, Regex::is_match, Regex::count, Regex::replace_all,
-        Regex::for_each_match,
+        Regex::first_match, Regex::for_each_match,
         escape,
     ],
 }

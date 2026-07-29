@@ -83,6 +83,35 @@ foreign memory borrowed for the duration of FN, called as (FN ptr len)."
 FN, called as (FN ptr len). No NUL terminator; interior NULs are legal."
   (call-with-bytes-arg (babel:string-to-octets string :encoding :utf-8) fn))
 
+(defun call-with-optional-utf8-arg (s fn)
+  "(:option :string) parameter: NIL → (FN 0 null 0), else (FN 1 ptr len)."
+  (if (null s)
+      (funcall fn 0 (cffi:null-pointer) 0)
+      (call-with-utf8-arg s (lambda (p l) (funcall fn 1 p l)))))
+
+(defun call-with-optional-bytes-arg (s fn)
+  "(:option :bytes) parameter: NIL → (FN 0 null 0), else (FN 1 ptr len)."
+  (if (null s)
+      (funcall fn 0 (cffi:null-pointer) 0)
+      (call-with-bytes-arg s (lambda (p l) (funcall fn 1 p l)))))
+
+(defun call-with-vec-arg (data cffi-type coercer fn)
+  "(:vec ...) parameter: copy DATA (a sequence of numbers) into a foreign
+array of CFFI-TYPE borrowed for the duration of FN, called as
+(FN ptr len-in-elements)."
+  (let ((len (length data)))
+    (cffi:with-foreign-object (buf cffi-type (max len 1))
+      (handler-case
+          (let ((i 0))
+            (map nil (lambda (x)
+                       (setf (cffi:mem-aref buf cffi-type i) (funcall coercer x))
+                       (incf i))
+                 data))
+        (error (e)
+          (error 'invalid-argument
+                 :message (format nil "bad vector element: ~A" e))))
+      (funcall fn buf len))))
+
 ;;; ---------------------------------------------------------------------------
 ;;; last-error / dealloc / free calls through resolved pointers
 ;;; ---------------------------------------------------------------------------
@@ -100,13 +129,18 @@ this thread."
     (values (foreign-utf8 (cffi:mem-ref tp :pointer) (cffi:mem-ref tl 'uintptr))
             (foreign-utf8 (cffi:mem-ref mp :pointer) (cffi:mem-ref ml 'uintptr)))))
 
-(defun call-dealloc (dealloc-ptr ptr len)
-  "Release a Rust-owned buffer via the owning library's universal
-deallocator. LEN = 0 transfers no allocation and is a no-op."
-  (when (plusp len)
+(defun call-dealloc-layout (dealloc-ptr ptr size align)
+  "Release a Rust-owned allocation of SIZE bytes / ALIGN alignment via the
+owning library's universal deallocator. SIZE = 0 transferred no allocation
+and is a no-op."
+  (when (plusp size)
     (cffi:foreign-funcall-pointer dealloc-ptr ()
-                                  :pointer ptr uintptr len uintptr 1
+                                  :pointer ptr uintptr size uintptr align
                                   :void)))
+
+(defun call-dealloc (dealloc-ptr ptr len)
+  "Byte-buffer/string variant of CALL-DEALLOC-LAYOUT (align 1)."
+  (call-dealloc-layout dealloc-ptr ptr len 1))
 
 (defun %call-free (free-ptr obj-ptr)
   (cffi:foreign-funcall-pointer free-ptr () :pointer obj-ptr :void))

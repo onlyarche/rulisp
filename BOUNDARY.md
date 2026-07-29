@@ -186,8 +186,16 @@ Differences from the borrowed form:
   type names that become condition classes), `:handles`, `:functions`.
 - Unknown keys are ignored everywhere: additive evolution is free.
 - Type vocabulary (closed): `:unit :bool :i8 :i16 :i32 :i64 :u8 :u16
-  :u32 :u64 :f32 :f64 :string :bytes (:handle "Name")
-  (:callback :params (...) :result :unit)`.
+  :u32 :u64 :f32 :f64 :string :bytes (:option T) (:vec S)
+  (:handle "Name") (:callback :params (...) :result :unit)
+  (:stored-callback :params (...) :result :unit)`.
+  - `(:option T)`, T ∈ scalars/`:string`/`:bytes` (0.2): a leading
+    `uint8` present flag; the value's usual wire representation follows and
+    is meaningful only when present. Lisp NIL ↔ None. `:bool` inner is
+    rejected (nil ambiguity).
+  - `(:vec S)`, S a scalar (0.2): `(const S*, uintptr_t len)` counted in
+    ELEMENTS; owned returns are freed via
+    `dealloc(ptr, len * sizeof(S), alignof(S))`.
   `:bytes` (added in 0.2, wire-additive on ABI 1) uses the exact `:string`
   convention — borrowed `(ptr,len)` in, owned + dealloc'd out, empty
   transfer at len 0 — minus UTF-8 validation; Rust sees `&[u8]` in and

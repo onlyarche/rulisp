@@ -5,6 +5,7 @@
    #:load-crate
    #:use-crate
    #:reload-crate
+   #:load-blob-crate
    #:free
    #:crate
    #:handle

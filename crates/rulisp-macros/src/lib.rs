@@ -71,14 +71,19 @@ enum PTy {
     HandleRef(Path),
     Callback { param_toks: Vec<&'static str> },
     StoredCallback { param_toks: Vec<&'static str> },
+    OptionScalar { tok: &'static str, ty: Type },
+    OptionStr,
+    OptionBytes,
+    VecScalar { tok: &'static str, ty: Type },
 }
 
 fn unsupported(span: proc_macro2::Span) -> Error {
     Error::new(
         span,
         "rulisp: unsupported type for export — accepted: i8..i64, u8..u64, f32, f64, bool, \
-         &str, &[u8], &HandleType, Callback<(...), ()>; String/Vec<u8>/handle returns; \
-         and Result thereof (DESIGN.md §5 type vocabulary)",
+         &str, &[u8], &[scalar], Option of these, &HandleType, Callback/StoredCallback; \
+         String/Vec<u8>/Vec<scalar>/Option/handle returns; and Result thereof \
+         (DESIGN.md §5 type vocabulary; Option<bool> is rejected — Lisp nil is ambiguous)",
     )
 }
 
@@ -96,6 +101,16 @@ fn classify_param(ty: &Type) -> Result<PTy, Error> {
                 Type::Path(p) if p.path.is_ident("str") => Ok(PTy::StrRef),
                 Type::Slice(s) => match &*s.elem {
                     Type::Path(p) if p.path.is_ident("u8") => Ok(PTy::BytesRef),
+                    Type::Path(p) => {
+                        let name = p.path.segments.last().unwrap().ident.to_string();
+                        match SCALARS.iter().find(|(r, _)| *r == name) {
+                            Some((_, tok)) => Ok(PTy::VecScalar {
+                                tok,
+                                ty: (*s.elem).clone(),
+                            }),
+                            None => Err(unsupported(s.elem.span())),
+                        }
+                    }
                     other => Err(unsupported(other.span())),
                 },
                 Type::Path(p) => Ok(PTy::HandleRef(p.path.clone())),
@@ -119,6 +134,25 @@ fn classify_param(ty: &Type) -> Result<PTy, Error> {
             }
             if name == "StoredCallback" {
                 return classify_callback(seg, ty.span(), true);
+            }
+            if name == "Option" {
+                let PathArguments::AngleBracketed(args) = &seg.arguments else {
+                    return Err(unsupported(ty.span()));
+                };
+                let Some(GenericArgument::Type(inner)) = args.args.first() else {
+                    return Err(unsupported(ty.span()));
+                };
+                return match classify_param(inner)? {
+                    PTy::Scalar { tok, ty } => Ok(PTy::OptionScalar { tok, ty }),
+                    PTy::StrRef => Ok(PTy::OptionStr),
+                    PTy::BytesRef => Ok(PTy::OptionBytes),
+                    PTy::Bool => Err(Error::new(
+                        inner.span(),
+                        "rulisp: Option<bool> is rejected — Lisp nil cannot \
+                         distinguish None from Some(false); use Option<i8>",
+                    )),
+                    _ => Err(unsupported(inner.span())),
+                };
             }
             Err(unsupported(ty.span()))
         }
@@ -187,6 +221,10 @@ enum RTy {
     Str,
     Bytes,
     Handle(Path),
+    OptionScalar { tok: &'static str, ty: Type },
+    OptionStr,
+    OptionBytes,
+    VecScalar { tok: &'static str, ty: Type },
 }
 
 /// Classify a *success* return type (after unwrapping Result).
@@ -208,15 +246,46 @@ fn classify_result(ty: Option<&Type>, ctor: bool) -> Result<RTy, Error> {
                 "String" => Ok(RTy::Str),
                 "Vec" => {
                     if let PathArguments::AngleBracketed(args) = &seg.arguments {
-                        if let Some(GenericArgument::Type(Type::Path(elem))) =
+                        if let Some(GenericArgument::Type(elem @ Type::Path(ep))) =
                             args.args.first()
                         {
-                            if elem.path.is_ident("u8") && args.args.len() == 1 {
-                                return Ok(RTy::Bytes);
+                            if args.args.len() == 1 {
+                                if ep.path.is_ident("u8") {
+                                    return Ok(RTy::Bytes);
+                                }
+                                let ename =
+                                    ep.path.segments.last().unwrap().ident.to_string();
+                                if let Some((_, tok)) =
+                                    SCALARS.iter().find(|(r, _)| *r == ename)
+                                {
+                                    return Ok(RTy::VecScalar {
+                                        tok,
+                                        ty: elem.clone(),
+                                    });
+                                }
                             }
                         }
                     }
                     Err(unsupported(ty.span()))
+                }
+                "Option" => {
+                    let PathArguments::AngleBracketed(args) = &seg.arguments else {
+                        return Err(unsupported(ty.span()));
+                    };
+                    let Some(GenericArgument::Type(inner)) = args.args.first() else {
+                        return Err(unsupported(ty.span()));
+                    };
+                    match classify_result(Some(inner), false)? {
+                        RTy::Scalar { tok, ty } => Ok(RTy::OptionScalar { tok, ty }),
+                        RTy::Str => Ok(RTy::OptionStr),
+                        RTy::Bytes => Ok(RTy::OptionBytes),
+                        RTy::Bool => Err(Error::new(
+                            inner.span(),
+                            "rulisp: Option<bool> is rejected — Lisp nil cannot \
+                             distinguish None from Some(false); use Option<i8>",
+                        )),
+                        _ => Err(unsupported(inner.span())),
+                    }
                 }
                 _ if ctor => Ok(RTy::Handle(p.path.clone())),
                 _ => Err(Error::new(
@@ -359,6 +428,59 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 });
                 call_args.push(quote! { #ident });
             }
+            PTy::VecScalar { ty, .. } => {
+                let ptr = format_ident!("{}_ptr", ident);
+                let len = format_ident!("{}_len", ident);
+                extern_params.extend(quote! { #ptr: *const #ty, #len: usize, });
+                preludes.extend(quote! {
+                    let #ident: &[#ty] =
+                        unsafe { ::rulisp::runtime::slice_arg(#ptr, #len) };
+                });
+                call_args.push(quote! { #ident });
+            }
+            PTy::OptionScalar { ty, .. } => {
+                let present = format_ident!("{}_present", ident);
+                extern_params.extend(quote! { #present: u8, #ident: #ty, });
+                preludes.extend(quote! {
+                    let #ident = if #present != 0 { Some(#ident) } else { None };
+                });
+                call_args.push(quote! { #ident });
+            }
+            PTy::OptionStr => {
+                let present = format_ident!("{}_present", ident);
+                let ptr = format_ident!("{}_ptr", ident);
+                let len = format_ident!("{}_len", ident);
+                extern_params.extend(quote! {
+                    #present: u8, #ptr: *const u8, #len: usize,
+                });
+                preludes.extend(quote! {
+                    let #ident = if #present != 0 {
+                        match unsafe { ::rulisp::runtime::str_arg(#ptr, #len) } {
+                            Ok(s) => Some(s),
+                            Err(status) => return status,
+                        }
+                    } else {
+                        None
+                    };
+                });
+                call_args.push(quote! { #ident });
+            }
+            PTy::OptionBytes => {
+                let present = format_ident!("{}_present", ident);
+                let ptr = format_ident!("{}_ptr", ident);
+                let len = format_ident!("{}_len", ident);
+                extern_params.extend(quote! {
+                    #present: u8, #ptr: *const u8, #len: usize,
+                });
+                preludes.extend(quote! {
+                    let #ident = if #present != 0 {
+                        Some(unsafe { ::rulisp::runtime::bytes_arg(#ptr, #len) })
+                    } else {
+                        None
+                    };
+                });
+                call_args.push(quote! { #ident });
+            }
             PTy::HandleRef(path) => {
                 extern_params.extend(quote! { #ident: *const ::std::ffi::c_void, });
                 preludes.extend(quote! {
@@ -451,6 +573,60 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
             quote! { out: *mut *mut ::std::ffi::c_void, },
             quote! { unsafe { *out = ::rulisp::runtime::handle_new(__v) }; },
         ),
+        RTy::VecScalar { ty, .. } => (
+            quote! { out_ptr: *mut *mut #ty, out_len: *mut usize, },
+            quote! {
+                let (__p, __l) = ::rulisp::runtime::vec_into_raw(__v);
+                unsafe {
+                    *out_ptr = __p;
+                    *out_len = __l;
+                }
+            },
+        ),
+        RTy::OptionScalar { ty, .. } => (
+            quote! { some_out: *mut u8, out: *mut #ty, },
+            quote! {
+                match __v {
+                    Some(__x) => unsafe {
+                        *some_out = 1;
+                        *out = __x;
+                    },
+                    None => unsafe { *some_out = 0 },
+                }
+            },
+        ),
+        RTy::OptionStr => (
+            quote! { some_out: *mut u8, out_ptr: *mut *mut u8, out_len: *mut usize, },
+            quote! {
+                match __v {
+                    Some(__s) => {
+                        let (__p, __l) = ::rulisp::runtime::string_into_raw(__s);
+                        unsafe {
+                            *some_out = 1;
+                            *out_ptr = __p;
+                            *out_len = __l;
+                        }
+                    }
+                    None => unsafe { *some_out = 0 },
+                }
+            },
+        ),
+        RTy::OptionBytes => (
+            quote! { some_out: *mut u8, out_ptr: *mut *mut u8, out_len: *mut usize, },
+            quote! {
+                match __v {
+                    Some(__b) => {
+                        let (__p, __l) = ::rulisp::runtime::bytes_into_raw(__b);
+                        unsafe {
+                            *some_out = 1;
+                            *out_ptr = __p;
+                            *out_len = __l;
+                        }
+                    }
+                    None => unsafe { *some_out = 0 },
+                }
+            },
+        ),
     };
 
     let clear_tunnel = if has_callback {
@@ -530,6 +706,19 @@ fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
                         result: ":unit",
                     }
                 },
+                PTy::OptionScalar { tok, .. } => quote! {
+                    ::rulisp::runtime::ParamTy::Option(
+                        &::rulisp::runtime::ParamTy::Scalar(#tok))
+                },
+                PTy::OptionStr => quote! {
+                    ::rulisp::runtime::ParamTy::Option(&::rulisp::runtime::ParamTy::Str)
+                },
+                PTy::OptionBytes => quote! {
+                    ::rulisp::runtime::ParamTy::Option(&::rulisp::runtime::ParamTy::Bytes)
+                },
+                PTy::VecScalar { tok, .. } => quote! {
+                    ::rulisp::runtime::ParamTy::Vec(#tok)
+                },
             };
             quote! { ::rulisp::runtime::ParamMeta { name: #name, ty: #ty } }
         })
@@ -542,6 +731,19 @@ fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
         RTy::Bytes => quote! { ::rulisp::runtime::ResultTy::Bytes },
         RTy::Handle(p) => quote! {
             ::rulisp::runtime::ResultTy::Handle(<#p as ::rulisp::HandleType>::RUST_NAME)
+        },
+        RTy::OptionScalar { tok, .. } => quote! {
+            ::rulisp::runtime::ResultTy::Option(
+                &::rulisp::runtime::ResultTy::Scalar(#tok))
+        },
+        RTy::OptionStr => quote! {
+            ::rulisp::runtime::ResultTy::Option(&::rulisp::runtime::ResultTy::Str)
+        },
+        RTy::OptionBytes => quote! {
+            ::rulisp::runtime::ResultTy::Option(&::rulisp::runtime::ResultTy::Bytes)
+        },
+        RTy::VecScalar { tok, .. } => quote! {
+            ::rulisp::runtime::ResultTy::Vec(#tok)
         },
     };
     let error = match &f.error {

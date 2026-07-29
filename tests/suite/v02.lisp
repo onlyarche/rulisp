@@ -45,6 +45,58 @@
   (signals rulisp:invalid-argument (wb-call "SUM" '(:a :b))))
 
 ;;; ---------------------------------------------------------------------------
+;;; (:option T) — NIL ↔ None, both directions (Option<bool> is rejected at
+;;; the macro: Lisp nil can't distinguish None from Some(false))
+;;; ---------------------------------------------------------------------------
+
+(test v02.option-result
+  (ensure-crate)
+  (is (= 2 (wb-call "FIND" #(5 6 7) 7)))
+  (is (eq nil (wb-call "FIND" #(5 6 7) 9)))
+  (is (= 0 (wb-call "FIND" #(7) 7)))
+  (is (eq nil (wb-call "FIND" #() 7))))
+
+(test v02.option-param
+  (ensure-crate)
+  (is (string= "Hello, 리스퍼!" (wb-call "GREET-OPT" "리스퍼")))
+  (is (string= "Hello, anonymous!" (wb-call "GREET-OPT" nil))))
+
+;;; ---------------------------------------------------------------------------
+;;; (:vec T) — scalar vectors; wire length counts ELEMENTS, freed via
+;;; dealloc(ptr, len*size, align)
+;;; ---------------------------------------------------------------------------
+
+(test v02.vec-roundtrip
+  (ensure-crate)
+  (is (equalp #(1 1 2 3) (wb-call "DELTAS" #(0 1 2 4 7))))
+  (is (typep (wb-call "DELTAS" #(0 1)) '(simple-array (signed-byte 64) (*))))
+  (is (equalp #() (wb-call "DELTAS" #())))
+  (is (equalp #() (wb-call "DELTAS" #(42))))
+  (is (equalp #(-5) (wb-call "DELTAS" '(3 -2))))       ; lists accepted
+  (let ((before (live-allocs)))
+    (dotimes (i 50)
+      (wb-call "DELTAS" #(1 2 3))
+      (wb-call "DELTAS" #()))
+    (is (= before (live-allocs))))
+  (signals rulisp:invalid-argument (wb-call "DELTAS" '(:a))))
+
+;;; ---------------------------------------------------------------------------
+;;; Prebuilt-blob loading (distribution: the no-Rust-toolchain path)
+;;; ---------------------------------------------------------------------------
+
+(test v02.blob-loading
+  (ensure-crate)
+  (let* ((blobdir (merge-pathnames "rulisp-blob-test/" (uiop:temporary-directory)))
+         (blob (merge-pathnames (rulisp::blob-file-name "wordbag") blobdir)))
+    (ensure-directories-exist blobdir)
+    (uiop:copy-file (rulisp::crate-source-path *crate*) blob)
+    (let ((crate (rulisp:load-blob-crate blobdir "wordbag")))
+      (is (eq crate *crate*))                ; same registry entry, new gen
+      (is (string= "Hello, X!" (wb-call "GREET" "X"))))
+    (signals rulisp:crate-not-loaded-error
+      (rulisp:load-blob-crate blobdir "missing"))))
+
+;;; ---------------------------------------------------------------------------
 ;;; Stored callbacks (ROADMAP.md §2): Rust keeps a registered closure and
 ;;; invokes it after the registering call returned — same thread or a fresh
 ;;; Rust thread. Dead ids fail safely; conditions are warned, not crashed.

@@ -156,6 +156,33 @@ pub fn string_into_raw(s: String) -> (*mut u8, usize) {
     bytes_into_raw(s.into_bytes())
 }
 
+/// Generic transfer of a `Vec<T>` (v0.2 `(:vec ...)`): the caller frees via
+/// the crate's `dealloc` with `(ptr, len * size_of::<T>(), align_of::<T>())`.
+/// `len` on the wire counts ELEMENTS. Empty vectors transfer no allocation.
+pub fn vec_into_raw<T>(v: Vec<T>) -> (*mut T, usize) {
+    let b: Box<[T]> = v.into_boxed_slice();
+    let len = b.len();
+    if len == 0 {
+        return (std::ptr::NonNull::dangling().as_ptr(), 0);
+    }
+    LIVE_ALLOCATIONS.fetch_add(1, Ordering::SeqCst);
+    (Box::into_raw(b) as *mut T, len)
+}
+
+/// Borrow an incoming `(ptr, len-in-elements)` slice argument for the
+/// duration of the call.
+///
+/// # Safety
+/// When `len > 0`, `ptr..ptr+len` (elements) must be readable and properly
+/// aligned for the duration of the borrow.
+pub unsafe fn slice_arg<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
+    if len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(ptr, len) }
+    }
+}
+
 /// Borrow an incoming `(ptr, len)` byte argument for the duration of the
 /// call. Any bytes are legal — no validation.
 ///

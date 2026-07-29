@@ -167,8 +167,10 @@ The v1 type vocabulary: integers, floats, `bool`, `&str`/`String`, opaque
 handles (`&self` methods + constructors), and synchronous same-thread
 callbacks. Patterns for things it doesn't have yet:
 
-- **`Option<T>`** — not yet: return a sentinel (`-1`), a `bool` + getter
-  pair, or model it as an error. (`(:option T)` is a planned addition.)
+- **`Option<T>`** — supported (since 0.2): Lisp NIL ↔ None for scalar,
+  string and byte payloads (`rx:regex-first-match` returns the match or
+  NIL). `Option<bool>` is rejected — nil can't distinguish None from
+  Some(false).
 - **Binary data** — `&[u8]` parameters and `Vec<u8>` returns cross as
   `(unsigned-byte 8)` vectors (the `:bytes` type, since 0.2).
 - **Iterators/collections** — either a callback (as `for_each_match`
