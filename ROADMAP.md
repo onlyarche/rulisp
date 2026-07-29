@@ -12,10 +12,9 @@ notes reference real cases hit while building the examples.
 
 ### 1. Type vocabulary: binary data and optionals
 
-- `:bytes` — `&[u8]` / `Vec<u8>` crossings (same `(ptr,len)` + dealloc
-  convention strings already use).
-  *Demand:* compression/crypto/tokenizer crates; reading and writing wasm
-  linear memory (examples/wasm can't feed a parser its input today).
+- ✅ `:bytes` — **shipped** (0.2 dev): `&[u8]` / `Vec<u8>` crossings, same
+  `(ptr,len)` + dealloc convention strings use, no UTF-8 validation.
+  Verified on SBCL + CCL; oracle/golden updated in lockstep.
 - `(:option T)` — `Option<T>` as (present, value) instead of sentinel
   values (`rx` currently has no clean "no match" story).
 - `(:vec T)` for scalar element types.

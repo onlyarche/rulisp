@@ -121,6 +121,13 @@ callback name, defining it on first use for this signature shape."
                `(:pointer ,op :pointer ,ol)
                `(%take-string-result %ctx (cffi:mem-ref ,op :pointer)
                                      (cffi:mem-ref ,ol 'uintptr)))))
+    ((eq result :bytes)
+     (let ((op (gensym "OUTP")) (ol (gensym "OUTL")))
+       (values (lambda (body)
+                 `(cffi:with-foreign-objects ((,op :pointer) (,ol 'uintptr)) ,body))
+               `(:pointer ,op :pointer ,ol)
+               `(%take-bytes-result %ctx (cffi:mem-ref ,op :pointer)
+                                    (cffi:mem-ref ,ol 'uintptr)))))
     ((handle-type-p result)
      (let ((oh (gensym "OUTH"))
            (class (funcall class-name-for (second result)))
@@ -145,6 +152,13 @@ callback name, defining it on first use for this signature shape."
 generation's dealloc (unwind-protect: released even if decoding signals)."
   (unwind-protect
        (foreign-utf8 ptr len)
+    (call-dealloc (gen-ctx-dealloc-ptr ctx) ptr len)))
+
+(defun %take-bytes-result (ctx ptr len)
+  "Copy a Rust-owned byte buffer then release it exactly once via the
+ALLOCATING generation's dealloc."
+  (unwind-protect
+       (foreign-octets ptr len)
     (call-dealloc (gen-ctx-dealloc-ptr ctx) ptr len)))
 
 (defun %make-crate-handle (crate ctx class rust-name ptr)
@@ -182,6 +196,13 @@ FSPEC against one immutable generation context."
                   (push (let ((s sym) (bp ptr) (bl len))
                           (lambda (inner)
                             `(call-with-utf8-arg ,s (lambda (,bp ,bl) ,inner))))
+                        wrappers)
+                  (setf call-args (append call-args `(:pointer ,ptr uintptr ,len)))))
+               ((eq ty :bytes)
+                (let ((ptr (gensym "PTR")) (len (gensym "LEN")))
+                  (push (let ((s sym) (bp ptr) (bl len))
+                          (lambda (inner)
+                            `(call-with-bytes-arg ,s (lambda (,bp ,bl) ,inner))))
                         wrappers)
                   (setf call-args (append call-args `(:pointer ,ptr uintptr ,len)))))
                ((handle-type-p ty)

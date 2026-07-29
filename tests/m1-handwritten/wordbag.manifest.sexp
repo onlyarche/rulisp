@@ -19,6 +19,10 @@
    :params ((:name "name" :type :string)) :result :string :error nil)
   (:fn :rust-name "echo" :lisp-name "echo" :symbol "echo"
    :params ((:name "s" :type :string)) :result :string :error nil)
+  (:fn :rust-name "sum" :lisp-name "sum" :symbol "sum"
+   :params ((:name "data" :type :bytes)) :result :u64 :error nil)
+  (:fn :rust-name "rev" :lisp-name "rev" :symbol "rev"
+   :params ((:name "data" :type :bytes)) :result :bytes :error nil)
   (:fn :rust-name "WordBag::new" :lisp-name "make-word-bag" :symbol "word_bag_new"
    :params () :result (:handle "WordBag") :error nil)
   (:fn :rust-name "WordBag::add" :lisp-name "word-bag-add" :symbol "word_bag_add"

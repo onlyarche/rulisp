@@ -11,6 +11,7 @@ pub enum ParamTy {
     /// A lisp type token like ":i64" (includes the colon).
     Scalar(&'static str),
     Str,
+    Bytes,
     /// Rust name of a `#[rulisp::handle]` type.
     Handle(&'static str),
     Callback {
@@ -25,6 +26,7 @@ pub enum ResultTy {
     Unit,
     Scalar(&'static str),
     Str,
+    Bytes,
     Handle(&'static str),
 }
 
@@ -77,6 +79,7 @@ fn render_ty(ty: &ParamTy, out: &mut String) {
     match ty {
         ParamTy::Scalar(tok) => out.push_str(tok),
         ParamTy::Str => out.push_str(":string"),
+        ParamTy::Bytes => out.push_str(":bytes"),
         ParamTy::Handle(n) => {
             out.push_str("(:handle \"");
             out.push_str(n);
@@ -110,6 +113,7 @@ fn render_result(r: &ResultTy, out: &mut String) {
         ResultTy::Unit => out.push_str(":unit"),
         ResultTy::Scalar(tok) => out.push_str(tok),
         ResultTy::Str => out.push_str(":string"),
+        ResultTy::Bytes => out.push_str(":bytes"),
         ResultTy::Handle(n) => {
             out.push_str("(:handle \"");
             out.push_str(n);

@@ -66,6 +66,18 @@ pub fn echo(s: &str) -> String {
     s.to_owned()
 }
 
+#[rulisp::export]
+pub fn sum(data: &[u8]) -> u64 {
+    data.iter().map(|&b| b as u64).sum()
+}
+
+#[rulisp::export]
+pub fn rev(data: &[u8]) -> Vec<u8> {
+    let mut v = data.to_vec();
+    v.reverse();
+    v
+}
+
 // ---------------------------------------------------------------------------
 // WordBag handle
 // ---------------------------------------------------------------------------
@@ -163,7 +175,7 @@ rulisp::module! {
     name: "wordbag",
     handles: [WordBag],
     fns: [
-        add, always_panic, parse_number, greet, echo,
+        add, always_panic, parse_number, greet, echo, sum, rev,
         WordBag::new, WordBag::add, WordBag::len, WordBag::slow_len,
         for_each_word,
         test_live_allocations, test_live_word_bags, test_cb_guard_drops,

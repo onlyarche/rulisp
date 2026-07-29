@@ -1,6 +1,6 @@
 [package]
 name = "rulisp-runtime"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Support runtime linked into every rulisp cdylib: status codes, last-error TLS, universal deallocator, shim helpers"
 license = "MIT"

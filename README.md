@@ -115,12 +115,12 @@ make test-ccl   # same suites on Clozure CL
 
 ## Scope (v0.1)
 
-In: scalars, `bool`, `&str`/`String`, opaque handles (`&self` methods,
-constructors), synchronous same-thread callbacks, `Result` errors → typed
-conditions, live reload, image dump/restore, `use-value`/`retry-build`
-restarts.
+In: scalars, `bool`, `&str`/`String`, `&[u8]`/`Vec<u8>` byte buffers,
+opaque handles (`&self` methods, constructors), synchronous same-thread
+callbacks, `Result` errors → typed conditions, live reload, image
+dump/restore, `use-value`/`retry-build` restarts.
 
-Out for now — see [ROADMAP.md](ROADMAP.md): `:bytes`/`Option`, stored and
+Out for now — see [ROADMAP.md](ROADMAP.md): `Option`/`Vec<T>`, stored and
 cross-thread callbacks, constructor `&key` arguments, Windows,
 prebuilt-binary distribution tooling
 ([docs/distribution.md](docs/distribution.md)).

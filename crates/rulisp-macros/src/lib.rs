@@ -67,6 +67,7 @@ enum PTy {
     Scalar { tok: &'static str, ty: Type },
     Bool,
     StrRef,
+    BytesRef,
     HandleRef(Path),
     Callback { param_toks: Vec<&'static str> },
 }
@@ -74,9 +75,9 @@ enum PTy {
 fn unsupported(span: proc_macro2::Span) -> Error {
     Error::new(
         span,
-        "rulisp: unsupported type for export — v1 accepts i8..i64, u8..u64, f32, f64, bool, \
-         &str, &HandleType, Callback<(...), ()>, String/handle returns, and Result thereof \
-         (DESIGN.md §5 type vocabulary)",
+        "rulisp: unsupported type for export — accepted: i8..i64, u8..u64, f32, f64, bool, \
+         &str, &[u8], &HandleType, Callback<(...), ()>; String/Vec<u8>/handle returns; \
+         and Result thereof (DESIGN.md §5 type vocabulary)",
     )
 }
 
@@ -92,6 +93,10 @@ fn classify_param(ty: &Type) -> Result<PTy, Error> {
             }
             match &*r.elem {
                 Type::Path(p) if p.path.is_ident("str") => Ok(PTy::StrRef),
+                Type::Slice(s) => match &*s.elem {
+                    Type::Path(p) if p.path.is_ident("u8") => Ok(PTy::BytesRef),
+                    other => Err(unsupported(other.span())),
+                },
                 Type::Path(p) => Ok(PTy::HandleRef(p.path.clone())),
                 other => Err(unsupported(other.span())),
             }
@@ -163,6 +168,7 @@ enum RTy {
     Scalar { tok: &'static str, ty: Type },
     Bool,
     Str,
+    Bytes,
     Handle(Path),
 }
 
@@ -183,6 +189,18 @@ fn classify_result(ty: Option<&Type>, ctor: bool) -> Result<RTy, Error> {
             match name.as_str() {
                 "bool" => Ok(RTy::Bool),
                 "String" => Ok(RTy::Str),
+                "Vec" => {
+                    if let PathArguments::AngleBracketed(args) = &seg.arguments {
+                        if let Some(GenericArgument::Type(Type::Path(elem))) =
+                            args.args.first()
+                        {
+                            if elem.path.is_ident("u8") && args.args.len() == 1 {
+                                return Ok(RTy::Bytes);
+                            }
+                        }
+                    }
+                    Err(unsupported(ty.span()))
+                }
                 _ if ctor => Ok(RTy::Handle(p.path.clone())),
                 _ => Err(Error::new(
                     ty.span(),
@@ -293,6 +311,16 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 });
                 call_args.push(quote! { #ident });
             }
+            PTy::BytesRef => {
+                let ptr = format_ident!("{}_ptr", ident);
+                let len = format_ident!("{}_len", ident);
+                extern_params.extend(quote! { #ptr: *const u8, #len: usize, });
+                preludes.extend(quote! {
+                    let #ident: &[u8] =
+                        unsafe { ::rulisp::runtime::bytes_arg(#ptr, #len) };
+                });
+                call_args.push(quote! { #ident });
+            }
             PTy::HandleRef(path) => {
                 extern_params.extend(quote! { #ident: *const ::std::ffi::c_void, });
                 preludes.extend(quote! {
@@ -370,6 +398,16 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 }
             },
         ),
+        RTy::Bytes => (
+            quote! { out_ptr: *mut *mut u8, out_len: *mut usize, },
+            quote! {
+                let (__p, __l) = ::rulisp::runtime::bytes_into_raw(__v);
+                unsafe {
+                    *out_ptr = __p;
+                    *out_len = __l;
+                }
+            },
+        ),
         RTy::Handle(_) => (
             quote! { out: *mut *mut ::std::ffi::c_void, },
             quote! { unsafe { *out = ::rulisp::runtime::handle_new(__v) }; },
@@ -436,6 +474,7 @@ fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
                 PTy::Scalar { tok, .. } => quote! { ::rulisp::runtime::ParamTy::Scalar(#tok) },
                 PTy::Bool => quote! { ::rulisp::runtime::ParamTy::Scalar(":bool") },
                 PTy::StrRef => quote! { ::rulisp::runtime::ParamTy::Str },
+                PTy::BytesRef => quote! { ::rulisp::runtime::ParamTy::Bytes },
                 PTy::HandleRef(p) => quote! {
                     ::rulisp::runtime::ParamTy::Handle(
                         <#p as ::rulisp::HandleType>::RUST_NAME)
@@ -455,6 +494,7 @@ fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
         RTy::Scalar { tok, .. } => quote! { ::rulisp::runtime::ResultTy::Scalar(#tok) },
         RTy::Bool => quote! { ::rulisp::runtime::ResultTy::Scalar(":bool") },
         RTy::Str => quote! { ::rulisp::runtime::ResultTy::Str },
+        RTy::Bytes => quote! { ::rulisp::runtime::ResultTy::Bytes },
         RTy::Handle(p) => quote! {
             ::rulisp::runtime::ResultTy::Handle(<#p as ::rulisp::HandleType>::RUST_NAME)
         },

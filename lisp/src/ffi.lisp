@@ -47,25 +47,41 @@
 ;;; UTF-8 marshaling (DESIGN.md §4.5)
 ;;; ---------------------------------------------------------------------------
 
-(defun foreign-utf8 (ptr len)
-  "Copy LEN bytes at PTR into a fresh Lisp string (UTF-8 decode).
+(defun foreign-octets (ptr len)
+  "Copy LEN bytes at PTR into a fresh (unsigned-byte 8) vector.
 LEN = 0 never touches PTR (empty-transfer convention)."
+  (let ((octets (make-array len :element-type '(unsigned-byte 8))))
+    (dotimes (i len)
+      (setf (aref octets i) (cffi:mem-aref ptr :uint8 i)))
+    octets))
+
+(defun foreign-utf8 (ptr len)
+  "Copy LEN bytes at PTR into a fresh Lisp string (UTF-8 decode)."
   (if (zerop len)
       ""
-      (let ((octets (make-array len :element-type '(unsigned-byte 8))))
-        (dotimes (i len)
-          (setf (aref octets i) (cffi:mem-aref ptr :uint8 i)))
-        (babel:octets-to-string octets :encoding :utf-8))))
+      (babel:octets-to-string (foreign-octets ptr len) :encoding :utf-8)))
 
-(defun call-with-utf8-arg (string fn)
-  "Encode STRING as UTF-8 into foreign memory borrowed for the duration of
-FN, called as (FN ptr len). No NUL terminator; interior NULs are legal."
-  (let* ((octets (babel:string-to-octets string :encoding :utf-8))
+(defun call-with-bytes-arg (data fn)
+  "Copy DATA — an octet vector, or any sequence coercible to one — into
+foreign memory borrowed for the duration of FN, called as (FN ptr len)."
+  (let* ((octets (if (typep data '(vector (unsigned-byte 8)))
+                     data
+                     (handler-case
+                         (coerce data '(simple-array (unsigned-byte 8) (*)))
+                       (error ()
+                         (error 'invalid-argument
+                                :message (format nil "not an octet sequence: ~S"
+                                                 data))))))
          (len (length octets)))
     (cffi:with-foreign-object (buf :uint8 (max len 1))
       (dotimes (i len)
         (setf (cffi:mem-aref buf :uint8 i) (aref octets i)))
       (funcall fn buf len))))
+
+(defun call-with-utf8-arg (string fn)
+  "Encode STRING as UTF-8 into foreign memory borrowed for the duration of
+FN, called as (FN ptr len). No NUL terminator; interior NULs are legal."
+  (call-with-bytes-arg (babel:string-to-octets string :encoding :utf-8) fn))
 
 ;;; ---------------------------------------------------------------------------
 ;;; last-error / dealloc / free calls through resolved pointers

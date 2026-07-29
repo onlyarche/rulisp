@@ -153,6 +153,41 @@ pub unsafe extern "C" fn wordbag_rulisp_echo(
     })
 }
 
+/// pub fn sum(data: &[u8]) -> u64   (v0.2 :bytes — borrowed octets in)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_sum(
+    data_ptr: *const u8,
+    data_len: usize,
+    out: *mut u64,
+) -> i32 {
+    rt::shim(|| {
+        let data = unsafe { rt::bytes_arg(data_ptr, data_len) };
+        unsafe { *out = data.iter().map(|&b| b as u64).sum() };
+        rt::STATUS_OK
+    })
+}
+
+/// pub fn rev(data: &[u8]) -> Vec<u8>   (v0.2 :bytes — owned octets out)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_rev(
+    data_ptr: *const u8,
+    data_len: usize,
+    out_ptr: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    rt::shim(|| {
+        let data = unsafe { rt::bytes_arg(data_ptr, data_len) };
+        let mut v = data.to_vec();
+        v.reverse();
+        let (p, l) = rt::bytes_into_raw(v);
+        unsafe {
+            *out_ptr = p;
+            *out_len = l;
+        }
+        rt::STATUS_OK
+    })
+}
+
 // ---------------------------------------------------------------------------
 // WordBag handle
 // ---------------------------------------------------------------------------

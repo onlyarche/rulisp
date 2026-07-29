@@ -137,18 +137,37 @@ pub unsafe fn str_arg<'a>(ptr: *const u8, len: usize) -> Result<&'a str, i32> {
     })
 }
 
-/// Transfer a String to the caller (Lisp takes ownership; frees via the
-/// crate's `dealloc` with `(ptr, len, 1)`). `len == capacity` is guaranteed
-/// by `into_boxed_slice`. Empty strings transfer no allocation: `(dangling, 0)`,
-/// and the CL side skips dealloc when len == 0.
-pub fn string_into_raw(s: String) -> (*mut u8, usize) {
-    let b: Box<[u8]> = s.into_bytes().into_boxed_slice();
+/// Transfer a byte buffer to the caller (Lisp takes ownership; frees via
+/// the crate's `dealloc` with `(ptr, len, 1)`). `len == capacity` is
+/// guaranteed by `into_boxed_slice`. Empty buffers transfer no allocation:
+/// `(dangling, 0)`, and the CL side skips dealloc when len == 0.
+pub fn bytes_into_raw(v: Vec<u8>) -> (*mut u8, usize) {
+    let b: Box<[u8]> = v.into_boxed_slice();
     let len = b.len();
     if len == 0 {
         return (std::ptr::NonNull::dangling().as_ptr(), 0);
     }
     LIVE_ALLOCATIONS.fetch_add(1, Ordering::SeqCst);
     (Box::into_raw(b) as *mut u8, len)
+}
+
+/// String variant of [`bytes_into_raw`] (same wire convention, align 1).
+pub fn string_into_raw(s: String) -> (*mut u8, usize) {
+    bytes_into_raw(s.into_bytes())
+}
+
+/// Borrow an incoming `(ptr, len)` byte argument for the duration of the
+/// call. Any bytes are legal — no validation.
+///
+/// # Safety
+/// When `len > 0`, `ptr..ptr+len` must be readable for the duration of the
+/// borrow.
+pub unsafe fn bytes_arg<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
+    if len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(ptr, len) }
+    }
 }
 
 /// Backs `<crate>_rulisp_dealloc` — the single universal deallocator for

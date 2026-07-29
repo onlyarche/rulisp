@@ -168,9 +168,9 @@ handles (`&self` methods + constructors), and synchronous same-thread
 callbacks. Patterns for things it doesn't have yet:
 
 - **`Option<T>`** — not yet: return a sentinel (`-1`), a `bool` + getter
-  pair, or model it as an error. (`(:option T)` is a planned v0.2 addition.)
-- **Binary data** — not yet: `:bytes` lands in v0.2; until then encode
-  (hex/base64) or keep the bytes on the Rust side behind a handle.
+  pair, or model it as an error. (`(:option T)` is a planned addition.)
+- **Binary data** — `&[u8]` parameters and `Vec<u8>` returns cross as
+  `(unsigned-byte 8)` vectors (the `:bytes` type, since 0.2).
 - **Iterators/collections** — either a callback (as `for_each_match`
   above) or a handle wrapping the collection with accessor methods.
 - **`&mut self`** — never: use interior mutability (`Mutex`, atomics);

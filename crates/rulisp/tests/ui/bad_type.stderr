@@ -1,4 +1,4 @@
-error: rulisp: unsupported type for export — v1 accepts i8..i64, u8..u64, f32, f64, bool, &str, &HandleType, Callback<(...), ()>, String/handle returns, and Result thereof (DESIGN.md §5 type vocabulary)
+error: rulisp: unsupported type for export — accepted: i8..i64, u8..u64, f32, f64, bool, &str, &[u8], &HandleType, Callback<(...), ()>; String/Vec<u8>/handle returns; and Result thereof (DESIGN.md §5 type vocabulary)
  --> tests/ui/bad_type.rs:4:16
   |
 4 | pub fn nope(v: Vec<u8>) -> u64 {

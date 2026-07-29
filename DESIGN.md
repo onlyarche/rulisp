@@ -508,4 +508,6 @@ CL 의존성: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads`, `uiop` (+�
 
 7. **M4 완료 기록 (2026-07-15)** — (a) 8스레드×10k 경합, (b) 중첩 콜백(2단 Rust 프레임 관통 condition eq-동일성), (c) 무작위 10k 시퀀스+리로드 — 모두 그린(101/101). (d)는 run-m3/m4가 무변경 M1 스위트(리로드·덤프 포함)를 매크로 파이프라인으로 실행하는 것으로 충족. **CCL 1.13/Linux 검증 완료(99/99)** — 발견된 이식성 이슈 2건: 보수적 스택 스캔 호스트에서 GC finalize 잔여 허용(#-sbcl slack 2), prepare 단계 전방참조 경고는 muffle-warning restart 존재 확인 후 muffle. 이미지 덤프 테스트는 비-SBCL에서 vacuous pass(구현별 덤프는 v0.2). BOUNDARY.md(영문 규범 계약)·README·LICENSE(MIT)·docs/distribution.md(배포 가이드)·.github/workflows/ci.yml(SBCL/CCL Linux 필수 + macOS 필수 + ECL best-effort) 작성. crates 3종 `cargo package` 검증 통과(게시 순서: runtime → macros → rulisp). 태그 v0.1.0. **원격 작업(사용자 계정 필요, 미실행): GitHub 리포 생성/push, crates.io 게시, Ultralisp 등록, 원격 CI 첫 실행.**
 
+8. **v0.2 `:bytes` 추가 (2026-07-29)** — §5 타입 어휘에 `:bytes` 편입. 와이어는 `:string`과 동일한 `(ptr,len)` 차용/소유 이전 + 범용 dealloc 규약(UTF-8 검증만 제거)이라 **ABI 1 무파괴**. Rust `&[u8]`(입력)/`Vec<u8>`(반환) ↔ CL `(unsigned-byte 8)` 벡터(입력은 octet 시퀀스 코어싱 허용, 실패 시 `invalid-argument`). 어휘 진화 절차 확립: 오라클 shim + 수기 매니페스트 + golden을 한 커밋에서 동시 갱신하고 매크로 출력의 바이트 동일성 게이트로 봉인. 구버전 로더는 `:bytes` 크레이트를 명명된 `manifest-error`로 깨끗이 거부(반쪽 로드 없음).
+
 원본 자료: 리서치 5종 + 종합(`wbqzsl9yo.output`), 설계 3안 + 판정 2건(`w1bva0j8v.output`), M1 리뷰 18건(`weic0xw2b.output`) — 세션 산출물 디렉터리에 보존.

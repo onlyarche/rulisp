@@ -168,6 +168,10 @@ Contract:
   against the host, unknown tokens pass), `:prefix`, `:errors` (Rust error
   type names that become condition classes), `:handles`, `:functions`.
 - Unknown keys are ignored everywhere: additive evolution is free.
-- v1 type vocabulary (closed): `:unit :bool :i8 :i16 :i32 :i64 :u8 :u16
-  :u32 :u64 :f32 :f64 :string (:handle "Name")
+- Type vocabulary (closed): `:unit :bool :i8 :i16 :i32 :i64 :u8 :u16
+  :u32 :u64 :f32 :f64 :string :bytes (:handle "Name")
   (:callback :params (...) :result :unit)`.
+  `:bytes` (added in 0.2, wire-additive on ABI 1) uses the exact `:string`
+  convention — borrowed `(ptr,len)` in, owned + dealloc'd out, empty
+  transfer at len 0 — minus UTF-8 validation; Rust sees `&[u8]` in and
+  returns `Vec<u8>`.
