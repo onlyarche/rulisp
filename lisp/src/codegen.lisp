@@ -76,6 +76,32 @@ every-other-status discipline.")
 
 (defvar *trampolines* (make-hash-table :test 'equal))
 
+(defun %define-callback-trampoline (form)
+  "Define a trampoline callback. EVAL suffices everywhere except ECL: a
+bytecodes-compiled defcallback there rides si:make-dynamic-callback, whose
+internal metadata the Boehm GC can collect out from under libffi (verified
+upstream bug: the closure userdata lives in non-GC-scanned memory and the
+:callback sysprop retains only the closure object) — the callback then
+reads recycled memory after any GC. Natively compiling the form emits a
+static C function instead: no libffi, no hazard."
+  #-ecl (eval form)
+  #+ecl
+  (uiop:with-temporary-file (:pathname src :type "lisp")
+    (with-open-file (out src :direction :output :if-exists :supersede)
+      (let ((*package* (find-package '#:rulisp)))
+        (format out "(in-package #:rulisp)~%~S~%" form)))
+    (handler-case
+        (multiple-value-bind (fasl warnings failure) (compile-file src)
+          (declare (ignore warnings))
+          (when (or failure (null fasl))
+            (error "compile-file reported failure"))
+          (load fasl)
+          (ignore-errors (delete-file fasl)))
+      (error (e)
+        (error 'manifest-error
+               :message (format nil "callbacks on ECL require the native ~
+                                     compiler (compile-file failed: ~A)" e))))))
+
 (defun trampoline-form (name param-types)
   (let ((specs (loop for ty in param-types
                      for i from 0
@@ -130,7 +156,7 @@ callback name, defining it on first use for this signature shape."
       (or (gethash key *trampolines*)
           (let ((name (intern (format nil "%TRAMPOLINE-~D" (hash-table-count *trampolines*))
                               '#:rulisp)))
-            (eval (trampoline-form name params))
+            (%define-callback-trampoline (trampoline-form name params))
             (setf (gethash key *trampolines*) name))))))
 
 (defun stored-trampoline-form (name param-types)
@@ -180,7 +206,7 @@ conditions are warned and reported as status 1; a dead id is status 2."
           (let ((name (intern (format nil "%STORED-TRAMPOLINE-~D"
                                       (hash-table-count *trampolines*))
                               '#:rulisp)))
-            (eval (stored-trampoline-form name params))
+            (%define-callback-trampoline (stored-trampoline-form name params))
             (setf (gethash key *trampolines*) name))))))
 
 ;;; ---------------------------------------------------------------------------

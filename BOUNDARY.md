@@ -138,6 +138,13 @@ Differences from the borrowed form:
   load). Free-vs-in-flight races are resolved by deferral (§5).
 - Rust code may spawn internal threads but cannot call Lisp callbacks from
   them (`!Send`, §6.1).
+- ECL specifics: callback trampolines are natively compiled at load time
+  (a C toolchain must be present — bytecodes defcallbacks are unsafe on
+  ECL, see docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread
+  invocation of stored callbacks is UNSUPPORTED there: ECL cannot adopt
+  threads it didn't create (`ecl_import_current_thread` would have to run
+  on the foreign thread itself). Invoke stored callbacks from Lisp-visible
+  threads only, or use the queue pattern.
 - Signals: a plain Rust cdylib (tokio included) installs no signal
   handlers. **Audit glue-crate dependencies for `sigaction`** (JIT,
   wasmtime, crash-handler crates are the usual offenders) — SBCL's GC is

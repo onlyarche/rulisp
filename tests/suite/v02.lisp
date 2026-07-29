@@ -117,8 +117,14 @@
 
 (test v02.stored-callback-cross-thread
   "The callback runs on a fresh Rust-spawned thread (adopted by the Lisp on
-entry); the shim joins it, so the effect is visible on return."
+entry); the shim joins it, so the effect is visible on return.
+ECL cannot adopt foreign threads (it requires ecl_import_current_thread on
+the thread itself, which rulisp cannot inject) — platform limitation, see
+BOUNDARY.md §7."
+  #+ecl (pass "foreign-thread callbacks are unsupported on ECL")
+  #-ecl
   (ensure-crate)
+  #-ecl
   (let* ((seen '())
          (lock (bt:make-lock))
          (token (rulisp:callback

@@ -53,8 +53,14 @@ constructor demand case appears, and then as an OPT-IN attribute
 
 ### 5. Portability
 
-- **ECL callback segfault** — the best-effort CI job is honestly red at
-  the callback tests; investigate ECL's libffi closure path.
+- ✅ **ECL callback segfault — root-caused and fixed** (0.2 dev): an
+  apparently unreported ECL bug (`si:make-dynamic-callback` doesn't
+  GC-protect its libffi closure metadata — writeup for upstream filing in
+  docs/upstream/ecl-dynamic-callback-gc.md). rulisp natively compiles
+  trampolines on ECL instead of eval'ing them; full suite now green on
+  ECL 21.2.1 (139/139), with one documented platform limitation:
+  foreign-thread stored-callback invocation (ECL cannot adopt foreign
+  threads).
 - Image dump/restore on non-SBCL hosts (`ccl:save-application`, ECL);
   the m7 test currently passes vacuously off SBCL.
 - Windows: excluded from v1; needs LLP64 `uintptr` handling, DLL

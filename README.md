@@ -103,11 +103,13 @@ architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
 
 ## Status
 
-v0.1.0. CI-verified matrix: SBCL on Linux x86-64 and macOS arm64, and
-Clozure CL 1.13 on Linux x86-64 (races, nested callbacks, reload,
-dump/restore, 10k-op fuzz — all green). Known limitation: ECL currently
-segfaults on the callback path (best-effort target, under investigation).
-Windows: v1 does not support it.
+0.2 (dev). CI-verified matrix: SBCL on Linux x86-64 and macOS arm64,
+Clozure CL 1.13 on Linux x86-64, and ECL 21+ on Linux (races, nested
+callbacks, reload, dump/restore, 10k-op fuzz — all green). ECL notes: a
+C toolchain is required for callbacks (rulisp natively compiles
+trampolines to dodge an upstream GC bug we root-caused —
+docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread stored
+callbacks are unsupported there. Windows: not yet supported.
 
 Requirements: a Rust toolchain (`cargo`), CFFI-capable Lisp, Quicklisp
 (deps: cffi, babel, trivial-garbage, bordeaux-threads).
