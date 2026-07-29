@@ -30,7 +30,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-rulisp = "0.1"
+rulisp = "0.2"
 regex = "1"
 ```
 

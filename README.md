@@ -103,7 +103,7 @@ architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
 
 ## Status
 
-0.2 (dev). CI-verified matrix: SBCL on Linux x86-64 and macOS arm64,
+0.2.0. CI-verified matrix: SBCL on Linux x86-64 and macOS arm64,
 Clozure CL 1.13 on Linux x86-64, and ECL 21+ on Linux (races, nested
 callbacks, reload, dump/restore, 10k-op fuzz — all green). ECL notes: a
 C toolchain is required for callbacks (rulisp natively compiles
