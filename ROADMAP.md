@@ -66,8 +66,10 @@ docs/distribution.md describes the patterns; v0.2 automates them:
 ### 7. DX polish
 
 - Opt-in `Display`-driven `print-object` for handles (DESIGN.md §6.4).
-- Wasm example follow-ups once the above land: linear-memory access via
-  `:bytes`, host functions via stored callbacks, possibly WASI.
+- ✅ Wasm linear-memory access via `:bytes` — shipped alongside `:bytes`
+  (bounds-checked `memory-read`/`memory-write` + a guest function summing
+  a host-written buffer). Still pending: host functions via stored
+  callbacks, possibly WASI.
 
 ## Later / exploratory
 

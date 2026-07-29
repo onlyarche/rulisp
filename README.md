@@ -90,11 +90,13 @@ wrapping the real `regex` crate in 10 minutes (the finished example is
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
 toolchain needed) vs building your own. For something bigger,
 [`examples/wasm/`](examples/wasm/) gives Common Lisp a WebAssembly runtime
-in ~140 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
+in ~190 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
 their exports under a fuel-metered CPU budget (runaway guest code traps as
-a condition instead of hanging the image), and watch wasm traps arrive as
-Lisp conditions (built on the signal-handler-free `wasmi` interpreter —
-see BOUNDARY.md §7 for why that matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
+a condition instead of hanging the image), move byte buffers in and out of
+the guest's linear memory (bounds-checked; out-of-bounds is a condition),
+and watch wasm traps arrive as Lisp conditions (built on the
+signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
+matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
 architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
 
 ## Status

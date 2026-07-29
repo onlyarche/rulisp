@@ -92,6 +92,53 @@ impl Wasm {
         self.call(name, &[a, b])
     }
 
+    /// Copy DATA into the guest's exported linear memory at OFFSET —
+    /// :bytes in action: Lisp octets land in the sandbox, bounds-checked.
+    pub fn memory_write(&self, offset: u64, data: &[u8]) -> Result<(), WasmError> {
+        let (store, instance) = &mut *self.inner.lock().unwrap();
+        let memory = instance
+            .get_memory(&mut *store, "memory")
+            .ok_or_else(|| WasmError("module exports no \"memory\"".into()))?;
+        let mem = memory.data_mut(&mut *store);
+        let mem_len = mem.len();
+        let start = offset as usize;
+        let end = start
+            .checked_add(data.len())
+            .filter(|&end| end <= mem_len)
+            .ok_or_else(|| {
+                WasmError(format!(
+                    "write of {} byte(s) at offset {} exceeds memory size {}",
+                    data.len(),
+                    offset,
+                    mem_len
+                ))
+            })?;
+        mem[start..end].copy_from_slice(data);
+        Ok(())
+    }
+
+    /// Copy LEN bytes out of the guest's linear memory at OFFSET.
+    pub fn memory_read(&self, offset: u64, len: u64) -> Result<Vec<u8>, WasmError> {
+        let (store, instance) = &mut *self.inner.lock().unwrap();
+        let memory = instance
+            .get_memory(&mut *store, "memory")
+            .ok_or_else(|| WasmError("module exports no \"memory\"".into()))?;
+        let mem = memory.data(&*store);
+        let start = offset as usize;
+        let src = start
+            .checked_add(len as usize)
+            .and_then(|end| mem.get(start..end))
+            .ok_or_else(|| {
+                WasmError(format!(
+                    "read of {} byte(s) at offset {} exceeds memory size {}",
+                    len,
+                    offset,
+                    mem.len()
+                ))
+            })?;
+        Ok(src.to_vec())
+    }
+
     /// Top up the fuel budget (metered instances only).
     pub fn refuel(&self, fuel: u64) -> Result<(), WasmError> {
         let (store, _) = &mut *self.inner.lock().unwrap();
@@ -151,6 +198,7 @@ rulisp::module! {
     handles: [Wasm],
     fns: [
         Wasm::load, Wasm::exports, Wasm::call0, Wasm::call1, Wasm::call2,
+        Wasm::memory_write, Wasm::memory_read,
         Wasm::refuel, Wasm::fuel_left,
     ],
 }
