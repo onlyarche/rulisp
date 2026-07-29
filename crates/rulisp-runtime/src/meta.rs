@@ -19,6 +19,11 @@ pub enum ParamTy {
         /// result token, ":unit" in v1
         result: &'static str,
     },
+    /// v0.2: registered callback — storable, cloneable, any-thread.
+    StoredCallback {
+        params: &'static [ParamTy],
+        result: &'static str,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -87,6 +92,18 @@ fn render_ty(ty: &ParamTy, out: &mut String) {
         }
         ParamTy::Callback { params, result } => {
             out.push_str("(:callback :params (");
+            for (i, p) in params.iter().enumerate() {
+                if i > 0 {
+                    out.push(' ');
+                }
+                render_ty(p, out);
+            }
+            out.push_str(") :result ");
+            out.push_str(result);
+            out.push(')');
+        }
+        ParamTy::StoredCallback { params, result } => {
+            out.push_str("(:stored-callback :params (");
             for (i, p) in params.iter().enumerate() {
                 if i > 0 {
                     out.push(' ');

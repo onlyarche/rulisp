@@ -8,6 +8,10 @@
    #:free
    #:crate
    #:handle
+   ;; stored callbacks (v0.2)
+   #:callback
+   #:unregister-callback
+   #:callback-token
    ;; crate readers
    #:crate-name
    #:crate-generation

@@ -17,7 +17,12 @@
 
 use std::sync::Mutex;
 
-use wasmi::{Config, Engine, Linker, Module, Store, Val};
+use rulisp::StoredCallback;
+use wasmi::{Caller, Config, Engine, Linker, Module, Store, Val};
+
+/// Per-instance host state: the Lisp callback behind the guest-importable
+/// `host.notify` function (a rulisp stored callback — Copy, any-thread).
+type HostState = Option<StoredCallback<(i64,)>>;
 
 #[derive(Debug)]
 pub struct WasmError(String);
@@ -38,7 +43,7 @@ impl From<wasmi::Error> for WasmError {
 
 #[rulisp::handle]
 pub struct Wasm {
-    inner: Mutex<(Store<()>, wasmi::Instance)>,
+    inner: Mutex<(Store<HostState>, wasmi::Instance)>,
 }
 
 #[rulisp::export]
@@ -58,11 +63,28 @@ impl Wasm {
         config.consume_fuel(fuel > 0);
         let engine = Engine::new(&config);
         let module = Module::new(&engine, &bytes)?;
-        let mut store = Store::new(&engine, ());
+        let mut store = Store::new(&engine, None);
         if fuel > 0 {
             store.set_fuel(fuel)?;
         }
-        let linker: Linker<()> = Linker::new(&engine);
+        let mut linker: Linker<HostState> = Linker::new(&engine);
+        // host.notify is always importable; without a Lisp callback set via
+        // wasm-on-notify, calling it traps (a condition, never a crash)
+        linker.func_wrap(
+            "host",
+            "notify",
+            |caller: Caller<'_, HostState>, x: i64| -> Result<(), wasmi::Error> {
+                match *caller.data() {
+                    Some(cb) => cb.call((x,)).map_err(|_| {
+                        wasmi::Error::new("lisp callback failed (see warnings)")
+                    }),
+                    None => Err(wasmi::Error::new(
+                        "no host callback set (call wasm-on-notify first)",
+                    )),
+                }
+            },
+        )
+        .map_err(|e| WasmError(e.to_string()))?;
         let instance = linker.instantiate_and_start(&mut store, &module)?;
         Ok(Wasm {
             inner: Mutex::new((store, instance)),
@@ -90,6 +112,13 @@ impl Wasm {
 
     pub fn call2(&self, name: &str, a: i64, b: i64) -> Result<i64, WasmError> {
         self.call(name, &[a, b])
+    }
+
+    /// Route the guest-importable `host.notify(i64)` to a stored Lisp
+    /// callback: wasm code calls straight into the REPL.
+    pub fn on_notify(&self, f: StoredCallback<(i64,)>) {
+        let (store, _) = &mut *self.inner.lock().unwrap();
+        *store.data_mut() = Some(f);
     }
 
     /// Copy DATA into the guest's exported linear memory at OFFSET —
@@ -198,6 +227,7 @@ rulisp::module! {
     handles: [Wasm],
     fns: [
         Wasm::load, Wasm::exports, Wasm::call0, Wasm::call1, Wasm::call2,
+        Wasm::on_notify,
         Wasm::memory_write, Wasm::memory_read,
         Wasm::refuel, Wasm::fuel_left,
     ],

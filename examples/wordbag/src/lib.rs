@@ -79,6 +79,43 @@ pub fn rev(data: &[u8]) -> Vec<u8> {
 }
 
 // ---------------------------------------------------------------------------
+// Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
+// it later — same thread or a fresh Rust thread (adopted on entry).
+// ---------------------------------------------------------------------------
+
+static NOTIFIER: Mutex<Option<StoredCallback<(i64,)>>> = Mutex::new(None);
+
+#[rulisp::export]
+pub fn set_notifier(f: StoredCallback<(i64,)>) {
+    *NOTIFIER.lock().unwrap() = Some(f);
+}
+
+#[rulisp::export]
+pub fn clear_notifier() {
+    *NOTIFIER.lock().unwrap() = None;
+}
+
+fn current_notifier() -> Result<StoredCallback<(i64,)>, Error> {
+    (*NOTIFIER.lock().unwrap()).ok_or_else(|| Error::msg("no notifier registered"))
+}
+
+#[rulisp::export]
+pub fn notify(x: i64) -> Result<(), Error> {
+    current_notifier()?
+        .call((x,))
+        .map_err(|_| Error::msg("stored callback failed (see warnings)"))
+}
+
+#[rulisp::export]
+pub fn notify_from_thread(x: i64) -> Result<(), Error> {
+    let cb = current_notifier()?;
+    std::thread::spawn(move || cb.call((x,)))
+        .join()
+        .map_err(|_| Error::msg("notifier thread panicked"))?
+        .map_err(|_| Error::msg("stored callback failed (see warnings)"))
+}
+
+// ---------------------------------------------------------------------------
 // WordBag handle
 // ---------------------------------------------------------------------------
 
@@ -176,6 +213,7 @@ rulisp::module! {
     handles: [WordBag],
     fns: [
         add, always_panic, parse_number, greet, echo, sum, rev,
+        set_notifier, clear_notifier, notify, notify_from_thread,
         WordBag::new, WordBag::add, WordBag::len, WordBag::slow_len,
         for_each_word,
         test_live_allocations, test_live_word_bags, test_cb_guard_drops,

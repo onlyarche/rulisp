@@ -21,16 +21,14 @@ notes reference real cases hit while building the examples.
 
 ### 2. Stored and cross-thread callbacks
 
-v1 callbacks are borrowed, same-thread, call-duration only. The ABI already
-reserves a `userdata` slot for registered callbacks.
-
-- Stored callbacks: register a Lisp closure, invoke later.
-  *Demand:* wasm host functions (guest code calling back into Lisp) —
-  the single most-requested capability the wasm example surfaced.
-- Cross-thread delivery: SBCL's foreign-thread callback adoption is
-  source-verified; expose it deliberately, plus a queue-polling helper as
-  the recommended high-frequency pattern (tokio/async bridges, event
-  streams).
+- ✅ **Shipped** (0.2 dev): `StoredCallback<A>` + `rulisp:callback` tokens
+  — registered closures Rust may store, clone and invoke from any thread
+  (foreign threads are adopted; verified on SBCL AND CCL). Fail-safe
+  lifetime: a dead id warns and errors, never dangles. The wire is the
+  `userdata` slot v1 reserved — ABI 1 unchanged. Demand case closed: wasm
+  host functions (examples/wasm `on-notify` + guest.wat).
+- Still open: a queue-polling helper as the recommended high-frequency
+  pattern (tokio/async bridges, event streams).
 
 ### 3. Constructor `&key` arguments
 

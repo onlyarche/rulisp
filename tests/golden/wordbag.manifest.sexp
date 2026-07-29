@@ -23,6 +23,15 @@
    :params ((:name "data" :type :bytes)) :result :u64 :error nil)
   (:fn :rust-name "rev" :lisp-name "rev" :symbol "rev"
    :params ((:name "data" :type :bytes)) :result :bytes :error nil)
+  (:fn :rust-name "set_notifier" :lisp-name "set-notifier" :symbol "set_notifier"
+   :params ((:name "f" :type (:stored-callback :params (:i64) :result :unit)))
+   :result :unit :error nil)
+  (:fn :rust-name "clear_notifier" :lisp-name "clear-notifier" :symbol "clear_notifier"
+   :params () :result :unit :error nil)
+  (:fn :rust-name "notify" :lisp-name "notify" :symbol "notify"
+   :params ((:name "x" :type :i64)) :result :unit :error "Error")
+  (:fn :rust-name "notify_from_thread" :lisp-name "notify-from-thread" :symbol "notify_from_thread"
+   :params ((:name "x" :type :i64)) :result :unit :error "Error")
   (:fn :rust-name "WordBag::new" :lisp-name "make-word-bag" :symbol "word_bag_new"
    :params () :result (:handle "WordBag") :error nil)
   (:fn :rust-name "WordBag::add" :lisp-name "word-bag-add" :symbol "word_bag_add"

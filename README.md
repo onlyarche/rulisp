@@ -94,7 +94,9 @@ in ~190 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
 their exports under a fuel-metered CPU budget (runaway guest code traps as
 a condition instead of hanging the image), move byte buffers in and out of
 the guest's linear memory (bounds-checked; out-of-bounds is a condition),
-and watch wasm traps arrive as Lisp conditions (built on the
+wire host functions so GUEST code calls straight into your Lisp closures
+(stored callbacks; a condition in the closure becomes a guest trap), and
+watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
 matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
 architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
@@ -118,14 +120,15 @@ make test-ccl   # same suites on Clozure CL
 ## Scope (v0.1)
 
 In: scalars, `bool`, `&str`/`String`, `&[u8]`/`Vec<u8>` byte buffers,
-opaque handles (`&self` methods, constructors), synchronous same-thread
-callbacks, `Result` errors → typed conditions, live reload, image
+opaque handles (`&self` methods, constructors), borrowed same-thread
+callbacks AND stored any-thread callbacks (`StoredCallback` +
+`rulisp:callback` tokens — fail-safe lifetime, verified cross-thread on
+SBCL and CCL), `Result` errors → typed conditions, live reload, image
 dump/restore, `use-value`/`retry-build` restarts.
 
-Out for now — see [ROADMAP.md](ROADMAP.md): `Option`/`Vec<T>`, stored and
-cross-thread callbacks, constructor `&key` arguments, Windows,
-prebuilt-binary distribution tooling
-([docs/distribution.md](docs/distribution.md)).
+Out for now — see [ROADMAP.md](ROADMAP.md): `Option`/`Vec<T>`,
+constructor `&key` arguments, Windows, prebuilt-binary distribution
+tooling ([docs/distribution.md](docs/distribution.md)).
 
 rulisp is for writing glue crates — it does not auto-bind arbitrary
 existing crates, by design (neither does PyO3).

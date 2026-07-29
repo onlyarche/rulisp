@@ -12,7 +12,7 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;
 
-use rulisp::Error;
+use rulisp::{Error, StoredCallback};
 use rulisp_runtime as rt;
 
 static MANIFEST: &str = include_str!("../wordbag.manifest.sexp");
@@ -325,6 +325,83 @@ pub unsafe extern "C" fn wordbag_rulisp_for_each_word(
         }
         unsafe { *out = words.len() as u64 };
         rt::STATUS_OK
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
+// it later — same thread or a fresh Rust thread (adopted on entry).
+// ---------------------------------------------------------------------------
+
+static NOTIFIER: Mutex<Option<StoredCallback<(i64,), ()>>> = Mutex::new(None);
+
+/// set_notifier(f: StoredCallback<(i64,)>)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_set_notifier(
+    f: unsafe extern "C" fn(u64, i64) -> i32,
+    f_userdata: u64,
+) -> i32 {
+    rt::shim(|| {
+        let f = unsafe { StoredCallback::from_raw(f as usize, f_userdata) };
+        *NOTIFIER.lock().unwrap() = Some(f);
+        rt::STATUS_OK
+    })
+}
+
+/// clear_notifier()
+#[no_mangle]
+pub extern "C" fn wordbag_rulisp_clear_notifier() -> i32 {
+    rt::shim(|| {
+        *NOTIFIER.lock().unwrap() = None;
+        rt::STATUS_OK
+    })
+}
+
+fn current_notifier() -> Result<StoredCallback<(i64,), ()>, i32> {
+    NOTIFIER.lock().unwrap().ok_or_else(|| {
+        rt::set_last_error("Error", "no notifier registered");
+        rt::STATUS_ERR
+    })
+}
+
+/// notify(x: i64) -> Result<(), Error> — invoke on the calling thread.
+#[no_mangle]
+pub extern "C" fn wordbag_rulisp_notify(x: i64) -> i32 {
+    rt::shim(|| {
+        let cb = match current_notifier() {
+            Ok(cb) => cb,
+            Err(status) => return status,
+        };
+        match cb.call((x,)) {
+            Ok(()) => rt::STATUS_OK,
+            Err(_) => {
+                rt::set_last_error("Error", "stored callback failed (see warnings)");
+                rt::STATUS_ERR
+            }
+        }
+    })
+}
+
+/// notify_from_thread(x: i64) -> Result<(), Error> — invoke from a fresh
+/// Rust thread (joined for determinism; the Lisp adopts it on entry).
+#[no_mangle]
+pub extern "C" fn wordbag_rulisp_notify_from_thread(x: i64) -> i32 {
+    rt::shim(|| {
+        let cb = match current_notifier() {
+            Ok(cb) => cb,
+            Err(status) => return status,
+        };
+        match std::thread::spawn(move || cb.call((x,))).join() {
+            Ok(Ok(())) => rt::STATUS_OK,
+            Ok(Err(_)) => {
+                rt::set_last_error("Error", "stored callback failed (see warnings)");
+                rt::STATUS_ERR
+            }
+            Err(_) => {
+                rt::set_last_error("Error", "notifier thread panicked");
+                rt::STATUS_ERR
+            }
+        }
     })
 }
 

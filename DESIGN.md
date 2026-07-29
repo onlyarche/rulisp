@@ -510,4 +510,6 @@ CL 의존성: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads`, `uiop` (+�
 
 8. **v0.2 `:bytes` 추가 (2026-07-29)** — §5 타입 어휘에 `:bytes` 편입. 와이어는 `:string`과 동일한 `(ptr,len)` 차용/소유 이전 + 범용 dealloc 규약(UTF-8 검증만 제거)이라 **ABI 1 무파괴**. Rust `&[u8]`(입력)/`Vec<u8>`(반환) ↔ CL `(unsigned-byte 8)` 벡터(입력은 octet 시퀀스 코어싱 허용, 실패 시 `invalid-argument`). 어휘 진화 절차 확립: 오라클 shim + 수기 매니페스트 + golden을 한 커밋에서 동시 갱신하고 매크로 출력의 바이트 동일성 게이트로 봉인. 구버전 로더는 `:bytes` 크레이트를 명명된 `manifest-error`로 깨끗이 거부(반쪽 로드 없음).
 
+9. **v0.2 저장형 콜백 (2026-07-29)** — §4.7이 예약해 둔 `userdata` 슬롯이 레지스트리 ID가 되어 **ABI 1 무변경**으로 저장형 콜백 도입. CL `rulisp:callback` → `callback-token`(토큰 생존 = 등록 유지; GC/명시 해제 후의 호출은 경고 + 에러 status로 **안전 실패** — UB 불가). Rust `StoredCallback<A>`는 숫자 2개(Copy·Send·Sync)로 저장·복제·임의 스레드 호출 가능. 에러 규약: 재signal할 프레임이 없을 수 있으므로 condition은 경고 후 status 1(죽은 ID는 2), 터널/스태시 불관여. 크로스스레드는 SBCL과 **CCL 양쪽에서 실증**(리서치의 미검증 항목 해소). 수요 사례 회수: wasm 호스트 함수(`guest.wat`의 `host.notify` → Lisp 클로저; 클로저의 condition은 게스트 트랩으로).
+
 원본 자료: 리서치 5종 + 종합(`wbqzsl9yo.output`), 설계 3안 + 판정 2건(`w1bva0j8v.output`), M1 리뷰 18건(`weic0xw2b.output`) — 세션 산출물 디렉터리에 보존.

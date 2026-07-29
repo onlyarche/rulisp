@@ -43,6 +43,7 @@ every-other-status discipline.")
 
 (defun handle-type-p (ty) (and (consp ty) (eq (car ty) :handle)))
 (defun callback-type-p (ty) (and (consp ty) (eq (car ty) :callback)))
+(defun stored-callback-type-p (ty) (and (consp ty) (eq (car ty) :stored-callback)))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Callback trampolines: one cffi:defcallback per signature shape, shared
@@ -88,21 +89,75 @@ every-other-status discipline.")
              (warn "rulisp: non-local exit is unwinding through Rust frames ~
                     — this is documented UB (DESIGN.md §4.7)")))))))
 
-(defun ensure-trampoline (cb-type)
-  "CB-TYPE: (:callback :params (...) :result :unit). Returns the trampoline
-callback name, defining it on first use for this signature shape."
+(defun %check-callback-shape (cb-type)
   (destructuring-bind (&key params result) (cdr cb-type)
     (unless (eq result :unit)
-      (error 'manifest-error :message "v1 callbacks must have :result :unit"))
+      (error 'manifest-error :message "callbacks must have :result :unit"))
     (dolist (p params)
       (unless (or (eq p :string) (assoc p +scalar-types+))
         (error 'manifest-error
                :message (format nil "unsupported callback param type ~S" p))))
-    (let ((key (list params result)))
+    (values params result)))
+
+(defun ensure-trampoline (cb-type)
+  "CB-TYPE: (:callback :params (...) :result :unit). Returns the trampoline
+callback name, defining it on first use for this signature shape."
+  (multiple-value-bind (params result) (%check-callback-shape cb-type)
+    (let ((key (list :borrowed params result)))
       (or (gethash key *trampolines*)
           (let ((name (intern (format nil "%TRAMPOLINE-~D" (hash-table-count *trampolines*))
                               '#:rulisp)))
             (eval (trampoline-form name params))
+            (setf (gethash key *trampolines*) name))))))
+
+(defun stored-trampoline-form (name param-types)
+  "Trampoline for STORED callbacks: the leading uint64 is the registry id,
+and there may be no rulisp call frame on this thread to re-signal into —
+conditions are warned and reported as status 1; a dead id is status 2."
+  (let ((specs (loop for ty in param-types
+                     for i from 0
+                     collect (list ty
+                                   (intern (format nil "%P~D" i) '#:rulisp)
+                                   (intern (format nil "%L~D" i) '#:rulisp)))))
+    `(cffi:defcallback ,name :int32
+         ((%id :uint64)
+          ,@(loop for (ty p l) in specs
+                  append (cond ((eq ty :string) `((,p :pointer) (,l uintptr)))
+                               (t `((,p ,(scalar-cffi ty)))))))
+       (let ((%done nil))
+         (unwind-protect
+              (handler-case
+                  (let ((%fn (%stored-callback-lookup %id)))
+                    (cond
+                      ((null %fn)
+                       (warn "rulisp: stored callback ~D is no longer registered ~
+                              (token unregistered or garbage-collected)" %id)
+                       (setf %done t)
+                       2)
+                      (t
+                       (funcall %fn
+                                ,@(loop for (ty p l) in specs
+                                        collect (cond ((eq ty :string) `(foreign-utf8 ,p ,l))
+                                                      ((eq ty :bool) `(plusp ,p))
+                                                      (t p))))
+                       (setf %done t)
+                       0)))
+                (serious-condition (%c)
+                  (warn "rulisp: condition in stored callback ~D: ~A" %id %c)
+                  (setf %done t)
+                  1))
+           (unless %done
+             (warn "rulisp: non-local exit is unwinding through Rust frames ~
+                    — this is documented UB (BOUNDARY.md §6)")))))))
+
+(defun ensure-stored-trampoline (cb-type)
+  (multiple-value-bind (params result) (%check-callback-shape cb-type)
+    (let ((key (list :stored params result)))
+      (or (gethash key *trampolines*)
+          (let ((name (intern (format nil "%STORED-TRAMPOLINE-~D"
+                                      (hash-table-count *trampolines*))
+                              '#:rulisp)))
+            (eval (stored-trampoline-form name params))
             (setf (gethash key *trampolines*) name))))))
 
 ;;; ---------------------------------------------------------------------------
@@ -236,6 +291,21 @@ FSPEC against one immutable generation context."
                   (setf call-args
                         (append call-args
                                 `(:pointer (cffi:callback ,tramp) :uint64 0)))))
+               ((stored-callback-type-p ty)
+                (let ((tramp (ensure-stored-trampoline ty)))
+                  (push (let ((s sym))
+                          (lambda (inner)
+                            `(progn
+                               (unless (typep ,s 'callback-token)
+                                 (error 'invalid-argument
+                                        :message "expected a callback token (rulisp:callback fn)"
+                                        :function-name ,qualified))
+                               ,inner)))
+                        wrappers)
+                  (setf call-args
+                        (append call-args
+                                `(:pointer (cffi:callback ,tramp)
+                                  :uint64 (callback-token-id ,sym))))))
                (t
                 (setf call-args
                       (append call-args

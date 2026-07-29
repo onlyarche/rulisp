@@ -70,6 +70,7 @@ enum PTy {
     BytesRef,
     HandleRef(Path),
     Callback { param_toks: Vec<&'static str> },
+    StoredCallback { param_toks: Vec<&'static str> },
 }
 
 fn unsupported(span: proc_macro2::Span) -> Error {
@@ -114,7 +115,10 @@ fn classify_param(ty: &Type) -> Result<PTy, Error> {
                 return Ok(PTy::Bool);
             }
             if name == "Callback" {
-                return classify_callback(seg, ty.span());
+                return classify_callback(seg, ty.span(), false);
+            }
+            if name == "StoredCallback" {
+                return classify_callback(seg, ty.span(), true);
             }
             Err(unsupported(ty.span()))
         }
@@ -122,7 +126,11 @@ fn classify_param(ty: &Type) -> Result<PTy, Error> {
     }
 }
 
-fn classify_callback(seg: &syn::PathSegment, span: proc_macro2::Span) -> Result<PTy, Error> {
+fn classify_callback(
+    seg: &syn::PathSegment,
+    span: proc_macro2::Span,
+    stored: bool,
+) -> Result<PTy, Error> {
     let PathArguments::AngleBracketed(args) = &seg.arguments else {
         return Err(unsupported(span));
     };
@@ -134,17 +142,22 @@ fn classify_callback(seg: &syn::PathSegment, span: proc_macro2::Span) -> Result<
             _ => None,
         })
         .collect();
-    let [tuple, result] = tys.as_slice() else {
+    // StoredCallback<A> defaults R to (); both accept an explicit R too
+    let (tuple, result) = match tys.as_slice() {
+        [tuple] if stored => (tuple, None),
+        [tuple, result] => (tuple, Some(result)),
+        _ => return Err(unsupported(span)),
+    };
+    let Type::Tuple(t) = *tuple else {
         return Err(unsupported(span));
     };
-    let Type::Tuple(t) = tuple else {
-        return Err(unsupported(span));
-    };
-    if !matches!(result, Type::Tuple(rt) if rt.elems.is_empty()) {
-        return Err(Error::new(
-            span,
-            "rulisp: v1 callbacks must return () — Callback<(...), ()>",
-        ));
+    if let Some(result) = result {
+        if !matches!(*result, Type::Tuple(rt) if rt.elems.is_empty()) {
+            return Err(Error::new(
+                span,
+                "rulisp: callbacks must return () — Callback<(...), ()>",
+            ));
+        }
     }
     let mut param_toks = Vec::new();
     for elem in &t.elems {
@@ -160,7 +173,11 @@ fn classify_callback(seg: &syn::PathSegment, span: proc_macro2::Span) -> Result<
             }
         }
     }
-    Ok(PTy::Callback { param_toks })
+    Ok(if stored {
+        PTy::StoredCallback { param_toks }
+    } else {
+        PTy::Callback { param_toks }
+    })
 }
 
 enum RTy {
@@ -273,6 +290,27 @@ enum CallKind {
     Ctor { self_ty: Path, method: Ident },
 }
 
+fn cb_ffi_types(param_toks: &[&'static str]) -> TokenStream2 {
+    let mut cb_ffi = TokenStream2::new();
+    for tok in param_toks {
+        match *tok {
+            ":string" => cb_ffi.extend(quote! { *const u8, usize, }),
+            ":bool" | ":u8" => cb_ffi.extend(quote! { u8, }),
+            ":i8" => cb_ffi.extend(quote! { i8, }),
+            ":i16" => cb_ffi.extend(quote! { i16, }),
+            ":i32" => cb_ffi.extend(quote! { i32, }),
+            ":i64" => cb_ffi.extend(quote! { i64, }),
+            ":u16" => cb_ffi.extend(quote! { u16, }),
+            ":u32" => cb_ffi.extend(quote! { u32, }),
+            ":u64" => cb_ffi.extend(quote! { u64, }),
+            ":f32" => cb_ffi.extend(quote! { f32, }),
+            ":f64" => cb_ffi.extend(quote! { f64, }),
+            _ => unreachable!(),
+        }
+    }
+    cb_ffi
+}
+
 fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
     let prefix = crate_prefix();
     let shim_ident = format_ident!("{}{}", prefix, f.symbol);
@@ -335,23 +373,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
             PTy::Callback { param_toks } => {
                 has_callback = true;
                 let userdata = format_ident!("{}_userdata", ident);
-                let mut cb_ffi = TokenStream2::new();
-                for tok in param_toks {
-                    match *tok {
-                        ":string" => cb_ffi.extend(quote! { *const u8, usize, }),
-                        ":bool" | ":u8" => cb_ffi.extend(quote! { u8, }),
-                        ":i8" => cb_ffi.extend(quote! { i8, }),
-                        ":i16" => cb_ffi.extend(quote! { i16, }),
-                        ":i32" => cb_ffi.extend(quote! { i32, }),
-                        ":i64" => cb_ffi.extend(quote! { i64, }),
-                        ":u16" => cb_ffi.extend(quote! { u16, }),
-                        ":u32" => cb_ffi.extend(quote! { u32, }),
-                        ":u64" => cb_ffi.extend(quote! { u64, }),
-                        ":f32" => cb_ffi.extend(quote! { f32, }),
-                        ":f64" => cb_ffi.extend(quote! { f64, }),
-                        _ => unreachable!(),
-                    }
-                }
+                let cb_ffi = cb_ffi_types(param_toks);
                 extern_params.extend(quote! {
                     #ident: unsafe extern "C" fn(u64, #cb_ffi) -> i32,
                     #userdata: u64,
@@ -359,6 +381,23 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 preludes.extend(quote! {
                     let #ident = unsafe {
                         ::rulisp::Callback::from_raw(#ident as *const (), #userdata)
+                    };
+                });
+                call_args.push(quote! { #ident });
+            }
+            PTy::StoredCallback { param_toks } => {
+                // same two ABI values as Callback — userdata carries the
+                // registry id; no tunnel involvement (errors are warned on
+                // the Lisp side and reported as plain CallbackError)
+                let userdata = format_ident!("{}_userdata", ident);
+                let cb_ffi = cb_ffi_types(param_toks);
+                extern_params.extend(quote! {
+                    #ident: unsafe extern "C" fn(u64, #cb_ffi) -> i32,
+                    #userdata: u64,
+                });
+                preludes.extend(quote! {
+                    let #ident = unsafe {
+                        ::rulisp::StoredCallback::from_raw(#ident as usize, #userdata)
                     };
                 });
                 call_args.push(quote! { #ident });
@@ -481,6 +520,12 @@ fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
                 },
                 PTy::Callback { param_toks } => quote! {
                     ::rulisp::runtime::ParamTy::Callback {
+                        params: &[#(::rulisp::runtime::ParamTy::Scalar(#param_toks)),*],
+                        result: ":unit",
+                    }
+                },
+                PTy::StoredCallback { param_toks } => quote! {
+                    ::rulisp::runtime::ParamTy::StoredCallback {
                         params: &[#(::rulisp::runtime::ParamTy::Scalar(#param_toks)),*],
                         result: ":unit",
                     }

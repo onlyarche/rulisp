@@ -11,6 +11,7 @@
                (:file "ffi")
                (:file "manifest")
                (:file "handle")
+               (:file "stored-callback")
                (:file "codegen")
                (:file "crate")
                (:file "build")))

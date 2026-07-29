@@ -113,6 +113,23 @@ Contract:
    logs a best-effort warning. Signal conditions instead — they are caught
    and tunneled correctly.
 
+Stored callbacks (0.2, `StoredCallback<A>`): same wire, different
+trampoline — the leading `uint64` carries a registry id minted by
+`rulisp:callback`, whose CALLBACK-TOKEN keeps the closure registered.
+Differences from the borrowed form:
+
+- Storable, `Clone`/`Copy`, `Send + Sync`: Rust may keep it and invoke
+  from any thread (the Lisp adopts foreign threads on entry; verified on
+  SBCL and CCL).
+- Lifetime is fail-safe, not compile-enforced: once the token is
+  unregistered (explicitly or by GC), invocation returns an error status
+  after a Lisp-side warning — a dead id can never dangle.
+- Error protocol: there may be no rulisp call frame on the invoking
+  thread, so a signaled condition is WARNED and reported as
+  `Err(CallbackError)` (status 1; a dead id is status 2). No stash, no
+  re-signal, no status 4.
+- The non-local-exit clause above applies identically.
+
 ## 7. Threads and signals
 
 - Any Lisp thread may call any export; execution is on the calling thread.
