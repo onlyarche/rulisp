@@ -99,7 +99,9 @@ wire host functions so GUEST code calls straight into your Lisp closures
 watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
 matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
-architecture and rationale in [DESIGN.md](DESIGN.md) (Korean).
+architecture and rationale in [DESIGN.md](DESIGN.md) (Korean). Release
+history: [CHANGELOG.md](CHANGELOG.md). Reporting a vulnerability and the
+threat model: [SECURITY.md](SECURITY.md).
 
 ## Status
 
