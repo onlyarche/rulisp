@@ -1,0 +1,5 @@
+error: rulisp: a constructor cannot take &self — take the producing handle as an ordinary parameter instead, e.g. `fn start(client: &Client, url: &str) -> Result<Req, Error>`
+  --> tests/ui/ctor_self.rs:20:9
+   |
+20 |     pub fn start(&self) -> Req {
+   |         ^^

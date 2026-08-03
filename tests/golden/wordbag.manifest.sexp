@@ -29,6 +29,8 @@
    :params ((:name "name" :type (:option :string))) :result :string :error nil)
   (:fn :rust-name "deltas" :lisp-name "deltas" :symbol "deltas"
    :params ((:name "xs" :type (:vec :i64))) :result (:vec :i64) :error nil)
+  (:fn :rust-name "scale" :lisp-name "scale" :symbol "scale"
+   :params ((:name "xs" :type (:vec :f64)) (:name "k" :type :f64)) :result (:vec :f64) :error nil)
   (:fn :rust-name "set_notifier" :lisp-name "set-notifier" :symbol "set_notifier"
    :params ((:name "f" :type (:stored-callback :params (:i64) :result :unit)))
    :result :unit :error nil)

@@ -47,12 +47,48 @@
 ;;; UTF-8 marshaling (DESIGN.md §4.5)
 ;;; ---------------------------------------------------------------------------
 
+;;; Bulk transfer. Element-at-a-time CFFI loops cost ~7-10 ns per BYTE
+;;; (measured, tests/bench.lisp) — a megabyte took milliseconds. Pinning a
+;;; specialized Lisp vector and memcpy'ing is ~100x faster, and on the
+;;; INBOUND side the pin lets Rust borrow the Lisp array directly: no copy
+;;; at all. Pinning is dynamic-extent and Rust may not retain the pointer
+;;; (BOUNDARY.md §4), so this stays inside the frozen contract.
+;;;
+;;; Not every implementation can pin every specialized array type, so the
+;;; capability is probed once per element type and the element-wise path
+;;; remains as the fallback.
+
+(defvar *pinnable* (make-hash-table :test 'equal))
+
+(defun pinnable-p (lisp-type)
+  (multiple-value-bind (val found) (gethash lisp-type *pinnable*)
+    (if found
+        val
+        (setf (gethash lisp-type *pinnable*)
+              (handler-case
+                  (let ((probe (make-array 1 :element-type lisp-type)))
+                    (and (typep probe `(simple-array ,lisp-type (*)))
+                         (cffi:with-pointer-to-vector-data (p probe)
+                           (not (cffi:null-pointer-p p)))))
+                (error () nil))))))
+
+(defun pinned-vector-p (v lisp-type)
+  (and (typep v `(simple-array ,lisp-type (*)))
+       (pinnable-p lisp-type)))
+
+(defun %memcpy (dst src nbytes)
+  (cffi:foreign-funcall "memcpy" :pointer dst :pointer src uintptr nbytes :pointer))
+
 (defun foreign-octets (ptr len)
   "Copy LEN bytes at PTR into a fresh (unsigned-byte 8) vector.
 LEN = 0 never touches PTR (empty-transfer convention)."
   (let ((octets (make-array len :element-type '(unsigned-byte 8))))
-    (dotimes (i len)
-      (setf (aref octets i) (cffi:mem-aref ptr :uint8 i)))
+    (when (plusp len)
+      (if (pinned-vector-p octets '(unsigned-byte 8))
+          (cffi:with-pointer-to-vector-data (dst octets)
+            (%memcpy dst ptr len))
+          (dotimes (i len)
+            (setf (aref octets i) (cffi:mem-aref ptr :uint8 i)))))
     octets))
 
 (defun foreign-utf8 (ptr len)
@@ -62,21 +98,30 @@ LEN = 0 never touches PTR (empty-transfer convention)."
       (babel:octets-to-string (foreign-octets ptr len) :encoding :utf-8)))
 
 (defun call-with-bytes-arg (data fn)
-  "Copy DATA — an octet vector, or any sequence coercible to one — into
-foreign memory borrowed for the duration of FN, called as (FN ptr len)."
-  (let* ((octets (if (typep data '(vector (unsigned-byte 8)))
-                     data
-                     (handler-case
-                         (coerce data '(simple-array (unsigned-byte 8) (*)))
-                       (error ()
-                         (error 'invalid-argument
-                                :message (format nil "not an octet sequence: ~S"
-                                                 data))))))
-         (len (length octets)))
-    (cffi:with-foreign-object (buf :uint8 (max len 1))
-      (dotimes (i len)
-        (setf (cffi:mem-aref buf :uint8 i) (aref octets i)))
-      (funcall fn buf len))))
+  "Lend DATA — an octet vector, or any sequence coercible to one — to FN as
+(FN ptr len) for the dynamic extent of the call. A simple octet vector is
+pinned and borrowed in place (no copy); anything else is coerced first."
+  (let ((octets (if (typep data '(simple-array (unsigned-byte 8) (*)))
+                    data
+                    (handler-case
+                        (coerce data '(simple-array (unsigned-byte 8) (*)))
+                      (error ()
+                        (error 'invalid-argument
+                               :message (format nil "not an octet sequence: ~S"
+                                                data)))))))
+    (let ((len (length octets)))
+      (cond
+        ((zerop len)
+         (cffi:with-foreign-object (buf :uint8 1)
+           (funcall fn buf 0)))
+        ((pinned-vector-p octets '(unsigned-byte 8))
+         (cffi:with-pointer-to-vector-data (ptr octets)
+           (funcall fn ptr len)))
+        (t
+         (cffi:with-foreign-object (buf :uint8 len)
+           (dotimes (i len)
+             (setf (cffi:mem-aref buf :uint8 i) (aref octets i)))
+           (funcall fn buf len)))))))
 
 (defun call-with-utf8-arg (string fn)
   "Encode STRING as UTF-8 into foreign memory borrowed for the duration of
@@ -95,22 +140,27 @@ FN, called as (FN ptr len). No NUL terminator; interior NULs are legal."
       (funcall fn 0 (cffi:null-pointer) 0)
       (call-with-bytes-arg s (lambda (p l) (funcall fn 1 p l)))))
 
-(defun call-with-vec-arg (data cffi-type coercer fn)
-  "(:vec ...) parameter: copy DATA (a sequence of numbers) into a foreign
-array of CFFI-TYPE borrowed for the duration of FN, called as
-(FN ptr len-in-elements)."
+(defun call-with-vec-arg (data cffi-type lisp-type coercer fn)
+  "(:vec ...) parameter: lend DATA (a sequence of numbers) to FN as
+(FN ptr len-in-elements). A matching simple specialized vector is pinned
+and borrowed in place; anything else is copied into a foreign array."
   (let ((len (length data)))
-    (cffi:with-foreign-object (buf cffi-type (max len 1))
-      (handler-case
-          (let ((i 0))
-            (map nil (lambda (x)
-                       (setf (cffi:mem-aref buf cffi-type i) (funcall coercer x))
-                       (incf i))
-                 data))
-        (error (e)
-          (error 'invalid-argument
-                 :message (format nil "bad vector element: ~A" e))))
-      (funcall fn buf len))))
+    (cond
+      ((and (plusp len) (pinned-vector-p data lisp-type))
+       (cffi:with-pointer-to-vector-data (ptr data)
+         (funcall fn ptr len)))
+      (t
+       (cffi:with-foreign-object (buf cffi-type (max len 1))
+         (handler-case
+             (let ((i 0))
+               (map nil (lambda (x)
+                          (setf (cffi:mem-aref buf cffi-type i) (funcall coercer x))
+                          (incf i))
+                    data))
+           (error (e)
+             (error 'invalid-argument
+                    :message (format nil "bad vector element: ~A" e))))
+         (funcall fn buf len))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; last-error / dealloc / free calls through resolved pointers

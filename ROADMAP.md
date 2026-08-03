@@ -1,5 +1,53 @@
 # Roadmap
 
+## v0.3 — prove it on something hard, and keep it fast
+
+Theme: v0.1 froze the boundary, v0.2 filled in types and callbacks; v0.3
+takes a demanding real consumer and makes the performance claims defensible.
+The flagship is an **async HTTPS client** (`examples/fetch`: reqwest +
+rustls on a tokio runtime), chosen because CL's TLS story is genuinely
+painful and because tokio is the hardest test of the v0.2 thread contract.
+
+A design panel (three independent designs, two judges) settled the API:
+**pull-based**, two handles (`Client` owning the runtime + readiness queue,
+`Req` per in-flight request), bodies pulled chunk-by-chunk as `:bytes`,
+headers crossing as the raw CRLF field block in `:bytes` both ways, every
+wait capped in Rust with the loop in Lisp, and a thin pure-Lisp veneer
+providing conditions, restarts and `with-client`. Headline finding:
+
+> **It requires zero new boundary features.** No wire change, no ABI bump,
+> no new type token. `:bytes` in callback params, `(:vec :string)`,
+> core cancellation and `Vec<Vec<u8>>` were each examined and refused with
+> cause — the pull design either doesn't need them or is better without.
+
+### Prerequisites (all zero-wire, ABI 1 preserved)
+- ✅ **Bulk `:bytes`/`:vec` marshalling** — pinned vector + `memcpy` fast
+  paths, element-wise fallback retained. Measured: 1 MiB byte transfer
+  **24× faster**, a 65k-element `i64` vector **307× faster**. A flagship
+  moving megabyte bodies could not ship on the old marshaller.
+- ✅ **Duplicate `:lisp-name` rejected at the manifest** — shipped v0.2.1
+  silently shadowed the loser (two `#[rulisp(constructor)]` fns on one type
+  both compute `make-<type>`), leaving it unreachable with no diagnostic.
+- ✅ **`#[rulisp(constructor)]` on a `&self` method is a compile error**
+  with the workaround in the message — it used to drop the receiver and
+  surface as a raw `E0061` inside generated code.
+- ✅ **Contract text** (BOUNDARY §7/§10): cap blocking waits in Rust,
+  refuse re-entry from runtime threads, and the surprising one — dumping
+  with live foreign threads succeeds silently, so thread-owning crates need
+  an explicit shutdown called from a dump hook.
+
+### Remaining
+- `examples/fetch` itself, plus its Lisp veneer and test plan.
+- Windows: start with `uintptr` (our `:unsigned-long` is wrong on LLP64)
+  and an experimental CI job; completion is a v0.4 goal.
+- Official Quicklisp submission; a worked Deploy example.
+
+Explicitly **not** in v0.3: the push/doorbell layer (no `StoredCallback` in
+the example — declaring one forces `compile-file` and a C toolchain on ECL
+at binding-generation time), streaming uploads, cookie/redirect/proxy
+configuration, zero-copy `:string`, constructor `&key`.
+
+
 v0.1.0 shipped the frozen boundary (BOUNDARY.md, ABI 1) and the PyO3-style
 developer experience. Everything below is **additive on the wire** — the
 manifest's ignore-unknown-keys rule and the universal `dealloc(ptr, size,

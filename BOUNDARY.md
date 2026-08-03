@@ -138,6 +138,16 @@ Differences from the borrowed form:
   load). Free-vs-in-flight races are resolved by deferral (§5).
 - Rust code may spawn internal threads but cannot call Lisp callbacks from
   them (`!Send`, §6.1).
+- **Blocking exports must cap their wait in Rust, and the loop belongs in
+  Lisp.** A Lisp thread inside a foreign call cannot be interrupted — SBCL
+  cannot deliver `sb-thread:interrupt-thread` there — so an export that
+  waits without a bound makes the image unkillable. Take a `wait_ms`
+  parameter, cap it (100 ms is a good default), return a "not ready yet"
+  answer, and let the caller loop in Lisp where interrupts and restarts
+  work.
+- **A blocking export must refuse re-entry from its own runtime's worker
+  thread** (e.g. `Handle::try_current().is_some()`) and report it as an
+  error, rather than letting the async runtime panic inside `catch_unwind`.
 - ECL specifics: callback trampolines are natively compiled at load time
   (a C toolchain must be present — bytecodes defcallbacks are unsafe on
   ECL, see docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread
@@ -182,6 +192,14 @@ Differences from the borrowed form:
   recorded artifact path and regenerates all bindings.
 - Freeing a dead-session handle performs no foreign call (the pointer
   belonged to a previous process image).
+- **There is no guardrail against dumping with live foreign threads.**
+  `save-lisp-and-die` refuses to run with multiple *Lisp* threads, but it
+  does not see threads a glue crate spawned — the dump succeeds and those
+  threads simply do not exist in the restored image, while any state they
+  owned is gone. A crate that owns threads (an async runtime, a watcher)
+  must export an explicit shutdown entry point, and the application must
+  call it from a dump hook (`uiop:register-image-dump-hook`) before
+  dumping.
 
 ## 11. Manifest
 

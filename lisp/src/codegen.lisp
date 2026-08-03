@@ -299,11 +299,16 @@ ALLOCATING generation's dealloc."
 
 (defun %take-vec-result (ctx ptr len cffi-type elt-size lisp-type)
   "Copy a Rust-owned Vec<scalar> (LEN elements) into a specialized Lisp
-vector, then release via dealloc(ptr, len*size, align=size)."
+vector, then release via dealloc(ptr, len*size, align=size). Bulk-copies
+into a pinned vector where the host supports it."
   (unwind-protect
        (let ((v (make-array len :element-type lisp-type)))
-         (dotimes (i len)
-           (setf (aref v i) (cffi:mem-aref ptr cffi-type i)))
+         (when (plusp len)
+           (if (pinned-vector-p v lisp-type)
+               (cffi:with-pointer-to-vector-data (dst v)
+                 (%memcpy dst ptr (* len elt-size)))
+               (dotimes (i len)
+                 (setf (aref v i) (cffi:mem-aref ptr cffi-type i)))))
          v)
     (call-dealloc-layout (gen-ctx-dealloc-ptr ctx) ptr
                          (* len elt-size) elt-size)))
@@ -374,11 +379,11 @@ FSPEC against one immutable generation context."
                                          (scalar-cffi inner-ty) `(if (null ,sym) 0 ,sym))))))))
                ((vec-type-p ty)
                 (multiple-value-bind (cty size lisp-ty coercer) (vec-elt-info (second ty))
-                  (declare (ignore size lisp-ty))
+                  (declare (ignore size))
                   (let ((ptr (gensym "PTR")) (len (gensym "LEN")))
                     (push (let ((s sym) (bp ptr) (bl len))
                             (lambda (inner)
-                              `(call-with-vec-arg ,s ,cty ,coercer
+                              `(call-with-vec-arg ,s ,cty ',lisp-ty ,coercer
                                                   (lambda (,bp ,bl) ,inner))))
                           wrappers)
                     (setf call-args (append call-args `(:pointer ,ptr uintptr ,len))))))

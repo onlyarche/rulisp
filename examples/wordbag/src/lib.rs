@@ -96,6 +96,11 @@ pub fn deltas(xs: &[i64]) -> Vec<i64> {
     xs.windows(2).map(|w| w[1] - w[0]).collect()
 }
 
+#[rulisp::export]
+pub fn scale(xs: &[f64], k: f64) -> Vec<f64> {
+    xs.iter().map(|x| x * k).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).
@@ -231,7 +236,7 @@ rulisp::module! {
     handles: [WordBag],
     fns: [
         add, always_panic, parse_number, greet, echo, sum, rev,
-        find, greet_opt, deltas,
+        find, greet_opt, deltas, scale,
         set_notifier, clear_notifier, notify, notify_from_thread,
         WordBag::new, WordBag::add, WordBag::len, WordBag::slow_len,
         for_each_word,

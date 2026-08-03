@@ -402,6 +402,27 @@ pub unsafe extern "C" fn wordbag_rulisp_deltas(
     })
 }
 
+/// pub fn scale(xs: &[f64], k: f64) -> Vec<f64>   (float (:vec ...) path)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_scale(
+    xs_ptr: *const f64,
+    xs_len: usize,
+    k: f64,
+    out_ptr: *mut *mut f64,
+    out_len: *mut usize,
+) -> i32 {
+    rt::shim(|| {
+        let xs = unsafe { rt::slice_arg(xs_ptr, xs_len) };
+        let v: Vec<f64> = xs.iter().map(|x| x * k).collect();
+        let (p, l) = rt::vec_into_raw(v);
+        unsafe {
+            *out_ptr = p;
+            *out_len = l;
+        }
+        rt::STATUS_OK
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).

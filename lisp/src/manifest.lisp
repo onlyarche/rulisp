@@ -137,5 +137,26 @@ refuse only what we can positively identify as wrong). Returns
                  (unless (every #'stringp errs)
                    (error 'manifest-error :message ":errors must be a list of strings"))
                  errs)
-       :handles (mapcar #'%parse-handle (getf p :handles))
-       :functions (mapcar #'%parse-fn (getf p :functions))))))
+       :handles (%check-unique-lisp-names
+                 (mapcar #'%parse-handle (getf p :handles))
+                 #'handle-spec-lisp-name #'handle-spec-rust-name "handle")
+       :functions (%check-unique-lisp-names
+                   (mapcar #'%parse-fn (getf p :functions))
+                   #'fn-spec-lisp-name #'fn-spec-rust-name "function")))))
+
+(defun %check-unique-lisp-names (specs lisp-name-of rust-name-of what)
+  "Two exports mapping to one Lisp name would silently shadow each other —
+COMMIT-BINDINGS just setfs symbol-function in order, so the loser stays in
+the library unreachable with no diagnostic. Reject at the manifest, before
+anything is interned. (The macro can emit such a collision: constructor
+names are derived from the impl type, so two #[rulisp(constructor)] fns on
+one type both compute make-<type>.)"
+  (let ((seen (make-hash-table :test 'equal)))
+    (dolist (s specs specs)
+      (let* ((name (funcall lisp-name-of s))
+             (prior (gethash name seen)))
+        (when prior
+          (error 'manifest-error
+                 :message (format nil "duplicate ~A lisp name ~S (~A and ~A)"
+                                  what name prior (funcall rust-name-of s))))
+        (setf (gethash name seen) (funcall rust-name-of s))))))

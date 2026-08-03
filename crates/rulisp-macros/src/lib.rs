@@ -953,6 +953,17 @@ fn export_impl(mut i: ItemImpl) -> Result<TokenStream2, Error> {
 
         let method = m.sig.ident.clone();
         let mname = method.to_string();
+        // A constructor's shim calls `<Type>::method(args)` — there is no
+        // receiver to pass, so `&self` here would silently drop it and hand
+        // the author a raw E0061 from inside generated code.
+        if is_ctor && m.sig.receiver().is_some() {
+            return Err(Error::new(
+                m.sig.span(),
+                "rulisp: a constructor cannot take &self — take the producing \
+                 handle as an ordinary parameter instead, e.g. \
+                 `fn start(client: &Client, url: &str) -> Result<Req, Error>`",
+            ));
+        }
         let (ok_ty, err) = split_result(&m.sig.output);
         let exported = ExportedFn {
             rust_name: format!("{ty_ident}::{mname}"),
