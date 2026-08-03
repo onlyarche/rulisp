@@ -1,0 +1,27 @@
+[package]
+name = "fetch"
+version = "0.1.0"
+edition = "2021"
+description = "rulisp example: an async HTTP(S) client for Common Lisp (reqwest + rustls)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rulisp = { path = "../../crates/rulisp" }
+
+# default-features = false is load-bearing, not hygiene: it keeps tokio's
+# "signal" and "process" features (the latter pulls the SIGCHLD driver) out
+# of the build. A foreign signal handler destabilises SBCL's signal-driven
+# GC — BOUNDARY.md §7. Same rule that made examples/wasm pick wasmi.
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread", "net", "time", "sync", "fs", "io-util", "macros",
+] }
+# rustls, not native-tls: the point is HTTPS from Lisp with no system
+# OpenSSL. Roots are baked in, so a prebuilt blob needs nothing installed.
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-webpki-roots", "http2", "gzip", "stream", "charset",
+] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio-util = { version = "0.7", default-features = false }

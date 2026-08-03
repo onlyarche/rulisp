@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-ccl bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-ccl bench clean
 
 build:
 	$(CARGO) build
@@ -19,6 +19,10 @@ test-m3:
 test-m4:
 	$(CARGO) test --workspace
 	$(SBCL) --non-interactive --load tests/run-m4.lisp
+
+test-fetch:
+	sh examples/fetch/audit.sh
+	$(SBCL) --non-interactive --load tests/run-fetch.lisp
 
 bench:
 	$(SBCL) --non-interactive --load tests/bench.lisp

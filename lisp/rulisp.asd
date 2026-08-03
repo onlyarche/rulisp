@@ -25,4 +25,5 @@
                (:file "m3")
                (:file "m4")
                (:file "v02")
-               (:file "v03")))
+               (:file "v03")
+               (:file "fetch")))
