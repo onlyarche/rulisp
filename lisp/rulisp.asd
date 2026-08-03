@@ -2,7 +2,7 @@
   :description "Use Rust from Common Lisp: load rulisp glue crates as idiomatic Lisp packages"
   :author "arche"
   :license "MIT"
-  :version "0.2.0"
+  :version "0.2.1"
   :depends-on (#:cffi #:babel #:trivial-garbage #:bordeaux-threads #:uiop)
   :pathname "src/"
   :serial t

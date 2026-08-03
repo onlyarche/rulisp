@@ -139,7 +139,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rulisp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "rulisp-macros",
  "rulisp-runtime",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "rulisp-macros"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "rulisp-runtime"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "rx"

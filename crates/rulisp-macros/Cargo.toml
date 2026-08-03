@@ -1,9 +1,10 @@
 [package]
 name = "rulisp-macros"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Proc-macros for rulisp glue crates: #[rulisp::handle], #[rulisp::export], rulisp::module!"
 license = "MIT"
+readme = "../../README.md"
 repository = "https://github.com/onlyarche/rulisp"
 keywords = ["lisp", "common-lisp", "ffi", "proc-macro"]
 categories = ["development-tools::ffi"]
