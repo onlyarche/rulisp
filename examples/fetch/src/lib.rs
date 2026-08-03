@@ -76,9 +76,22 @@ fn encode_headers(h: &HeaderMap) -> Vec<u8> {
 fn decode_headers(block: &[u8]) -> Result<HeaderMap, HttpError> {
     let mut map = HeaderMap::new();
     for line in block.split(|&b| b == b'\n') {
+        // A well-formed block terminates every field with CRLF. Rejecting
+        // bare LF catches malformed input, but note the limit of what this
+        // layer can do: a value that already contains CRLF is, on the wire,
+        // simply two fields — indistinguishable here. Request-splitting has
+        // to be refused by whoever BUILDS the block (see %encode-headers in
+        // http.lisp), which is why that validation is not optional.
         let line = match line.strip_suffix(b"\r") {
             Some(l) => l,
-            None => line,
+            None => {
+                if line.is_empty() {
+                    continue;
+                }
+                return Err(HttpError::request(
+                    "header block must terminate every field with CRLF",
+                ));
+            }
         };
         if line.is_empty() {
             continue;
@@ -158,20 +171,33 @@ struct TaskGuard {
 impl Drop for TaskGuard {
     fn drop(&mut self) {
         let cancelled = self.sh.cancel.is_cancelled();
+        // ORDER MATTERS. The documented idiom is "wait until done, then
+        // submit the next one", so by the time a Lisp thread can observe
+        // settled/done, the capacity it implies must already exist:
+        // release the admission permit and drop in_flight FIRST, and only
+        // then publish the terminal state. The reverse order lets a
+        // correct caller get "busy" or a stale in_flight right after being
+        // told the request finished.
+        self.client.admission.add_permits(1);
+        self.client.in_flight.fetch_sub(1, Ordering::SeqCst);
+        self.client.ready.push(self.sh.id);
         self.sh.settle(if cancelled {
             Some(HttpError::new("cancelled", "request cancelled"))
         } else {
             None
         });
-        self.client.in_flight.fetch_sub(1, Ordering::SeqCst);
-        self.client.admission.add_permits(1);
-        self.client.ready.push(self.sh.id);
     }
 }
 
 // ---------------------------------------------------------------------------
 // Ready queue: ids of requests that have settled since you last looked.
 // ---------------------------------------------------------------------------
+
+/// Draining the queue is optional — the veneer never does — so it must be
+/// bounded or a long-lived client accumulates one id per request forever.
+/// Oldest ids are dropped: a completion notice nobody collected in the last
+/// READY_CAP requests is of no use to anyone.
+const READY_CAP: usize = 4096;
 
 #[derive(Default)]
 struct ReadyQ {
@@ -181,7 +207,13 @@ struct ReadyQ {
 
 impl ReadyQ {
     fn push(&self, id: u64) {
-        self.ids.lock().unwrap().push_back(id);
+        {
+            let mut q = self.ids.lock().unwrap();
+            if q.len() >= READY_CAP {
+                q.pop_front();
+            }
+            q.push_back(id);
+        }
         self.cv.notify_all();
     }
 
@@ -308,7 +340,14 @@ impl Client {
         self.inner.cancel_all.cancel();
         let rt = self.inner.rt.lock().unwrap().take();
         if let Some(rt) = rt {
-            rt.shutdown_timeout(capped(grace_ms));
+            // Deliberate exception to the WAIT_CAP_MS rule, bounded at 5 s:
+            // this is the one call whose PURPOSE is to wait, and it is what
+            // a dump hook calls to quiesce foreign threads before
+            // save-lisp-and-die (BOUNDARY §10). Blocking-pool threads that
+            // are mid-syscall may still outlive it — they hold no Lisp
+            // state, but a dump taken while one is mid-write can leave a
+            // partial file, so dump after this returns, not during.
+            rt.shutdown_timeout(Duration::from_millis(grace_ms.min(5_000)));
         }
         Ok(())
     }

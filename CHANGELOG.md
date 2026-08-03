@@ -5,6 +5,30 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
+## Unreleased (0.3 development)
+
+### Added
+- **`examples/fetch`** — an async HTTPS client (reqwest + rustls on tokio),
+  the v0.3 flagship. Pull-based: `Client` owns the runtime, admission
+  semaphore and ready queue; `Req` owns one exchange; bodies are pulled as
+  `:bytes` or streamed to a file; headers cross as the raw CRLF field block
+  both ways. It needs **no new boundary feature** — no wire change, no ABI
+  bump. Ships with a Lisp veneer (conditions with a kind slot, restarts,
+  `with-client`), a hermetic loopback test server, and `audit.sh`, an
+  executable BOUNDARY §7 check.
+- `make bench` — a benchmark suite for the boundary paths.
+
+### Changed
+- **Bulk `:bytes`/`:vec` marshalling**: pinned vector + `memcpy`, with the
+  inbound side now a true zero-copy borrow. Measured 24× on a 1 MiB byte
+  transfer and 307× on a 65k-element `i64` vector.
+
+### Fixed
+- Duplicate `:lisp-name` in a manifest silently shadowed one export; now
+  rejected before anything is interned.
+- `#[rulisp(constructor)]` on a `&self` method dropped the receiver and
+  surfaced as a raw `E0061`; now a compile error naming the fix.
+
 ## 0.2.1 — 2026-08-03
 
 ### Fixed

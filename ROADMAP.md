@@ -37,7 +37,17 @@ providing conditions, restarts and `with-client`. Headline finding:
   an explicit shutdown called from a dump hook.
 
 ### Remaining
-- `examples/fetch` itself, plus its Lisp veneer and test plan.
+- ✅ `examples/fetch` — shipped, with its Lisp veneer and a hermetic
+  loopback test server. An adversarial review (3 lenses, per-finding
+  verification) produced **18 findings, all 18 confirmed**, most reproduced
+  empirically; every one is fixed and covered by a regression test. The
+  sharpest were: a failed `download` reported as success (the sink drain
+  loop could exit without ever re-entering the read that carries the
+  error), an uncapped default body size that would exhaust the Lisp heap,
+  CRLF request-splitting through caller-supplied header values, an
+  audit-gate regex that could never fire because glibc imports are
+  version-tagged, and a `TaskGuard` ordering that published "done" before
+  releasing the admission permit.
 - Windows: start with `uintptr` (our `:unsigned-long` is wrong on LLP64)
   and an experimental CI job; completion is a v0.4 goal.
 - Official Quicklisp submission; a worked Deploy example.

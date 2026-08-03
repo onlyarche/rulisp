@@ -12,8 +12,9 @@
   (:use #:cl)
   (:shadow #:get)
   (:export #:client #:with-client #:shutdown
-           #:request #:get #:download
-           #:http-error #:http-error-kind #:http-error-status #:http-error-url
+           #:request #:get #:download #:*max-bytes*
+           #:http-error #:http-error-kind #:http-error-detail
+           #:http-error-status #:http-error-url
            #:retry-request))
 
 (in-package #:http)
@@ -60,11 +61,39 @@
 ;;; Header alists <-> the raw CRLF field block
 ;;; ---------------------------------------------------------------------------
 
+(defun %validate-header (name value)
+  "Refuse anything that could splice extra fields into the block. This is
+the ONLY place request splitting can be stopped: once a value containing
+CRLF is in the block it is, on the wire, simply two fields, and no parser
+downstream can tell the difference (CWE-113)."
+  (let ((n (string name)))
+    (when (zerop (length n))
+      (error 'http-error :kind "request" :detail "empty header name"))
+    (loop for ch across n
+          unless (and (< 32 (char-code ch) 127)
+                      (not (find ch ":()<>@,;\\\"/[]?={} " :test #'char=)))
+            do (error 'http-error :kind "request"
+                                  :detail (format nil "illegal character in header name ~S" n))))
+  (flet ((bad (b)
+           (or (= b 13) (= b 10) (= b 0))))
+    (if (stringp value)
+        (loop for ch across value
+              when (bad (char-code ch))
+                do (error 'http-error :kind "request"
+                                      :detail (format nil "CR, LF or NUL in the value of ~A"
+                                                      name)))
+        (loop for b across value
+              when (bad b)
+                do (error 'http-error :kind "request"
+                                      :detail (format nil "CR, LF or NUL in the value of ~A"
+                                                      name))))))
+
 (defun %encode-headers (alist)
   "((\"accept\" . \"*/*\") ...) -> octets. Values may be strings or octet
 vectors; octets pass through untouched, which is how you send a value that
-isn't UTF-8."
+isn't UTF-8. Names and values are validated first — see %VALIDATE-HEADER."
   (when alist
+    (loop for (name . value) in alist do (%validate-header name value))
     (let ((out (make-array 0 :element-type '(unsigned-byte 8)
                              :adjustable t :fill-pointer t)))
       (flet ((put (octets)
@@ -124,12 +153,39 @@ value is bytes, not text, and obs-text is legal."
 what stops its runtime threads before an image dump (BOUNDARY §10)."
   `(let ((,var (client ,@options)))
      (unwind-protect (progn ,@body)
-       (shutdown ,var)
-       (rulisp:free ,var))))
+       ;; nested, so a condition from SHUTDOWN cannot skip the free and
+       ;; leak the handle — the very thing this macro exists to prevent
+       (unwind-protect (shutdown ,var)
+         (rulisp:free ,var)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Requests
 ;;; ---------------------------------------------------------------------------
+
+(defvar *max-bytes* (* 256 1024 1024)
+  "Default ceiling for a body buffered on the Lisp heap. An unbounded
+response would otherwise exhaust the image — and in-process FFI has no
+crash isolation, so that takes the host down with it. Use :SINK for bodies
+larger than this; the sink path streams to a file and is uncapped.")
+
+(defun %status-or-nil (req)
+  "REQ-STATUS is 0 until the response head arrives; the condition's STATUS
+slot spells 'no status yet' NIL rather than leaking that sentinel."
+  (let ((s (%call "REQ-STATUS" req)))
+    (and (plusp s) s)))
+
+(defun %signal-if-failed (req url)
+  "Signal the task's terminal error if it has one. REQ-READ can only report
+an error it happens to be waiting inside when the task settles; both drain
+loops can exit on REQ-DONE without re-entering it — most obviously in sink
+mode, which never buffers a chunk — so the settled state must be consulted
+explicitly. Without this a failed download reports success."
+  (let ((kind (%call "REQ-ERROR-KIND" req)))
+    (when kind
+      (error 'http-error :kind kind
+                         :detail (or (%call "REQ-ERROR-MESSAGE" req) "")
+                         :status (%status-or-nil req)
+                         :url url))))
 
 (defun %drain (req url &key sink)
   "Pull the body to completion. Returns octets, or NIL when SINK was used.
@@ -138,11 +194,11 @@ on every path — completion, error, cancel, free, GC, shutdown."
   (if sink
       (progn
         (loop until (%call "REQ-DONE" req)
-              do (%translating (url (%call "REQ-STATUS" req))
+              do (%translating (url (%status-or-nil req))
                    (%call "REQ-READ" req 0 100)))
         nil)
       (let ((parts '()) (total 0))
-        (loop for chunk = (%translating (url (%call "REQ-STATUS" req))
+        (loop for chunk = (%translating (url (%status-or-nil req))
                             (%call "REQ-READ" req 1048576 100))
               while (or chunk (not (%call "REQ-DONE" req)))
               when chunk
@@ -154,13 +210,19 @@ on every path — completion, error, cancel, free, GC, shutdown."
             (incf at (length p)))))))
 
 (defun request (client method url
-                &key headers body sink (timeout-ms 30000) (max-bytes 0)
+                &key headers body sink (timeout-ms 30000)
+                     (max-bytes (if sink 0 *max-bytes*))
                      (expect-success t))
   "Perform one request to completion. Returns (values body status headers),
 where BODY is octets (or NIL with :SINK) and HEADERS is an alist in wire
 order. Signals HTTP-ERROR on transport failures and, unless
 :EXPECT-SUCCESS is NIL, on non-2xx responses; a RETRY-REQUEST restart is
-established around the whole exchange."
+established around the whole exchange.
+
+:MAX-BYTES caps the body, enforced against bytes RECEIVED (not against a
+Content-Length a hostile peer can omit); 0 means unlimited. It defaults to
+*MAX-BYTES* for a buffered body and to unlimited with :SINK, because the
+sink path never touches the Lisp heap."
   (loop
     (restart-case
         (let ((req (%translating (url)
@@ -168,14 +230,19 @@ established around the whole exchange."
                             (%encode-headers headers) body sink
                             timeout-ms max-bytes))))
           (unwind-protect
-               (let* ((data (%drain req url :sink sink))
-                      (status (%call "REQ-STATUS" req))
-                      (hdrs (%decode-headers (%call "REQ-HEADERS" req))))
-                 (when (and expect-success (not (<= 200 status 299)))
-                   (error 'http-error :kind "status"
-                                      :detail (format nil "server returned ~D" status)
-                                      :status status :url url))
-                 (return (values data status hdrs)))
+               (let ((data (%drain req url :sink sink)))
+                 ;; Consult the settled state before the status is trusted:
+                 ;; a terminal error must not be reported as "server
+                 ;; returned 0", and on the sink path REQ-READ may never
+                 ;; have been inside the failure at all.
+                 (%signal-if-failed req url)
+                 (let ((status (%call "REQ-STATUS" req))
+                       (hdrs (%decode-headers (%call "REQ-HEADERS" req))))
+                   (when (and expect-success (not (<= 200 status 299)))
+                     (error 'http-error :kind "status"
+                                        :detail (format nil "server returned ~D" status)
+                                        :status status :url url))
+                   (return (values data status hdrs))))
             (rulisp:free req)))
       (retry-request ()
         :report "Send the request again."

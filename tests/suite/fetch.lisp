@@ -301,3 +301,128 @@ inversion between the pipe and the ready queue."
                                             :expect-success nil)))))
       (funcall (find-symbol "SHUTDOWN" "HTTP") client)
       (rulisp:free client))))
+
+;;; ---------------------------------------------------------------------------
+;;; Regressions from the adversarial review (18 findings, all confirmed).
+;;; ---------------------------------------------------------------------------
+
+(test fetch.sink-failure-is-not-silent-success
+  "The sink drain loop can exit on REQ-DONE without ever re-entering
+REQ-READ, and REQ-READ was the only path an error took to Lisp. A failure
+here is a download reported as successful with no file on disk."
+  (ensure-fetch)
+  (dotimes (i 20)
+    (let ((c (handler-case
+                 (progn (funcall (find-symbol "DOWNLOAD" "HTTP") *fetch-client*
+                                 (url "/bytes/10000") "/no/such/dir/out.bin")
+                        nil)
+               (error (e) e))))
+      (is (typep c (find-symbol "HTTP-ERROR" "HTTP")))
+      (is (equal "io" (funcall (find-symbol "HTTP-ERROR-KIND" "HTTP") c))))))
+
+(test fetch.transport-failure-reports-transport
+  "A pre-head failure has status 0; reporting that as kind \"status\" with
+status 0 defeats any handler that dispatches on kind to decide on a retry."
+  (ensure-fetch)
+  (let ((c (handler-case
+               (progn (funcall (find-symbol "GET" "HTTP") *fetch-client*
+                               "http://127.0.0.1:9/nope")
+                      nil)
+             (error (e) e))))
+    (is (typep c (find-symbol "HTTP-ERROR" "HTTP")))
+    (is (equal "transport" (funcall (find-symbol "HTTP-ERROR-KIND" "HTTP") c)))
+    (is (null (funcall (find-symbol "HTTP-ERROR-STATUS" "HTTP") c)))))
+
+(test fetch.buffered-body-is-capped-by-default
+  "With no cap an unbounded response exhausts the Lisp heap — and
+in-process FFI has no crash isolation, so that kills the host image."
+  (ensure-fetch)
+  (let ((sym (find-symbol "*MAX-BYTES*" "HTTP")))
+    (is (not (null sym)))
+    (progv (list sym) (list 100000)
+      (is (equal "too-large"
+                 (handler-case
+                     (progn (funcall (find-symbol "GET" "HTTP") *fetch-client*
+                                     (url "/no-length/2000000"))
+                            nil)
+                   (error (e) (funcall (find-symbol "HTTP-ERROR-KIND" "HTTP") e))))))))
+
+(test fetch.header-injection-refused
+  "A CRLF in a caller-supplied value would splice extra request fields
+(CWE-113); once it is in the block no parser downstream can tell."
+  (ensure-fetch)
+  (dolist (bad '(("x-evil" . "a
+inj: 1") ("bad name" . "a") ("x:y" . "a")))
+    (let ((c (handler-case
+                 (progn (funcall (find-symbol "GET" "HTTP") *fetch-client*
+                                 (url "/echo-headers")
+                                 :headers (list (cons (car bad) (cdr bad))))
+                        nil)
+               (error (e) e))))
+      (is (typep c (find-symbol "HTTP-ERROR" "HTTP"))
+          "~S was accepted" bad)))
+  ;; and the Rust side refuses a malformed block outright
+  (is (equal "request"
+             (kind-of-signal
+               (fc "MAKE-REQ" *fetch-client* "GET" (url "/echo-headers")
+                   (babel:string-to-octets (format nil "x: 1~Cy: 2~C~C"
+                                                   #\Newline #\Return #\Newline))
+                   nil nil 5000 0)))))
+
+(test fetch.ready-queue-is-bounded
+  "Nothing in the veneer drains the ready queue, so an unbounded one grows
+by one id per request for the life of the client."
+  (ensure-fetch)
+  (let ((c (fc "MAKE-CLIENT" 1 4 4 3000)))
+    (unwind-protect
+         (let ((base (fc "CLIENT-START-TEST-SERVER" c)))
+           (dotimes (i 40)
+             (let ((r (fc "MAKE-REQ" c "GET" (format nil "~A/bytes/16" base)
+                          nil nil nil 10000 0)))
+               (slurp r)
+               (rulisp:free r)))
+           (let ((n 0))
+             (loop while (fc "CLIENT-NEXT-READY" c 0) do (incf n))
+             (is (<= n 4096) "ready queue held ~D ids" n)))
+      (fc "CLIENT-SHUTDOWN" c 200)
+      (rulisp:free c))))
+
+(test fetch.permit-available-when-done
+  "TaskGuard must release the admission permit BEFORE publishing the
+terminal state, or the documented 'wait for done, then submit' idiom races
+against its own capacity check."
+  (ensure-fetch)
+  (let ((c (fc "MAKE-CLIENT" 1 1 4 3000)))
+    (unwind-protect
+         (let ((base (fc "CLIENT-START-TEST-SERVER" c)))
+           (dotimes (i 25)
+             (let ((r (fc "MAKE-REQ" c "GET" (format nil "~A/bytes/16" base)
+                          nil nil nil 10000 0)))
+               (slurp r)
+               (loop repeat 300 until (fc "REQ-DONE" r) do (sleep 0.001))
+               (rulisp:free r))
+             (let ((refused (kind-of-signal
+                              (let ((r2 (fc "MAKE-REQ" c "GET"
+                                            (format nil "~A/bytes/16" base)
+                                            nil nil nil 10000 0)))
+                                (slurp r2)
+                                (rulisp:free r2)))))
+               (is (null refused) "submit after done was refused with ~A" refused))))
+      (fc "CLIENT-SHUTDOWN" c 200)
+      (rulisp:free c))))
+
+(test fetch.no-adoption-during-transfer
+  "Sampling only before and after cannot see an adoption that happens
+mid-transfer and detaches when the OS thread exits."
+  (ensure-fetch)
+  (let ((r (fc "MAKE-REQ" *fetch-client* "GET" (url "/drip/60/10")
+               nil nil nil 20000 0))
+        (peak 0))
+    (unwind-protect
+         (progn
+           (loop repeat 40 until (fc "REQ-DONE" r)
+                 do (fc "REQ-READ" r 65536 20)
+                    (setf peak (max peak (length (bt:all-threads)))))
+           (is (= 1 peak) "~D Lisp threads existed mid-transfer" peak))
+      (fc "REQ-CANCEL" r)
+      (rulisp:free r))))

@@ -13,7 +13,9 @@ command -v "$CARGO" >/dev/null || CARGO="$HOME/.cargo/bin/cargo"
 SO=$(ls ../../target/debug/libfetch.so ../../target/release/libfetch.so 2>/dev/null | head -1)
 [ -n "$SO" ] || { echo "FAIL: libfetch not built"; exit 1; }
 
-if nm -D --undefined-only "$SO" | grep -Eq ' (sigaction|signal|bsd_signal)$'; then
+# glibc imports carry a version suffix (`U sigaction@GLIBC_2.2.5`), so the
+# name must not be anchored with $ — that made this gate inert.
+if nm -D --undefined-only "$SO" | grep -Eq ' (sigaction|signal|bsd_signal|sigprocmask|pthread_sigmask)(@|$)'; then
     echo "FAIL: $SO references a signal-disposition symbol"; exit 1
 fi
 if "$CARGO" tree -e features 2>/dev/null | grep -Eq 'tokio feature "(signal|process)"'; then
