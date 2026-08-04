@@ -1,0 +1,8 @@
+# The manifest fixtures are byte-exactness gates: the macro's output is
+# compared against them verbatim. A Windows checkout translating LF to CRLF
+# would break that comparison for reasons that have nothing to do with the
+# code, so pin their line endings.
+*.sexp text eol=lf
+
+# Shell scripts must keep LF even on a Windows checkout.
+*.sh text eol=lf
