@@ -65,6 +65,30 @@ jobs:
                --eval '(quicklisp-quickstart:install)'
       - run: make test-m4
 
+  sbcl-windows:
+    name: SBCL / Windows x86-64 (experimental, may fail)
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo tests (platform-independent)
+        run: cargo test --workspace
+      - run: choco install sbcl --no-progress -y
+      - name: install quicklisp
+        run: |
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)'
+      # The loader was ported (LoadLibrary/GetProcAddress, pointer-sized
+      # uintptr for LLP64, .dll naming with no lib prefix) but has never run
+      # on Windows — this job is where that claim gets tested.
+      - name: full gate
+        run: make test-m4
+
   ecl-linux:
     name: ECL / Linux (best-effort, may fail)
     runs-on: ubuntu-latest

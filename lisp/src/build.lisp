@@ -57,6 +57,7 @@
 \"linux-x86_64\" or \"darwin-arm64\"."
   (format nil "~A-~A"
           (cond ((uiop:os-macosx-p) "darwin")
+                ((uiop:os-windows-p) "windows")
                 ((member :linux *features*) "linux")
                 (t "unknown"))
           (cond ((member :x86-64 *features*) "x86_64")
@@ -65,10 +66,10 @@
                 (t "unknown"))))
 
 (defun blob-file-name (name)
-  (format nil "lib~A-~A.~A"
-          (substitute #\_ #\- name)
-          (host-blob-suffix)
-          (if (uiop:os-macosx-p) "dylib" "so")))
+  (let ((base (format nil "~A-~A" (substitute #\_ #\- name) (host-blob-suffix))))
+    (if (uiop:os-windows-p)
+        (format nil "~A.dll" base)
+        (format nil "lib~A.~A" base (shared-library-type)))))
 
 (defun load-blob-crate (directory name &key package)
   "Load the prebuilt per-platform artifact lib<name>-<os>-<arch>.<ext> from
@@ -99,9 +100,7 @@ RETRY-BUILD restart."
             (return))
         (retry-build ()
           :report "Run cargo build again.")))
-    (let* ((lib-file (format nil "lib~A.~A"
-                             (substitute #\_ #\- name)
-                             (if (uiop:os-macosx-p) "dylib" "so")))
+    (let* ((lib-file (artifact-file-name name))
            (artifact (merge-pathnames
                       (format nil "~A/~A"
                               (if (eq profile :release) "release" "debug")

@@ -48,9 +48,20 @@ providing conditions, restarts and `with-client`. Headline finding:
   audit-gate regex that could never fire because glibc imports are
   version-tagged, and a `TaskGuard` ordering that published "done" before
   releasing the admission permit.
-- Windows: start with `uintptr` (our `:unsigned-long` is wrong on LLP64)
-  and an experimental CI job; completion is a v0.4 goal.
-- Official Quicklisp submission; a worked Deploy example.
+- ✅ **Windows groundwork**: `uintptr` is now derived from the pointer size
+  (naming a C type was wrong on LLP64, where `unsigned long` is 32 bits);
+  the loader is abstracted over `dlopen`/`dlsym` and
+  `LoadLibrary`/`GetProcAddress`; artifact naming knows that Windows drops
+  the `lib` prefix and uses `.dll`. The unique-copy load policy already
+  sidesteps the DLL-in-use lock. **None of this has run on Windows** — an
+  experimental (`continue-on-error`) CI job is where the claim gets tested.
+  Finishing the port is a v0.4 goal.
+- ✅ A worked Deploy recipe (docs/distribution.md), including the two things
+  that bite silently: platform-named artifacts and quiescing foreign
+  threads in a dump hook.
+- **Quicklisp: deliberately deferred to 1.0.** Until then rulisp ships via
+  Ultralisp (and crates.io for the Rust side) — a pre-1.0 API does not
+  belong in a dist users treat as stable.
 
 Explicitly **not** in v0.3: the push/doorbell layer (no `StoredCallback` in
 the example — declaring one forces `compile-file` and a C toolchain on ECL

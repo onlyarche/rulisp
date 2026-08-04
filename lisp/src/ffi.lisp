@@ -7,41 +7,93 @@
 
 (defconstant +abi-version+ 1)
 
-;; v1 targets 64-bit Linux/macOS (LP64): uintptr_t == unsigned long.
-(cffi:defctype uintptr :unsigned-long)
+;; uintptr_t / size_t is pointer-sized on every target: LP64 (Linux, macOS),
+;; LLP64 (Windows — where `unsigned long` is only 32 bits, which is why
+;; deriving this from the pointer size rather than naming a C type is the
+;; only portable choice) and ILP32.
+(cffi:defctype uintptr
+    #.(if (= 8 (cffi:foreign-type-size :pointer)) :uint64 :uint32))
 
-(cffi:defcfun ("dlopen" %dlopen) :pointer
-  (path :string)
-  (flags :int))
+;;; Library loading. Symbols MUST be resolved against a specific library
+;;; handle: after a reload two generations export identical names, and a
+;;; global-namespace lookup would silently pick the older one.
 
-(cffi:defcfun ("dlsym" %dlsym) :pointer
-  (handle :pointer)
-  (name :string))
+#-(or windows win32)
+(progn
+  (cffi:defcfun ("dlopen" %dlopen) :pointer
+    (path :string)
+    (flags :int))
+  (cffi:defcfun ("dlsym" %dlsym) :pointer
+    (handle :pointer)
+    (name :string))
+  (cffi:defcfun ("dlerror" %dlerror) :pointer)
 
-(cffi:defcfun ("dlerror" %dlerror) :pointer)
+  (defconstant +rtld-now+ 2)
 
-(defconstant +rtld-now+ 2)
+  (defun %open-library (native-path)
+    (%dlerror)                          ; clear any stale error
+    (%dlopen native-path +rtld-now+))
 
-(defun %dlerror-string ()
-  (let ((p (%dlerror)))
-    (if (cffi:null-pointer-p p)
-        "unknown dlerror"
-        (cffi:foreign-string-to-lisp p))))
+  (defun %library-error ()
+    (let ((p (%dlerror)))
+      (if (cffi:null-pointer-p p)
+          "unknown dlerror"
+          (cffi:foreign-string-to-lisp p))))
+
+  (defun %find-symbol-in (handle name)
+    (%dlsym handle name)))
+
+#+(or windows win32)
+(progn
+  ;; The unique-copy loading policy (crate.lisp) matters twice as much
+  ;; here: Windows locks a DLL while it is loaded, so overwriting the
+  ;; artifact in place would fail outright.
+  (cffi:defcfun ("LoadLibraryA" %load-library) :pointer
+    (path :string))
+  (cffi:defcfun ("GetProcAddress" %get-proc-address) :pointer
+    (handle :pointer)
+    (name :string))
+  (cffi:defcfun ("GetLastError" %get-last-error) :unsigned-int)
+
+  (defun %open-library (native-path)
+    (%load-library native-path))
+
+  (defun %library-error ()
+    (format nil "LoadLibrary failed (GetLastError=~D)" (%get-last-error)))
+
+  (defun %find-symbol-in (handle name)
+    (%get-proc-address handle name)))
 
 (defun dlopen* (path)
-  "dlopen PATH with RTLD_NOW | RTLD_LOCAL; error with dlerror text on failure."
-  (%dlerror)                            ; clear any stale error
-  (let ((h (%dlopen (uiop:native-namestring path) +rtld-now+)))
+  "Load the shared library at PATH; signal with the OS error text on
+failure. Never unloaded — see BOUNDARY.md §9."
+  (let ((h (%open-library (uiop:native-namestring path))))
     (when (cffi:null-pointer-p h)
       (error 'crate-not-loaded-error
              :name (namestring path)
-             :message (%dlerror-string)))
+             :message (%library-error)))
     h))
 
 (defun dlsym-ptr (lib-handle name)
   "Resolve NAME against LIB-HANDLE only. Returns NIL when absent."
-  (let ((p (%dlsym lib-handle name)))
+  (let ((p (%find-symbol-in lib-handle name)))
     (if (cffi:null-pointer-p p) nil p)))
+
+;;; ---------------------------------------------------------------------------
+;;; Artifact naming. cargo emits lib<name>.so / lib<name>.dylib / <name>.dll —
+;;; note Windows drops the "lib" prefix.
+;;; ---------------------------------------------------------------------------
+
+(defun shared-library-type ()
+  (cond ((uiop:os-macosx-p) "dylib")
+        ((uiop:os-windows-p) "dll")
+        (t "so")))
+
+(defun artifact-file-name (crate-name)
+  (let ((base (substitute #\_ #\- crate-name)))
+    (if (uiop:os-windows-p)
+        (format nil "~A.dll" base)
+        (format nil "lib~A.~A" base (shared-library-type)))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; UTF-8 marshaling (DESIGN.md §4.5)

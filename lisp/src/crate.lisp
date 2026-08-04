@@ -109,10 +109,14 @@ use but can still be freed."
                           :message "artifact does not exist")))
          (provisional (substitute #\_ #\- (or crate-arg (derive-crate-name path))))
          (prefix-guess (format nil "~A_rulisp_" provisional))
-         (copy (merge-pathnames (format nil "~A-c~D-~D.so"
+         ;; unique name per load: defeats dlopen path caching (macOS dyld
+         ;; would otherwise hand back the old image) and sidesteps the
+         ;; Windows lock on a loaded DLL
+         (copy (merge-pathnames (format nil "~A-c~D-~D.~A"
                                         provisional
                                         (incf *copy-counter*)
-                                        (get-universal-time))
+                                        (get-universal-time)
+                                        (shared-library-type))
                                 (cache-directory))))
     (uiop:copy-file path copy)
     (multiple-value-bind (lib manifest raw)
@@ -278,7 +282,9 @@ fmakunbound."
 (defun %sweep-crate-cache (name current-copy)
   "Delete this crate's older cache copies. Unlinking a still-mapped file is
 safe on POSIX (the mapping keeps the inode alive); copies left by previous
-OS processes reference no live mapping at all."
+OS processes reference no live mapping at all. On Windows a loaded DLL
+cannot be deleted at all, so the delete simply fails and is ignored —
+stale copies are swept on a later run once nothing has them open."
   (let ((prefix (format nil "~A-c" (substitute #\_ #\- name))))
     (dolist (f (uiop:directory-files (cache-directory)))
       (when (and (uiop:string-prefix-p prefix (file-namestring f))

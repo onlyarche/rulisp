@@ -43,9 +43,58 @@ source dist as plain data. Caveats:
 For shipped executables, [Deploy](https://codeberg.org/shinmera/deploy)
 automates the whole lifecycle: it discovers every open foreign library,
 copies them next to the binary at `asdf:make` time, closes before the image
-dump and reopens at boot. rulisp's own restore hook (session bump + reload
-from the recorded path) composes with it; point the crate's artifact path
-at a file shipped alongside the binary.
+dump and reopens at boot.
+
+rulisp needs one adjustment, because Deploy's model is "reopen the same
+library" while rulisp's is "regenerate the bindings from whichever artifact
+we load now" (its own restore hook bumps the session counter and re-runs
+`load-crate`). Let rulisp own the reload and tell Deploy to leave the
+artifact alone:
+
+```lisp
+;; my-app.asd
+(defsystem "my-app"
+  :defsystem-depends-on (:deploy)
+  :build-operation "deploy-op"
+  :build-pathname "my-app"
+  :entry-point "my-app:main"
+  :depends-on ("rulisp")
+  :components ((:file "main")))
+```
+
+```lisp
+;; main.lisp
+(defvar *crate* nil)
+
+;; Deploy copies libraries next to the binary; ship the glue artifact the
+;; same way and load it from there at boot rather than from a build path
+;; that will not exist on the user's machine.
+(defun artifact-directory ()
+  (if (uiop:argv0)
+      (uiop:pathname-directory-pathname (uiop:argv0))
+      #p"./"))
+
+(defun start ()
+  (setf *crate* (rulisp:load-blob-crate (artifact-directory) "mylib")))
+
+(uiop:register-image-restore-hook 'start nil)
+
+;; Crates that own threads (an async runtime, a watcher) MUST be quiesced
+;; before the dump: save-lisp-and-die does not see foreign threads and will
+;; happily dump with them running (BOUNDARY.md §10).
+(uiop:register-image-dump-hook
+ (lambda () (when *crate* (mylib:shutdown-everything))))
+```
+
+Two things to get right, both of which bite silently:
+
+1. **Name the artifact for the platform** — `lib<name>-<os>-<arch>.<ext>`,
+   which is what `load-blob-crate` looks for and what
+   `.github/workflows/blobs.yml` produces.
+2. **Quiesce foreign threads in a dump hook.** SBCL refuses to dump with
+   several *Lisp* threads but cannot see the ones a glue crate spawned, so
+   the dump succeeds and the threads are simply gone in the restored image
+   — with whatever they were doing left half-done.
 
 ## Pattern C — build on the user's machine (developers)
 
