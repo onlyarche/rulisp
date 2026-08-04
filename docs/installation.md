@@ -1,17 +1,17 @@
 # Installation
 
-Setting up rulisp on Linux and macOS: toolchains, Lisp-side dependencies,
-and how to verify the install. (Windows is not supported in v1.)
+Setting up rulisp on Linux, macOS and Windows: toolchains, Lisp-side
+dependencies, and how to verify the install.
 
 ## What you need and why
 
 | Dependency | Why | Verified with |
 |---|---|---|
 | Rust toolchain (`cargo`, `rustc`) | builds glue crates; invoked by `rulisp:use-crate` at development time only — loading the `rulisp` system itself needs no Rust | Rust 1.97 (anything recent works; `catch_unwind`, edition 2021) |
-| A Common Lisp | the host | SBCL 2.1.11+ (primary), Clozure CL 1.13 (Linux) |
+| A Common Lisp | the host | SBCL 2.1.11+ on Linux, macOS and Windows; Clozure CL 1.13 and ECL 21+ on Linux |
 | Quicklisp | pulls the CL dependencies | current dist |
 | CL libraries: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads` (+ `fiveam` for the test suites) | FFI, UTF-8, finalizers, locks | Quicklisp dist versions |
-| C toolchain (linker) | Rust needs a system linker | gcc / Xcode CLT |
+| C toolchain (linker) | Rust needs a system linker | gcc / Xcode CLT / MSVC build tools |
 
 ## Linux (Debian/Ubuntu shown; adjust the package manager elsewhere)
 
@@ -93,8 +93,15 @@ Quicklisp as above. Notes:
 
 ## Getting rulisp
 
-Until the Quicklisp/Ultralisp registration lands, clone into Quicklisp's
-`local-projects` (ASDF finds `lisp/rulisp.asd` there automatically):
+rulisp is on Ultralisp (Quicklisp itself is planned for 1.0):
+
+```lisp
+(ql-dist:install-dist "http://dist.ultralisp.org/" :prompt nil)  ; once
+(ql:quickload :rulisp)
+```
+
+To track the repository instead, clone into Quicklisp's `local-projects`
+(ASDF finds `lisp/rulisp.asd` there automatically):
 
 ```sh
 git clone https://github.com/onlyarche/rulisp ~/quicklisp/local-projects/rulisp
@@ -127,8 +134,10 @@ downloads crates.io deps):
 Full test gates, from the repository root:
 
 ```sh
-make test-m4                          # everything, on SBCL (101 checks)
+make test-m4                          # everything, on SBCL
 make test-ccl CCL=~/ccl/lx86cl64      # same suites on Clozure CL (Linux)
+make test-fetch                       # the async HTTP example (hermetic)
+make bench                            # boundary throughput
 cargo test --workspace                # manifest golden + compile-fail tests
 ```
 
