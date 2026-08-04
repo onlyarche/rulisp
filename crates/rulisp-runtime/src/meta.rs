@@ -79,12 +79,21 @@ pub const TARGET: &str = "aarch64-unknown-linux-gnu";
 pub const TARGET: &str = "x86_64-apple-darwin";
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 pub const TARGET: &str = "aarch64-apple-darwin";
+#[cfg(all(target_arch = "x86_64", target_os = "windows", target_env = "msvc"))]
+pub const TARGET: &str = "x86_64-pc-windows-msvc";
+#[cfg(all(target_arch = "x86_64", target_os = "windows", target_env = "gnu"))]
+pub const TARGET: &str = "x86_64-pc-windows-gnu";
+#[cfg(all(target_arch = "aarch64", target_os = "windows"))]
+pub const TARGET: &str = "aarch64-pc-windows-msvc";
 #[cfg(not(any(
     all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"),
     all(target_arch = "x86_64", target_os = "linux", target_env = "musl"),
     all(target_arch = "aarch64", target_os = "linux", target_env = "gnu"),
     all(target_arch = "x86_64", target_os = "macos"),
     all(target_arch = "aarch64", target_os = "macos"),
+    all(target_arch = "x86_64", target_os = "windows", target_env = "msvc"),
+    all(target_arch = "x86_64", target_os = "windows", target_env = "gnu"),
+    all(target_arch = "aarch64", target_os = "windows"),
 )))]
 pub const TARGET: &str = "unknown";
 
