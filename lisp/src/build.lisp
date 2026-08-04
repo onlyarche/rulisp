@@ -20,7 +20,10 @@
       (let ((in-package-section nil))
         (loop for line = (read-line in nil)
               while line
-              do (let ((trim (string-trim '(#\Space #\Tab) line)))
+              ;; #\Return matters: a Cargo.toml with CRLF line endings —
+              ;; standard on a Windows checkout — otherwise yields
+              ;; "[package]\r", which matches nothing.
+              do (let ((trim (string-trim '(#\Space #\Tab #\Return) line)))
                    (cond ((string= trim "[package]")
                           (setf in-package-section t))
                          ((and (plusp (length trim)) (char= (char trim 0) #\[))
@@ -29,7 +32,7 @@
                                (>= (length trim) 5)
                                (string= "name" trim :end2 4)
                                (find #\= trim))
-                          (return (string-trim '(#\Space #\Tab #\")
+                          (return (string-trim '(#\Space #\Tab #\Return #\")
                                                (subseq trim (1+ (position #\= trim))))))))
               finally (error 'build-error
                              :command nil
