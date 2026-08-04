@@ -17,6 +17,10 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   `with-client`), a hermetic loopback test server, and `audit.sh`, an
   executable BOUNDARY §7 check.
 - `make bench` — a benchmark suite for the boundary paths.
+- **Windows support.** The loader is abstracted over `dlopen`/`dlsym` and
+  `LoadLibrary`/`GetProcAddress`, `uintptr` is derived from the pointer
+  size (naming a C type is wrong on LLP64), and artifact naming knows
+  Windows drops the `lib` prefix. CI runs the full suite there, 177/177.
 
 ### Changed
 - **Bulk `:bytes`/`:vec` marshalling**: pinned vector + `memcpy`, with the
@@ -28,6 +32,10 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   rejected before anything is interned.
 - `#[rulisp(constructor)]` on a `&self` method dropped the receiver and
   surfaced as a raw `E0061`; now a compile error naming the fix.
+- The `Cargo.toml` scraper could not tolerate CR, so `use-crate` failed on
+  any CRLF manifest. The tree is also pinned to LF now: a CRLF checkout
+  broke the golden byte-identity fixture and turned Lisp format-string
+  line continuations into `FORMAT-ERROR`.
 
 ## 0.2.1 — 2026-08-03
 

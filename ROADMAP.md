@@ -48,14 +48,20 @@ providing conditions, restarts and `with-client`. Headline finding:
   audit-gate regex that could never fire because glibc imports are
   version-tagged, and a `TaskGuard` ordering that published "done" before
   releasing the admission permit.
-- ✅ **Windows groundwork**: `uintptr` is now derived from the pointer size
-  (naming a C type was wrong on LLP64, where `unsigned long` is 32 bits);
-  the loader is abstracted over `dlopen`/`dlsym` and
-  `LoadLibrary`/`GetProcAddress`; artifact naming knows that Windows drops
-  the `lib` prefix and uses `.dll`. The unique-copy load policy already
-  sidesteps the DLL-in-use lock. **None of this has run on Windows** — an
-  experimental (`continue-on-error`) CI job is where the claim gets tested.
-  Finishing the port is a v0.4 goal.
+- ✅ **Windows works** — and earlier than planned. `uintptr` is derived
+  from the pointer size (naming a C type was wrong on LLP64, where
+  `unsigned long` is 32 bits); the loader is abstracted over
+  `dlopen`/`dlsym` and `LoadLibrary`/`GetProcAddress`; artifact naming
+  knows Windows drops the `lib` prefix and uses `.dll`; the unique-copy
+  load policy, added for macOS dyld caching, also sidesteps the DLL-in-use
+  lock. Three real portability bugs surfaced on the way, none of them
+  Windows-only in principle: a Cargo.toml scraper that could not tolerate
+  CR, the golden fixture broken by CRLF translation, and Lisp format
+  strings whose `~` end-of-line continuation is not the tilde-newline
+  directive once a CR sits between them (the tree is now pinned to LF).
+  The CI job is **required**, at 177/177. (It runs three fewer assertions
+  than Linux: `fx.target-check` guards a couple of them behind
+  `#+(and x86-64 linux)`.)
 - ✅ A worked Deploy recipe (docs/distribution.md), including the two things
   that bite silently: platform-named artifacts and quiescing foreign
   threads in a dump hook.

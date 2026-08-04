@@ -73,6 +73,24 @@ macOS notes:
 - rulisp loads libraries by absolute path, so SIP's stripping of
   `DYLD_LIBRARY_PATH` is irrelevant.
 
+## Windows
+
+> Status: CI-verified on Windows x86-64 with SBCL (full suite green).
+
+Install [SBCL](http://www.sbcl.org/platform-table.html) (or
+`choco install sbcl`), a Rust toolchain from <https://rustup.rs>, and
+Quicklisp as above. Notes:
+
+- Artifacts are `<name>.dll` — cargo drops the `lib` prefix on Windows —
+  and `load-blob-crate` looks for `<name>-windows-x86_64.dll`.
+- A loaded DLL is locked, so an artifact cannot be overwritten in place.
+  rulisp already loads a uniquely named copy per generation, so
+  `use-crate`/`reload-crate` work anyway; stale copies in the cache are
+  swept on a later run.
+- Check the repository out with LF endings (the shipped `.gitattributes`
+  does this): the manifest fixtures are byte-compared, and a CR inside a
+  Lisp format string breaks its line continuations.
+
 ## Getting rulisp
 
 Until the Quicklisp/Ultralisp registration lands, clone into Quicklisp's

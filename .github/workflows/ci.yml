@@ -66,9 +66,8 @@ jobs:
       - run: make test-m4
 
   sbcl-windows:
-    name: SBCL / Windows x86-64 (experimental, may fail)
+    name: SBCL / Windows x86-64 (required)
     runs-on: windows-latest
-    continue-on-error: true
     defaults:
       run:
         shell: bash
@@ -83,9 +82,6 @@ jobs:
           curl -sO https://beta.quicklisp.org/quicklisp.lisp
           sbcl --non-interactive --load quicklisp.lisp \
                --eval '(quicklisp-quickstart:install)'
-      # The loader was ported (LoadLibrary/GetProcAddress, pointer-sized
-      # uintptr for LLP64, .dll naming with no lib prefix) but has never run
-      # on Windows — this job is where that claim gets tested.
       - name: full gate
         run: make test-m4
 
