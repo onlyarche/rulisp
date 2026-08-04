@@ -1,8 +1,12 @@
-# The manifest fixtures are byte-exactness gates: the macro's output is
-# compared against them verbatim. A Windows checkout translating LF to CRLF
-# would break that comparison for reasons that have nothing to do with the
-# code, so pin their line endings.
-*.sexp text eol=lf
+# Check every text file out with LF, on every platform.
+#
+# This is not cosmetic here. Two things in this repo are line-ending
+# sensitive and fail in confusing ways under a CRLF checkout:
+#   * the manifest fixtures, which the macro's output is compared against
+#     byte for byte;
+#   * Lisp format strings, where a ~ at end of line is a line-continuation
+#     directive that does not recognise CR and signals FORMAT-ERROR.
+* text=auto eol=lf
 
-# Shell scripts must keep LF even on a Windows checkout.
+*.sexp text eol=lf
 *.sh text eol=lf
