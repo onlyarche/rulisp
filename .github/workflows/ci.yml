@@ -76,7 +76,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: cargo tests (platform-independent)
         run: cargo test --workspace
-      - run: choco install sbcl --no-progress -y
+      # the community feed 503s occasionally; a required job must not
+      # flake on a package-feed hiccup
+      - name: install sbcl (with retry)
+        run: |
+          for i in 1 2 3 4 5; do
+            choco install sbcl --no-progress -y && exit 0
+            echo "choco attempt $i failed; retrying in $((i*30))s"
+            sleep $((i*30))
+          done
+          exit 1
       - name: install quicklisp
         run: |
           curl -sO https://beta.quicklisp.org/quicklisp.lisp
