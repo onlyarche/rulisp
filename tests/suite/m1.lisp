@@ -272,10 +272,15 @@ generation let a stale wrapper dereference a new generation's handle — UB)."
 ;;; ---------------------------------------------------------------------------
 
 (test m7.dump-restore
-  ;; drives sbcl subprocesses (dump phase uses sb-ext:save-lisp-and-die);
-  ;; on other hosts this test passes vacuously
-  #-sbcl (pass "image dump/restore drives sbcl subprocesses; skipped here")
-  #+sbcl
+  ;; Dumps an executable image in a subprocess and re-launches it, via
+  ;; uiop:dump-image — save-lisp-and-die on SBCL, ccl:save-application on
+  ;; CCL (whose toplevel is fixed to uiop's restore-image, so the
+  ;; post-restore assertions live in *image-entry-point*, which runs after
+  ;; the restore hooks — i.e. after %restore-all-crates has bumped the
+  ;; session and reloaded the crate).
+  #-(or sbcl ccl)
+  (pass "skipped: no uiop:dump-image on this host — ECL has none; ECL executables ship via asdf:program-op (docs/design/v04-plan.md item 4)")
+  #+(or sbcl ccl)
   (let* ((tmp (uiop:temporary-directory))
          (exe (merge-pathnames "rulisp-m1-restore-test" tmp))
          (script (merge-pathnames "rulisp-m1-dump-phase.lisp" tmp))
@@ -294,40 +299,53 @@ generation let a stale wrapper dereference a new generation's handle — UB)."
 (rulisp:use-crate ~S)
 (setf *bag* (funcall (find-symbol \"MAKE-WORD-BAG\" \"WORDBAG\")))
 (funcall (find-symbol \"WORD-BAG-ADD\" \"WORDBAG\") *bag* \"pre-dump\")
+;; abandoned after restore: its finalizer must fire in the restored image
+;; and must NOT make a foreign call (the mapping it remembers is gone)
+(defvar *abandoned* (funcall (find-symbol \"MAKE-WORD-BAG\" \"WORDBAG\")))
 (defvar *saved-greet* (symbol-function (find-symbol \"GREET\" \"WORDBAG\")))
-(sb-ext:save-lisp-and-die ~S :executable t :toplevel
- (lambda ()
-   (handler-case
-       (progn
-         (uiop:call-image-restore-hook)
-         (assert (string= \"Hello, restored!\"
-                          (funcall (find-symbol \"GREET\" \"WORDBAG\") \"restored\")))
-         (handler-case
-             (progn (funcall (find-symbol \"WORD-BAG-LEN\" \"WORDBAG\") *bag*)
-                    (format t \"FAIL: pre-dump handle did not signal~~%\")
-                    (uiop:quit 1))
-           (rulisp:stale-handle-error () t))
-         (assert (eq t (rulisp:free *bag*)))   ; dead session: freed w/o foreign call
-         (assert (eq nil (rulisp:free *bag*)))
-         (handler-case
-             (progn (funcall *saved-greet* \"x\")
-                    (format t \"FAIL: saved closure did not signal~~%\")
-                    (uiop:quit 1))
-           (rulisp:crate-not-loaded-error () t))
-         (let ((bag2 (funcall (find-symbol \"MAKE-WORD-BAG\" \"WORDBAG\"))))
-           (funcall (find-symbol \"WORD-BAG-ADD\" \"WORDBAG\") bag2 \"post\")
-           (assert (= 1 (funcall (find-symbol \"WORD-BAG-LEN\" \"WORDBAG\") bag2))))
-         (format t \"RESTORE-OK~~%\")
-         (uiop:quit 0))
-     (error (e)
-       (format t \"FAIL: ~~A~~%\" e)
-       (uiop:quit 1)))))~%"
+(setf uiop:*image-entry-point*
+      (lambda ()
+        (handler-case
+            (progn
+              (assert (string= \"Hello, restored!\"
+                               (funcall (find-symbol \"GREET\" \"WORDBAG\") \"restored\")))
+              (handler-case
+                  (progn (funcall (find-symbol \"WORD-BAG-LEN\" \"WORDBAG\") *bag*)
+                         (format t \"FAIL: pre-dump handle did not signal~~%\")
+                         (uiop:quit 1))
+                (rulisp:stale-handle-error () t))
+              (assert (eq t (rulisp:free *bag*)))   ; dead session: freed w/o foreign call
+              (assert (eq nil (rulisp:free *bag*)))
+              (handler-case
+                  (progn (funcall *saved-greet* \"x\")
+                         (format t \"FAIL: saved closure did not signal~~%\")
+                         (uiop:quit 1))
+                (rulisp:crate-not-loaded-error () t))
+              ;; the finalizer path: drop the pre-dump handle NOW, in the
+              ;; restored image, and force collection — the session gate
+              ;; must turn the finalizer into a no-op instead of a foreign
+              ;; call into an unmapped library
+              (setf *abandoned* nil)
+              (trivial-garbage:gc :full t)
+              (let ((bag2 (funcall (find-symbol \"MAKE-WORD-BAG\" \"WORDBAG\"))))
+                (funcall (find-symbol \"WORD-BAG-ADD\" \"WORDBAG\") bag2 \"post\")
+                (assert (= 1 (funcall (find-symbol \"WORD-BAG-LEN\" \"WORDBAG\") bag2))))
+              (format t \"RESTORE-OK~~%\")
+              (uiop:quit 0))
+          (error (e)
+            (format t \"FAIL: ~~A~~%\" e)
+            (uiop:quit 1)))))
+(uiop:dump-image ~S :executable t)~%"
               (namestring lisp-dir) (namestring *crate-dir*) (namestring exe)))
     (multiple-value-bind (out err code)
-        (uiop:run-program (list "sbcl" "--non-interactive" "--load"
-                                (uiop:native-namestring script))
-                          :output :string :error-output :string
-                          :ignore-error-status t)
+        (uiop:run-program
+         (append #+sbcl (list "sbcl" "--non-interactive")
+                 ;; uiop:argv0 is NIL on CCL 1.13; the raw argument list
+                 ;; still carries the binary path
+                 #+ccl (list (first ccl:*command-line-argument-list*) "--batch")
+                 (list "--load" (uiop:native-namestring script)))
+         :output :string :error-output :string
+         :ignore-error-status t)
       (declare (ignore out))
       (is (zerop code) "dump phase failed:~%~A" err))
     (multiple-value-bind (out err code)

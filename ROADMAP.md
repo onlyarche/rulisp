@@ -1,5 +1,53 @@
 # Roadmap
 
+## v0.4 — enforced, everywhere
+
+Issue #1's reporter praised the boundary because "the surrounding
+invariants are otherwise enforced rather than merely documented" — and
+0.1.0–0.2.1 were yanked over the one claim that wasn't. v0.4 makes that
+property total: every normative BOUNDARY.md claim becomes a compile error,
+a runtime check, or a non-vacuous test on every claimed host, and the §10
+dump discipline becomes structural. ABI 1 stays frozen; nothing here adds
+an ECL load-time toolchain requirement. Full plan with demand cases and
+acceptance criteria: docs/design/v04-plan.md (scoped by a three-proposal
+panel with two verifying judges).
+
+1. **BOUNDARY conformance sweep** — claim→enforcement table appended to
+   BOUNDARY.md; six pre-verified prose-only gaps get tests (swallowed
+   CallbackError → status 4, panicking Drop in a free shim, poisoned
+   mutex → status 2, thread-local last_error, out-params untouched on ERR,
+   ECL toolchain manifest-error).
+2. ✅ **De-vacuous m7** — the dump/restore test now really runs on CCL
+   (`uiop:dump-image` → `ccl:save-application`; assertions live in
+   `*image-entry-point*` since CCL's toplevel is fixed), plus a new
+   finalizer assertion: a pre-dump handle GC'd after restore must not make
+   a foreign call. First real CCL execution passed immediately — the
+   machinery was portable all along; only the test was missing.
+3. **`#[rulisp(on_dump)]`** — a declared zero-arg shutdown export,
+   auto-registered as a dump hook by the loader (wire-additive
+   `(:on-dump "symbol")` manifest key). Dump-only; no thread detection.
+   fetch converts as the worked example, finally shipping the two dump
+   tests v0.3's risk table promised.
+4. **ECL deploy story** — no `dump-image` exists there;
+   `asdf:program-op` is the delivery path and rulisp's restore hook
+   already runs in its epilogue. Document + smoke-test it.
+5. **`#[rulisp(constructor, name = "…")]`** — now load-bearing: since
+   duplicate `:lisp-name` became a hard error, a two-constructor handle
+   type is inexpressible without it. Scheduled for v0.4 by the v0.3 plan.
+6. **Reusable signal-audit tool** — extract fetch's audit.sh into
+   `tools/rulisp-audit.sh`, run it over all examples in CI, with a
+   deliberately-failing fixture so the gate can never go inert again.
+7. **docs/benchmarks.md** — the 24×/307× numbers get a documented,
+   dated, release-profile method (`make bench` already builds release).
+8. **ECL CI promotion to required** — gated on item 4 plus a green
+   streak; "fully supported" and "may fail" cannot both be true.
+
+Not in v0.4 (causes in the plan): boundary vocabulary round 2
+(`(:vec :string)`, multiple values, tagged enums), the push/doorbell
+callback layer, reload semantics for on_dump, a new flagship example,
+print-object polish, LispWorks/ABCL/ocicl, Quicklisp (1.0, user
+decision), constructor `&key`, anything that would `dlclose`.
+
 ## v0.3 — prove it on something hard, and keep it fast
 
 Theme: v0.1 froze the boundary, v0.2 filled in types and callbacks; v0.3
