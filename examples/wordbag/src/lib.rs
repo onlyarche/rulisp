@@ -181,6 +181,13 @@ impl WordBag {
         std::thread::sleep(std::time::Duration::from_millis(millis));
         self.words.lock().unwrap().len() as u64
     }
+    /// Panics while holding the words mutex, poisoning it: BOUNDARY §8 —
+    /// the NEXT lock's unwrap panics too and surfaces as status 2.
+    pub fn poison(&self) {
+        let _guard = self.words.lock().unwrap();
+        panic!("wordbag: poisoning the words mutex");
+    }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +200,30 @@ impl Drop for CbGuard {
     fn drop(&mut self) {
         CB_GUARD_DROPS.fetch_add(1, Ordering::SeqCst);
     }
+}
+
+/// Swallows callback failures and keeps counting: BOUNDARY §6.3(3), first
+/// sentence — a swallowed CallbackError's stash is discarded when the shim
+/// returns OK, so the caller sees a normal return, not a re-signal.
+#[rulisp::export]
+pub fn count_ok(bag: &WordBag, f: Callback<(&str,), ()>) -> u64 {
+    let words: Vec<String> = bag.words.lock().unwrap().clone();
+    let mut ok: u64 = 0;
+    for w in &words {
+        if f.call((w.as_str(),)).is_ok() {
+            ok += 1;
+        }
+    }
+    ok
+}
+
+/// Swallows a callback failure, then fails with its OWN error: BOUNDARY
+/// §6.3(3), second sentence — the call is conservatively status 4, so the
+/// stashed Lisp condition re-signals instead of this error.
+#[rulisp::export]
+pub fn swallow_then_fail(f: Callback<(i64,), ()>) -> Result<(), Error> {
+    let _ = f.call((7,));
+    Err(Error::msg("own error after swallow"))
 }
 
 #[rulisp::export]
@@ -231,15 +262,40 @@ pub fn test_cb_guard_drops() -> i64 {
 // The fns order is the manifest order (byte-pinned by tests/golden/).
 // ---------------------------------------------------------------------------
 
+/// Drop panics when armed: BOUNDARY §2's exception — a panic inside a
+/// `*_free` shim is caught, logged to stderr and swallowed, never crossing
+/// the boundary.
+#[rulisp::handle]
+pub struct Grenade {
+    armed: bool,
+}
+
+impl Drop for Grenade {
+    fn drop(&mut self) {
+        if self.armed {
+            panic!("grenade: boom in drop");
+        }
+    }
+}
+
+#[rulisp::export]
+impl Grenade {
+    #[rulisp(constructor)]
+    pub fn new(armed: bool) -> Grenade {
+        Grenade { armed }
+    }
+}
+
 rulisp::module! {
     name: "wordbag",
-    handles: [WordBag],
+    handles: [WordBag, Grenade],
     fns: [
         add, always_panic, parse_number, greet, echo, sum, rev,
         find, greet_opt, deltas, scale,
         set_notifier, clear_notifier, notify, notify_from_thread,
         WordBag::new, WordBag::add, WordBag::len, WordBag::slow_len,
-        for_each_word,
+        for_each_word, count_ok, swallow_then_fail,
+        WordBag::poison, Grenade::new,
         test_live_allocations, test_live_word_bags, test_cb_guard_drops,
     ],
 }

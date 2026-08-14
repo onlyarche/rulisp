@@ -45,6 +45,16 @@ every-other-status discipline.")
 (defun callback-type-p (ty) (and (consp ty) (eq (car ty) :callback)))
 (defun stored-callback-type-p (ty) (and (consp ty) (eq (car ty) :stored-callback)))
 (defun option-type-p (ty) (and (consp ty) (eq (car ty) :option)))
+
+(defun option-inner (ty)
+  "Inner type of (:option X), rejecting :bool: Lisp nil cannot distinguish
+None from Some(false). The macro refuses to emit it; a hand-written
+manifest must be refused here for the same reason."
+  (let ((inner (second ty)))
+    (when (eq inner :bool)
+      (error 'manifest-error
+             :message "(:option :bool) is not in the type vocabulary — nil is ambiguous between None and false; use (:option :i8)"))
+    inner))
 (defun vec-type-p (ty) (and (consp ty) (eq (car ty) :vec)))
 
 (defparameter +vec-elt-types+
@@ -246,7 +256,7 @@ conditions are warned and reported as status 1; a dead id is status 2."
                `(:pointer ,o)
                `(plusp (cffi:mem-ref ,o :uint8)))))
     ((option-type-p result)
-     (let ((inner (second result))
+     (let ((inner (option-inner result))
            (some (gensym "SOME")))
        (cond
          ((member inner '(:string :bytes))
@@ -358,7 +368,7 @@ FSPEC against one immutable generation context."
                         wrappers)
                   (setf call-args (append call-args `(:pointer ,ptr uintptr ,len)))))
                ((option-type-p ty)
-                (let ((inner-ty (second ty)))
+                (let ((inner-ty (option-inner ty)))
                   (cond
                     ((member inner-ty '(:string :bytes))
                      (let ((pres (gensym "PRES")) (ptr (gensym "PTR")) (len (gensym "LEN"))

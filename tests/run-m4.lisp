@@ -26,6 +26,7 @@
        (r4 (fiveam:run :rulisp-m4))
        (r5 (fiveam:run :rulisp-v02))
        (r6 (fiveam:run :rulisp-v03))
-       (all (append r1 r2 r3 r4 r5 r6)))
+       (r7 (fiveam:run :rulisp-v04))
+       (all (append r1 r2 r3 r4 r5 r6 r7)))
   (fiveam:explain! all)
   (uiop:quit (if (fiveam:results-status all) 0 1)))

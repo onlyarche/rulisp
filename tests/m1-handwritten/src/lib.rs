@@ -339,6 +339,102 @@ pub unsafe extern "C" fn wordbag_rulisp_for_each_word(
     })
 }
 
+pub type Cbty1 = unsafe extern "C" fn(userdata: u64, a0: i64) -> i32;
+
+/// count_ok(bag, f) -> u64: swallows callback failures and keeps counting.
+/// BOUNDARY §6.3(3), first sentence — with the shim returning OK, the
+/// stashed condition is discarded, not re-signaled.
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_count_ok(
+    this: *const c_void,
+    f: Cbty0,
+    userdata: u64,
+    out: *mut u64,
+) -> i32 {
+    rt::shim(|| {
+        rt::clear_callback_tunnel();
+        let _frame = rt::ShimFrame::new();
+        let bag: &WordBag = unsafe { rt::handle_ref(&_frame, this) };
+        let words: Vec<String> = bag.words.lock().unwrap().clone();
+        let mut ok: u64 = 0;
+        for w in &words {
+            if unsafe { f(userdata, w.as_ptr(), w.len()) } == 0 {
+                ok += 1;
+            }
+        }
+        unsafe { *out = ok };
+        rt::STATUS_OK
+    })
+}
+
+/// swallow_then_fail(f) -> Result<(), Error>: swallows the callback error,
+/// then fails on its own. BOUNDARY §6.3(3), second sentence — the tunnel
+/// flag is still up, so the failure is conservatively STATUS_CB_ERR and
+/// the ORIGINAL Lisp condition re-signals (mirrors the macro's
+/// tunnel_check on the Err branch).
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_swallow_then_fail(f: Cbty1, userdata: u64) -> i32 {
+    rt::shim(|| {
+        rt::clear_callback_tunnel();
+        let _ = unsafe { f(userdata, 7) };
+        if rt::callback_tunnel() {
+            return rt::STATUS_CB_ERR;
+        }
+        rt::set_last_error("Error", "own error after swallow");
+        rt::STATUS_ERR
+    })
+}
+
+/// WordBag::poison(&self): panics while holding the words mutex —
+/// BOUNDARY §8's poisoned-mutex clause; the next lock reports status 2.
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_word_bag_poison(this: *const c_void) -> i32 {
+    rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
+        let bag: &WordBag = unsafe { rt::handle_ref(&_frame, this) };
+        let _guard = bag.words.lock().unwrap();
+        panic!("wordbag: poisoning the words mutex");
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Grenade: a handle whose Drop panics when armed (BOUNDARY §2's exception —
+// a panic inside a *_free shim is caught, logged and swallowed)
+// ---------------------------------------------------------------------------
+
+pub struct Grenade {
+    armed: bool,
+}
+
+impl Drop for Grenade {
+    fn drop(&mut self) {
+        if self.armed {
+            panic!("grenade: boom in drop");
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_grenade_new(
+    armed: u8,
+    out: *mut *mut c_void,
+) -> i32 {
+    rt::shim(|| {
+        unsafe { *out = rt::handle_new(Grenade { armed: armed != 0 }) };
+        rt::STATUS_OK
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_grenade_free(this: *mut c_void) {
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        rt::handle_free::<Grenade>(this)
+    }));
+    if r.is_err() {
+        eprintln!("rulisp: panic in wordbag_rulisp_grenade_free (caught, handle leaked)");
+    }
+}
+
 /// pub fn find(data: &[u8], b: u8) -> Option<u64>   (v0.2 (:option ...))
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_find(

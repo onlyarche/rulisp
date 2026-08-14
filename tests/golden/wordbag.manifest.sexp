@@ -7,7 +7,8 @@
  :prefix "wordbag_rulisp_"
  :errors ("ParseError")
  :handles
- ((:handle :rust-name "WordBag" :lisp-name "word-bag" :free "word_bag_free"))
+ ((:handle :rust-name "WordBag" :lisp-name "word-bag" :free "word_bag_free")
+  (:handle :rust-name "Grenade" :lisp-name "grenade" :free "grenade_free"))
  :functions
  ((:fn :rust-name "add" :lisp-name "add" :symbol "add"
    :params ((:name "a" :type :i64) (:name "b" :type :i64)) :result :i64 :error nil)
@@ -54,6 +55,17 @@
    :params ((:name "bag" :type (:handle "WordBag"))
             (:name "f" :type (:callback :params (:string) :result :unit)))
    :result :u64 :error "Error")
+  (:fn :rust-name "count_ok" :lisp-name "count-ok" :symbol "count_ok"
+   :params ((:name "bag" :type (:handle "WordBag"))
+            (:name "f" :type (:callback :params (:string) :result :unit)))
+   :result :u64 :error nil)
+  (:fn :rust-name "swallow_then_fail" :lisp-name "swallow-then-fail" :symbol "swallow_then_fail"
+   :params ((:name "f" :type (:callback :params (:i64) :result :unit)))
+   :result :unit :error "Error")
+  (:fn :rust-name "WordBag::poison" :lisp-name "word-bag-poison" :symbol "word_bag_poison"
+   :params ((:name "self" :type (:handle "WordBag"))) :result :unit :error nil)
+  (:fn :rust-name "Grenade::new" :lisp-name "make-grenade" :symbol "grenade_new"
+   :params ((:name "armed" :type :bool)) :result (:handle "Grenade") :error nil)
   (:fn :rust-name "test_live_allocations" :lisp-name "test-live-allocations" :symbol "test_live_allocations"
    :params () :result :i64 :error nil)
   (:fn :rust-name "test_live_word_bags" :lisp-name "test-live-word-bags" :symbol "test_live_word_bags"

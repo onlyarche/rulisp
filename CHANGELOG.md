@@ -5,6 +5,30 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
+## Unreleased (0.4 development)
+
+### Added
+- **BOUNDARY.md §12: the conformance table.** Every normative claim in
+  §1–§11 (103 rows) classified as compile error, runtime check, test,
+  documented-UB-by-design, or gap — with verified citations. The two
+  remaining gaps are scheduled v0.4 items and say so in the table.
+- Eight new conformance tests (`:rulisp-v04`), closing every prose-only
+  claim the sweep found: swallowed `CallbackError` discards the stash;
+  swallow-then-fail re-signals the original condition (status 4); a panic
+  in a `*_free` shim is caught and swallowed (new `Grenade` fixture handle
+  whose `Drop` panics); a poisoned mutex reports `rust-panic` on the next
+  lock; `last_error` is thread-local AND per-library (concurrent failures
+  in wordbag and rx never cross); out-params survive an ERR return
+  untouched (FFI-level sentinel test); ECL's missing-C-compiler failure is
+  the named `manifest-error` (injected via `c::*cc*`).
+- The dump/restore test (m7) now really runs on CCL — and Windows —
+  instead of passing vacuously off SBCL, with a new assertion: a pre-dump
+  handle GC'd after restore must not make a foreign call.
+
+### Fixed
+- The loader now rejects `(:option :bool)` in a hand-written manifest
+  (`option-inner`); previously only the macro refused to emit it.
+
 ## 0.3.0 — 2026-08-14
 
 ### Added
