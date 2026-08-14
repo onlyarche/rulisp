@@ -1,0 +1,49 @@
+error: rulisp: explicit lifetimes are not allowed in export signatures — a Lisp-owned borrow is only valid for the duration of the call; elide the lifetime
+  --> tests/ui/static_lifetime.rs:17:18
+   |
+17 | pub fn stash(s: &'static str) {
+   |                  ^^^^^^^
+
+error: rulisp: explicit lifetimes are not allowed in export signatures — a Lisp-owned borrow is only valid for the duration of the call; elide the lifetime
+  --> tests/ui/static_lifetime.rs:23:29
+   |
+23 | pub fn stash_opt(s: Option<&'static str>) {
+   |                             ^^^^^^^
+
+error: rulisp: explicit lifetimes are not allowed in export signatures — a Lisp-owned borrow is only valid for the duration of the call; elide the lifetime
+  --> tests/ui/static_lifetime.rs:29:24
+   |
+29 | pub fn stash_bytes(b: &'static [u8]) {
+   |                        ^^^^^^^
+
+error: rulisp: explicit lifetimes are not allowed in export signatures — a Lisp-owned borrow is only valid for the duration of the call; elide the lifetime
+  --> tests/ui/static_lifetime.rs:34:23
+   |
+34 | pub fn stash_vec(xs: &'static [i64]) {
+   |                       ^^^^^^^
+
+error: rulisp: explicit lifetimes are not allowed in export signatures — a Lisp-owned borrow is only valid for the duration of the call; elide the lifetime
+  --> tests/ui/static_lifetime.rs:40:27
+   |
+40 | pub fn stash_handle(bag: &'static Bag) {
+   |                           ^^^^^^^
+
+error: rulisp: explicit lifetimes are not allowed in export signatures — a Lisp-owned borrow is only valid for the duration of the call; elide the lifetime
+  --> tests/ui/static_lifetime.rs:46:29
+   |
+46 | pub fn with_cb(cb: Callback<'static, (i64,), ()>) {
+   |                             ^^^^^^^
+
+error: rulisp: explicit lifetimes are not allowed in export signatures — a handle borrow is only valid for the duration of the call; write &self
+  --> tests/ui/static_lifetime.rs:53:23
+   |
+53 |     pub fn touch<'a>(&'a self) -> i64 {
+   |                       ^^
+
+warning: unused import: `rulisp::Callback`
+ --> tests/ui/static_lifetime.rs:8:5
+  |
+8 | use rulisp::Callback;
+  |     ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default

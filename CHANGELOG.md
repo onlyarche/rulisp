@@ -28,6 +28,17 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   transfer and 307× on a 65k-element `i64` vector.
 
 ### Fixed
+- **Soundness (issue #1):** an explicit `'static` in an export signature
+  compiled cleanly — under `#![forbid(unsafe_code)]` — and let a glue
+  crate retain a Lisp-owned buffer past the end of the call (use after
+  free). The borrowing helpers' lifetimes were unconstrained, so the
+  caller's signature chose them. Fixed at both layers: the macro rejects
+  any explicit lifetime anywhere in an export signature (`&'static str`,
+  `Option<&'static str>`, slices, handle references, `Callback<'static,…>`,
+  and the `&'a self` receiver — each pinned by a trybuild test), and the
+  helpers now take a per-call `ShimFrame` whose borrow the returned
+  lifetime is inferred from, so the guarantee no longer depends on the
+  macro remembering to check. Affects 0.1.0–0.2.1.
 - Duplicate `:lisp-name` in a manifest silently shadowed one export; now
   rejected before anything is interned.
 - `#[rulisp(constructor)]` on a `&self` method dropped the receiver and

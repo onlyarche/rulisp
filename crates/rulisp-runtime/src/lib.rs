@@ -119,13 +119,37 @@ pub fn shim<F: FnOnce() -> i32>(f: F) -> i32 {
     }
 }
 
+/// Witness of one live shim invocation. Every borrowing helper takes
+/// `&'a ShimFrame` and returns its borrow at `'a`, so the lifetime is
+/// INFERRED from the frame the shim created — not chosen by the caller.
+/// Without this, the helpers' `'a` was unconstrained and an explicit
+/// `&'static str` in an export signature let safe Rust retain a Lisp-owned
+/// buffer past the end of the call (issue #1). The macro also rejects
+/// explicit lifetimes outright; this makes the guarantee structural rather
+/// than dependent on that check.
+pub struct ShimFrame(());
+
+impl ShimFrame {
+    /// Generated shims only. (Constructing one elsewhere buys nothing: the
+    /// raw pointers these helpers consume never reach user code.)
+    #[doc(hidden)]
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        ShimFrame(())
+    }
+}
+
 /// Borrow an incoming `(ptr, len)` UTF-8 argument for the duration of the
 /// call. Invalid UTF-8 records last-error and yields `STATUS_INVALID`.
 ///
 /// # Safety
-/// When `len > 0`, `ptr..ptr+len` must be readable for the duration of the
-/// borrow.
-pub unsafe fn str_arg<'a>(ptr: *const u8, len: usize) -> Result<&'a str, i32> {
+/// When `len > 0`, `ptr..ptr+len` must be readable for as long as the shim
+/// frame lives (the frame must not outlive the extern "C" call).
+pub unsafe fn str_arg<'a>(
+    _frame: &'a ShimFrame,
+    ptr: *const u8,
+    len: usize,
+) -> Result<&'a str, i32> {
     let bytes: &[u8] = if len == 0 {
         &[]
     } else {
@@ -175,7 +199,7 @@ pub fn vec_into_raw<T>(v: Vec<T>) -> (*mut T, usize) {
 /// # Safety
 /// When `len > 0`, `ptr..ptr+len` (elements) must be readable and properly
 /// aligned for the duration of the borrow.
-pub unsafe fn slice_arg<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
+pub unsafe fn slice_arg<'a, T>(_frame: &'a ShimFrame, ptr: *const T, len: usize) -> &'a [T] {
     if len == 0 {
         &[]
     } else {
@@ -189,7 +213,7 @@ pub unsafe fn slice_arg<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
 /// # Safety
 /// When `len > 0`, `ptr..ptr+len` must be readable for the duration of the
 /// borrow.
-pub unsafe fn bytes_arg<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
+pub unsafe fn bytes_arg<'a>(_frame: &'a ShimFrame, ptr: *const u8, len: usize) -> &'a [u8] {
     if len == 0 {
         &[]
     } else {
@@ -226,7 +250,7 @@ pub fn handle_new<T: Send + Sync + 'static>(v: T) -> *mut c_void {
 /// `ptr` must come from `handle_new::<T>` and not have been freed. The CL
 /// cell state machine guarantees this for calls made through generated
 /// wrappers.
-pub unsafe fn handle_ref<'a, T>(ptr: *const c_void) -> &'a T {
+pub unsafe fn handle_ref<'a, T>(_frame: &'a ShimFrame, ptr: *const c_void) -> &'a T {
     unsafe { &*(ptr as *const T) }
 }
 

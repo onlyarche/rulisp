@@ -65,6 +65,7 @@ pub unsafe extern "C" fn wordbag_rulisp_dealloc(ptr: *mut u8, size: usize, align
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_add(a: i64, b: i64, out: *mut i64) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         unsafe { *out = a.wrapping_add(b) };
         rt::STATUS_OK
     })
@@ -84,7 +85,8 @@ pub unsafe extern "C" fn wordbag_rulisp_parse_number(
     out: *mut i64,
 ) -> i32 {
     rt::shim(|| {
-        let s = match unsafe { rt::str_arg(s_ptr, s_len) } {
+        let _frame = rt::ShimFrame::new();
+        let s = match unsafe { rt::str_arg(&_frame, s_ptr, s_len) } {
             Ok(s) => s,
             Err(status) => return status,
         };
@@ -118,7 +120,8 @@ pub unsafe extern "C" fn wordbag_rulisp_greet(
     out_len: *mut usize,
 ) -> i32 {
     rt::shim(|| {
-        let name = match unsafe { rt::str_arg(name_ptr, name_len) } {
+        let _frame = rt::ShimFrame::new();
+        let name = match unsafe { rt::str_arg(&_frame, name_ptr, name_len) } {
             Ok(s) => s,
             Err(status) => return status,
         };
@@ -140,7 +143,8 @@ pub unsafe extern "C" fn wordbag_rulisp_echo(
     out_len: *mut usize,
 ) -> i32 {
     rt::shim(|| {
-        let s = match unsafe { rt::str_arg(s_ptr, s_len) } {
+        let _frame = rt::ShimFrame::new();
+        let s = match unsafe { rt::str_arg(&_frame, s_ptr, s_len) } {
             Ok(s) => s,
             Err(status) => return status,
         };
@@ -161,7 +165,8 @@ pub unsafe extern "C" fn wordbag_rulisp_sum(
     out: *mut u64,
 ) -> i32 {
     rt::shim(|| {
-        let data = unsafe { rt::bytes_arg(data_ptr, data_len) };
+        let _frame = rt::ShimFrame::new();
+        let data = unsafe { rt::bytes_arg(&_frame, data_ptr, data_len) };
         unsafe { *out = data.iter().map(|&b| b as u64).sum() };
         rt::STATUS_OK
     })
@@ -176,7 +181,8 @@ pub unsafe extern "C" fn wordbag_rulisp_rev(
     out_len: *mut usize,
 ) -> i32 {
     rt::shim(|| {
-        let data = unsafe { rt::bytes_arg(data_ptr, data_len) };
+        let _frame = rt::ShimFrame::new();
+        let data = unsafe { rt::bytes_arg(&_frame, data_ptr, data_len) };
         let mut v = data.to_vec();
         v.reverse();
         let (p, l) = rt::bytes_into_raw(v);
@@ -215,6 +221,7 @@ impl Drop for WordBag {
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_word_bag_new(out: *mut *mut c_void) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         unsafe { *out = rt::handle_new(WordBag::new()) };
         rt::STATUS_OK
     })
@@ -228,8 +235,9 @@ pub unsafe extern "C" fn wordbag_rulisp_word_bag_add(
     word_len: usize,
 ) -> i32 {
     rt::shim(|| {
-        let bag: &WordBag = unsafe { rt::handle_ref(this) };
-        let word = match unsafe { rt::str_arg(word_ptr, word_len) } {
+        let _frame = rt::ShimFrame::new();
+        let bag: &WordBag = unsafe { rt::handle_ref(&_frame, this) };
+        let word = match unsafe { rt::str_arg(&_frame, word_ptr, word_len) } {
             Ok(s) => s,
             Err(status) => return status,
         };
@@ -247,7 +255,8 @@ pub unsafe extern "C" fn wordbag_rulisp_word_bag_add(
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_word_bag_len(this: *const c_void, out: *mut u64) -> i32 {
     rt::shim(|| {
-        let bag: &WordBag = unsafe { rt::handle_ref(this) };
+        let _frame = rt::ShimFrame::new();
+        let bag: &WordBag = unsafe { rt::handle_ref(&_frame, this) };
         unsafe { *out = bag.words.lock().unwrap().len() as u64 };
         rt::STATUS_OK
     })
@@ -262,7 +271,8 @@ pub unsafe extern "C" fn wordbag_rulisp_word_bag_slow_len(
     out: *mut u64,
 ) -> i32 {
     rt::shim(|| {
-        let bag: &WordBag = unsafe { rt::handle_ref(this) };
+        let _frame = rt::ShimFrame::new();
+        let bag: &WordBag = unsafe { rt::handle_ref(&_frame, this) };
         std::thread::sleep(std::time::Duration::from_millis(millis));
         unsafe { *out = bag.words.lock().unwrap().len() as u64 };
         rt::STATUS_OK
@@ -314,7 +324,8 @@ pub unsafe extern "C" fn wordbag_rulisp_for_each_word(
     out: *mut u64,
 ) -> i32 {
     rt::shim(|| {
-        let bag: &WordBag = unsafe { rt::handle_ref(this) };
+        let _frame = rt::ShimFrame::new();
+        let bag: &WordBag = unsafe { rt::handle_ref(&_frame, this) };
         let _guard = CbGuard;
         let words: Vec<String> = bag.words.lock().unwrap().clone();
         for w in &words {
@@ -338,7 +349,8 @@ pub unsafe extern "C" fn wordbag_rulisp_find(
     out: *mut u64,
 ) -> i32 {
     rt::shim(|| {
-        let data = unsafe { rt::bytes_arg(data_ptr, data_len) };
+        let _frame = rt::ShimFrame::new();
+        let data = unsafe { rt::bytes_arg(&_frame, data_ptr, data_len) };
         match data.iter().position(|&x| x == b) {
             Some(i) => unsafe {
                 *some_out = 1;
@@ -360,8 +372,9 @@ pub unsafe extern "C" fn wordbag_rulisp_greet_opt(
     out_len: *mut usize,
 ) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         let name = if name_present != 0 {
-            match unsafe { rt::str_arg(name_ptr, name_len) } {
+            match unsafe { rt::str_arg(&_frame, name_ptr, name_len) } {
                 Ok(s) => Some(s),
                 Err(status) => return status,
             }
@@ -391,7 +404,8 @@ pub unsafe extern "C" fn wordbag_rulisp_deltas(
     out_len: *mut usize,
 ) -> i32 {
     rt::shim(|| {
-        let xs = unsafe { rt::slice_arg(xs_ptr, xs_len) };
+        let _frame = rt::ShimFrame::new();
+        let xs = unsafe { rt::slice_arg(&_frame, xs_ptr, xs_len) };
         let v: Vec<i64> = xs.windows(2).map(|w| w[1] - w[0]).collect();
         let (p, l) = rt::vec_into_raw(v);
         unsafe {
@@ -412,7 +426,8 @@ pub unsafe extern "C" fn wordbag_rulisp_scale(
     out_len: *mut usize,
 ) -> i32 {
     rt::shim(|| {
-        let xs = unsafe { rt::slice_arg(xs_ptr, xs_len) };
+        let _frame = rt::ShimFrame::new();
+        let xs = unsafe { rt::slice_arg(&_frame, xs_ptr, xs_len) };
         let v: Vec<f64> = xs.iter().map(|x| x * k).collect();
         let (p, l) = rt::vec_into_raw(v);
         unsafe {
@@ -437,6 +452,7 @@ pub unsafe extern "C" fn wordbag_rulisp_set_notifier(
     f_userdata: u64,
 ) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         let f = unsafe { StoredCallback::from_raw(f as usize, f_userdata) };
         *NOTIFIER.lock().unwrap() = Some(f);
         rt::STATUS_OK
@@ -447,6 +463,7 @@ pub unsafe extern "C" fn wordbag_rulisp_set_notifier(
 #[no_mangle]
 pub extern "C" fn wordbag_rulisp_clear_notifier() -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         *NOTIFIER.lock().unwrap() = None;
         rt::STATUS_OK
     })
@@ -463,6 +480,7 @@ fn current_notifier() -> Result<StoredCallback<(i64,), ()>, i32> {
 #[no_mangle]
 pub extern "C" fn wordbag_rulisp_notify(x: i64) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         let cb = match current_notifier() {
             Ok(cb) => cb,
             Err(status) => return status,
@@ -482,6 +500,7 @@ pub extern "C" fn wordbag_rulisp_notify(x: i64) -> i32 {
 #[no_mangle]
 pub extern "C" fn wordbag_rulisp_notify_from_thread(x: i64) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         let cb = match current_notifier() {
             Ok(cb) => cb,
             Err(status) => return status,
@@ -507,6 +526,7 @@ pub extern "C" fn wordbag_rulisp_notify_from_thread(x: i64) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_test_live_allocations(out: *mut i64) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         unsafe { *out = rt::LIVE_ALLOCATIONS.load(Ordering::SeqCst) };
         rt::STATUS_OK
     })
@@ -515,6 +535,7 @@ pub unsafe extern "C" fn wordbag_rulisp_test_live_allocations(out: *mut i64) -> 
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_test_live_word_bags(out: *mut i64) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         unsafe { *out = LIVE_WORD_BAGS.load(Ordering::SeqCst) };
         rt::STATUS_OK
     })
@@ -523,6 +544,7 @@ pub unsafe extern "C" fn wordbag_rulisp_test_live_word_bags(out: *mut i64) -> i3
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_test_cb_guard_drops(out: *mut i64) -> i32 {
     rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
         unsafe { *out = CB_GUARD_DROPS.load(Ordering::SeqCst) };
         rt::STATUS_OK
     })

@@ -161,9 +161,14 @@ impl<A> StoredCallback<A, ()> {
 
 impl<'a, A> Callback<'a, A, ()> {
     /// Used by generated shims only — the macro guarantees `fnptr` matches
-    /// the declared shape `A`.
+    /// the declared shape `A`. The frame pins `'a` to the shim invocation,
+    /// so the callback cannot be given a caller-chosen lifetime.
     #[doc(hidden)]
-    pub unsafe fn from_raw(fnptr: *const (), userdata: u64) -> Self {
+    pub unsafe fn from_raw(
+        _frame: &'a runtime::ShimFrame,
+        fnptr: *const (),
+        userdata: u64,
+    ) -> Self {
         Callback {
             fnptr,
             userdata,

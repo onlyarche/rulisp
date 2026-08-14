@@ -54,8 +54,15 @@ logged to stderr and swallowed (finalizer context has no error channel).
 - Wire format both directions: `(const uint8_t *ptr, uintptr_t len)`,
   UTF-8, **no NUL terminator, interior NULs legal**.
 - Lisp→Rust: borrowed for the duration of the call. Rust validates UTF-8
-  (failure → status 3). Rust must not retain the pointer (the macro only
-  hands user code `&str`, making retention a compile error).
+  (failure → status 3). Rust must not retain the pointer. Retention is a
+  compile error, enforced twice (issue #1 showed one layer is not enough:
+  an explicit `&'static str` in an export signature used to defeat it from
+  safe Rust): the macro rejects any explicit lifetime in an export
+  signature, and every borrowing helper takes a per-call `ShimFrame` whose
+  borrow pins the returned lifetime to the shim invocation — so even code
+  that bypasses the macro check cannot name a longer lifetime and have it
+  unify. The same two layers cover byte buffers, scalar slices, handle
+  references and borrowed callbacks.
 - Rust→Lisp: out-params `(uint8_t **ptr, uintptr_t *len)`. Ownership
   transfers to Lisp, which copies then releases **exactly once** via the
   owning library's `dealloc(ptr, len, 1)` (strings have align 1;

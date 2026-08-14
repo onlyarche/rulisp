@@ -87,7 +87,58 @@ fn unsupported(span: proc_macro2::Span) -> Error {
     )
 }
 
+/// Reject any named lifetime anywhere in an export parameter type. The
+/// borrowing helpers pin their lifetime to the shim frame, so an explicit
+/// `'static` would fail to unify anyway — but this turns that into an
+/// actionable message at the annotation's span instead of a borrow-checker
+/// error inside generated code. `'_` is elision spelled out and stays
+/// legal. (Without both layers, `&'static str` compiled cleanly and let
+/// safe Rust retain a Lisp-owned buffer past the call — issue #1.)
+fn reject_named_lifetimes(ty: &Type) -> Result<(), Error> {
+    fn named(lt: &syn::Lifetime) -> Result<(), Error> {
+        if lt.ident == "_" {
+            Ok(())
+        } else {
+            Err(Error::new(
+                lt.span(),
+                "rulisp: explicit lifetimes are not allowed in export signatures — \
+                 a Lisp-owned borrow is only valid for the duration of the call; \
+                 elide the lifetime",
+            ))
+        }
+    }
+    match ty {
+        Type::Reference(r) => {
+            if let Some(lt) = &r.lifetime {
+                named(lt)?;
+            }
+            reject_named_lifetimes(&r.elem)
+        }
+        Type::Slice(s) => reject_named_lifetimes(&s.elem),
+        Type::Tuple(t) => t.elems.iter().try_for_each(reject_named_lifetimes),
+        Type::Paren(p) => reject_named_lifetimes(&p.elem),
+        Type::Group(g) => reject_named_lifetimes(&g.elem),
+        Type::Path(p) => {
+            for seg in &p.path.segments {
+                if let PathArguments::AngleBracketed(args) = &seg.arguments {
+                    for a in &args.args {
+                        match a {
+                            GenericArgument::Lifetime(lt) => named(lt)?,
+                            GenericArgument::Type(t) => reject_named_lifetimes(t)?,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+        // anything else fails classification as unsupported anyway
+        _ => Ok(()),
+    }
+}
+
 fn classify_param(ty: &Type) -> Result<PTy, Error> {
+    reject_named_lifetimes(ty)?;
     match ty {
         Type::Reference(r) => {
             if r.mutability.is_some() {
@@ -411,7 +462,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 let len = format_ident!("{}_len", ident);
                 extern_params.extend(quote! { #ptr: *const u8, #len: usize, });
                 preludes.extend(quote! {
-                    let #ident = match unsafe { ::rulisp::runtime::str_arg(#ptr, #len) } {
+                    let #ident = match unsafe { ::rulisp::runtime::str_arg(&__frame, #ptr, #len) } {
                         Ok(s) => s,
                         Err(status) => return status,
                     };
@@ -424,7 +475,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 extern_params.extend(quote! { #ptr: *const u8, #len: usize, });
                 preludes.extend(quote! {
                     let #ident: &[u8] =
-                        unsafe { ::rulisp::runtime::bytes_arg(#ptr, #len) };
+                        unsafe { ::rulisp::runtime::bytes_arg(&__frame, #ptr, #len) };
                 });
                 call_args.push(quote! { #ident });
             }
@@ -434,7 +485,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 extern_params.extend(quote! { #ptr: *const #ty, #len: usize, });
                 preludes.extend(quote! {
                     let #ident: &[#ty] =
-                        unsafe { ::rulisp::runtime::slice_arg(#ptr, #len) };
+                        unsafe { ::rulisp::runtime::slice_arg(&__frame, #ptr, #len) };
                 });
                 call_args.push(quote! { #ident });
             }
@@ -455,7 +506,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 });
                 preludes.extend(quote! {
                     let #ident = if #present != 0 {
-                        match unsafe { ::rulisp::runtime::str_arg(#ptr, #len) } {
+                        match unsafe { ::rulisp::runtime::str_arg(&__frame, #ptr, #len) } {
                             Ok(s) => Some(s),
                             Err(status) => return status,
                         }
@@ -474,7 +525,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 });
                 preludes.extend(quote! {
                     let #ident = if #present != 0 {
-                        Some(unsafe { ::rulisp::runtime::bytes_arg(#ptr, #len) })
+                        Some(unsafe { ::rulisp::runtime::bytes_arg(&__frame, #ptr, #len) })
                     } else {
                         None
                     };
@@ -484,7 +535,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
             PTy::HandleRef(path) => {
                 extern_params.extend(quote! { #ident: *const ::std::ffi::c_void, });
                 preludes.extend(quote! {
-                    let #ident: &#path = unsafe { ::rulisp::runtime::handle_ref(#ident) };
+                    let #ident: &#path = unsafe { ::rulisp::runtime::handle_ref(&__frame, #ident) };
                 });
                 if is_self {
                     self_expr = Some(quote! { #ident });
@@ -502,7 +553,7 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
                 });
                 preludes.extend(quote! {
                     let #ident = unsafe {
-                        ::rulisp::Callback::from_raw(#ident as *const (), #userdata)
+                        ::rulisp::Callback::from_raw(&__frame, #ident as *const (), #userdata)
                     };
                 });
                 call_args.push(quote! { #ident });
@@ -669,6 +720,8 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
         #[no_mangle]
         pub unsafe extern "C" fn #shim_ident(#extern_params #out_params) -> i32 {
             ::rulisp::runtime::shim(|| {
+                // pins every borrowed argument's lifetime to this call
+                let __frame = ::rulisp::runtime::ShimFrame::new();
                 #clear_tunnel
                 #preludes
                 #body
@@ -853,6 +906,16 @@ fn fn_params(sig: &syn::Signature, self_ty: Option<&Path>) -> Result<Vec<(String
     for input in &sig.inputs {
         match input {
             FnArg::Receiver(r) => {
+                if let Some((_, Some(lt))) = &r.reference {
+                    if lt.ident != "_" {
+                        return Err(Error::new(
+                            lt.span(),
+                            "rulisp: explicit lifetimes are not allowed in export \
+                             signatures — a handle borrow is only valid for the \
+                             duration of the call; write &self",
+                        ));
+                    }
+                }
                 if r.mutability.is_some() {
                     return Err(Error::new(
                         r.span(),
@@ -861,9 +924,16 @@ fn fn_params(sig: &syn::Signature, self_ty: Option<&Path>) -> Result<Vec<(String
                     ));
                 }
                 if r.reference.is_none() {
+                    // `self: &'static Self` also lands here (syn puts the
+                    // reference in r.ty, not the shorthand slot), so the
+                    // message must not claim it is by-value
                     return Err(Error::new(
                         r.span(),
-                        "rulisp: by-value self is not supported — methods take &self",
+                        if r.colon_token.is_some() {
+                            "rulisp: typed self receivers are not supported — write &self"
+                        } else {
+                            "rulisp: by-value self is not supported — methods take &self"
+                        },
                     ));
                 }
                 let self_ty = self_ty.ok_or_else(|| {
