@@ -105,13 +105,17 @@ threat model: [SECURITY.md](SECURITY.md).
 
 ## Status
 
-0.2.0. CI-verified matrix: SBCL on Linux x86-64 and macOS arm64,
-Clozure CL 1.13 on Linux x86-64, and ECL 21+ on Linux (races, nested
-callbacks, reload, dump/restore, 10k-op fuzz — all green). ECL notes: a
-C toolchain is required for callbacks (rulisp natively compiles
-trampolines to dodge an upstream GC bug we root-caused —
-docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread stored
-callbacks are unsupported there. Windows: not yet supported.
+0.3.0. CI-verified matrix: SBCL on Linux x86-64, macOS arm64 and
+Windows x86-64, Clozure CL 1.13 on Linux x86-64, and ECL 21+ on Linux
+(races, nested callbacks, reload, dump/restore, 10k-op fuzz — all
+green). ECL notes: a C toolchain is required for callbacks (rulisp
+natively compiles trampolines to dodge an upstream GC bug we root-caused
+— docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread stored
+callbacks are unsupported there.
+
+Versions up to 0.2.1 have a soundness hole (issue #1: an explicit
+`'static` in an export signature could retain a Lisp-owned buffer past
+the call) and are yanked — depend on 0.3.0.
 
 Requirements: a Rust toolchain (`cargo`), CFFI-capable Lisp, Quicklisp
 (deps: cffi, babel, trivial-garbage, bordeaux-threads).
@@ -132,8 +136,8 @@ tokens — fail-safe lifetime, verified cross-thread on SBCL and CCL),
 (`load-blob-crate`, no Rust toolchain needed), live reload, image
 dump/restore, `use-value`/`retry-build` restarts.
 
-Out for now — see [ROADMAP.md](ROADMAP.md): Windows, ECL callbacks, a
-worked Deploy example, `Vec<String>`/nested containers.
+Out for now — see [ROADMAP.md](ROADMAP.md): `Vec<String>`/nested
+containers, multiple return values, non-SBCL image dump.
 
 rulisp is for writing glue crates — it does not auto-bind arbitrary
 existing crates, by design (neither does PyO3).

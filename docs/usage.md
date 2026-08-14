@@ -63,7 +63,7 @@ Rust side:
 crate-type = ["cdylib"]
 
 [dependencies]
-rulisp = "0.1"          # from crates.io
+rulisp = "0.3"          # from crates.io
 regex = "1"             # whatever you're wrapping
 ```
 

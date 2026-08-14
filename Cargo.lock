@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "rulisp"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "rulisp-macros",
  "rulisp-runtime",
@@ -863,7 +863,7 @@ dependencies = [
 
 [[package]]
 name = "rulisp-macros"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -872,7 +872,7 @@ dependencies = [
 
 [[package]]
 name = "rulisp-runtime"
-version = "0.2.1"
+version = "0.3.0"
 
 [[package]]
 name = "rustc-hash"
