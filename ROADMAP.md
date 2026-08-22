@@ -12,22 +12,22 @@ an ECL load-time toolchain requirement. Full plan with demand cases and
 acceptance criteria: docs/design/v04-plan.md (scoped by a three-proposal
 panel with two verifying judges).
 
-1. **BOUNDARY conformance sweep** — claim→enforcement table appended to
-   BOUNDARY.md; six pre-verified prose-only gaps get tests (swallowed
-   CallbackError → status 4, panicking Drop in a free shim, poisoned
-   mutex → status 2, thread-local last_error, out-params untouched on ERR,
-   ECL toolchain manifest-error).
+1. ✅ **BOUNDARY conformance sweep** — §12: all 103 normative claims
+   classified with verified citations. The six pre-verified prose-only
+   gaps got tests, plus two the sweep itself found (per-library
+   last_error isolation; loader-side `(:option :bool)` rejection).
 2. ✅ **De-vacuous m7** — the dump/restore test now really runs on CCL
    (`uiop:dump-image` → `ccl:save-application`; assertions live in
    `*image-entry-point*` since CCL's toplevel is fixed), plus a new
    finalizer assertion: a pre-dump handle GC'd after restore must not make
    a foreign call. First real CCL execution passed immediately — the
    machinery was portable all along; only the test was missing.
-3. **`#[rulisp(on_dump)]`** — a declared zero-arg shutdown export,
-   auto-registered as a dump hook by the loader (wire-additive
-   `(:on-dump "symbol")` manifest key). Dump-only; no thread detection.
-   fetch converts as the worked example, finally shipping the two dump
-   tests v0.3's risk table promised.
+3. ✅ **`on_dump`** — a declared zero-arg shutdown export in
+   `rulisp::module!`, auto-registered as a dump hook by the loader
+   (wire-additive `(:on-dump "symbol")` key; validated at macro AND
+   loader). fetch converted; the flagship test dumps an image with a
+   tokio transfer live and restores it — the two tests v0.3's risk table
+   promised.
 4. **ECL deploy story** — no `dump-image` exists there;
    `asdf:program-op` is the delivery path and rulisp's restore hook
    already runs in its epilogue. Document + smoke-test it.
