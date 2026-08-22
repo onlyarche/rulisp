@@ -262,6 +262,31 @@ pub fn test_cb_guard_drops() -> i64 {
 // The fns order is the manifest order (byte-pinned by tests/golden/).
 // ---------------------------------------------------------------------------
 
+static DUMP_PREPS: AtomicI64 = AtomicI64::new(0);
+static DUMP_PREP_FAIL: AtomicI64 = AtomicI64::new(0);
+
+/// The crate's declared dump hook (BOUNDARY §10 :on-dump). Counts its
+/// invocations so tests can observe the loader-driven call, and fails on
+/// demand so the warn-and-proceed contract is testable.
+#[rulisp::export]
+pub fn dump_prep() -> Result<(), Error> {
+    DUMP_PREPS.fetch_add(1, Ordering::SeqCst);
+    if DUMP_PREP_FAIL.load(Ordering::SeqCst) != 0 {
+        return Err(Error::msg("dump_prep armed to fail"));
+    }
+    Ok(())
+}
+
+#[rulisp::export]
+pub fn set_dump_prep_fail(fail: bool) {
+    DUMP_PREP_FAIL.store(if fail { 1 } else { 0 }, Ordering::SeqCst);
+}
+
+#[rulisp::export]
+pub fn test_dump_preps() -> i64 {
+    DUMP_PREPS.load(Ordering::SeqCst)
+}
+
 /// Drop panics when armed: BOUNDARY §2's exception — a panic inside a
 /// `*_free` shim is caught, logged to stderr and swallowed, never crossing
 /// the boundary.
@@ -297,5 +322,7 @@ rulisp::module! {
         for_each_word, count_ok, swallow_then_fail,
         WordBag::poison, Grenade::new,
         test_live_allocations, test_live_word_bags, test_cb_guard_drops,
+        dump_prep, set_dump_prep_fail, test_dump_preps,
     ],
+    on_dump: dump_prep,
 }

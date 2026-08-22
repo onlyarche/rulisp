@@ -82,6 +82,31 @@ artifact alone:
 ;; Crates that own threads (an async runtime, a watcher) MUST be quiesced
 ;; before the dump: save-lisp-and-die does not see foreign threads and will
 ;; happily dump with them running (BOUNDARY.md §10).
+```
+
+Since 0.4 the glue crate can do this declaratively: mark a zero-arg export
+as the crate's dump hook and the loader wires it up —
+
+```rust
+#[rulisp::export]
+pub fn shutdown_all() { /* quiesce every runtime this crate owns */ }
+
+rulisp::module! {
+    name: "mylib",
+    handles: [...],
+    fns: [..., shutdown_all],
+    on_dump: shutdown_all,
+}
+```
+
+The loader calls every loaded crate's declared hook in load order,
+immediately before any `uiop:dump-image`-driven dump; a failing hook is
+warned and skipped. `examples/fetch` is the worked example (its hook stops
+every live tokio runtime; the suite dumps an image with a request in
+flight and restores it). For a crate WITHOUT the declaration, keep the
+manual pattern:
+
+```lisp
 (uiop:register-image-dump-hook
  (lambda () (when *crate* (mylib:shutdown-everything))))
 ```

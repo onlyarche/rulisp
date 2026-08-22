@@ -212,3 +212,56 @@
         "a wordbag error message leaked from another library")
     (is (eq t (bt:join-thread rx-worker))
         "an rx error message leaked from another library")))
+
+;;; ---------------------------------------------------------------------------
+;;; §10: declared dump hooks (:on-dump). The loader must call every loaded
+;;; crate's declared hook before a dump, warn-and-proceed on failure, and
+;;; refuse a malformed declaration at the manifest.
+;;; ---------------------------------------------------------------------------
+
+(test v04.on-dump-declared-hook-runs
+  (ensure-crate)
+  (let ((before (wb-call "TEST-DUMP-PREPS")))
+    (rulisp::%run-crate-dump-hooks)
+    (is (= (1+ before) (wb-call "TEST-DUMP-PREPS"))
+        "the loader did not call the declared hook")))
+
+(test v04.on-dump-failing-hook-warns-and-proceeds
+  "A dump must never be wedged by its own cleanup: a failing hook is a
+warning, and the dump machinery keeps going."
+  (ensure-crate)
+  (wb-call "SET-DUMP-PREP-FAIL" t)
+  (unwind-protect
+       (let ((before (wb-call "TEST-DUMP-PREPS")))
+         (signals warning (rulisp::%run-crate-dump-hooks))
+         (is (= (1+ before) (wb-call "TEST-DUMP-PREPS"))))
+    (wb-call "SET-DUMP-PREP-FAIL" nil)))
+
+(test v04.on-dump-manifest-validation
+  "The hook is called through a fixed () -> int32 signature, so a
+mismatched declaration would be UB — the manifest must refuse it."
+  (flet ((mf (fn-entry on-dump)
+           (format nil "(:rulisp-manifest :schema 1 :abi 1 :crate \"x\" ~
+                        :prefix \"x_rulisp_\" :on-dump ~S ~
+                        :functions (~A))" on-dump fn-entry)))
+    ;; names no declared function
+    (signals rulisp:manifest-error
+      (rulisp::parse-manifest
+       (mf "(:fn :rust-name \"f\" :lisp-name \"f\" :symbol \"f\" :params () :result :unit :error nil)"
+           "nope")))
+    ;; declared, but takes a parameter
+    (signals rulisp:manifest-error
+      (rulisp::parse-manifest
+       (mf "(:fn :rust-name \"f\" :lisp-name \"f\" :symbol \"f\" :params ((:name \"a\" :type :i64)) :result :unit :error nil)"
+           "f")))
+    ;; declared, but returns a value
+    (signals rulisp:manifest-error
+      (rulisp::parse-manifest
+       (mf "(:fn :rust-name \"f\" :lisp-name \"f\" :symbol \"f\" :params () :result :i64 :error nil)"
+           "f")))
+    ;; well-formed: accepted, recorded
+    (is (string= "f"
+                 (rulisp::manifest-on-dump
+                  (rulisp::parse-manifest
+                   (mf "(:fn :rust-name \"f\" :lisp-name \"f\" :symbol \"f\" :params () :result :unit :error \"Error\")"
+                       "f")))))))

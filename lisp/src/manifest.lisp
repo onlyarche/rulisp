@@ -19,7 +19,8 @@
   rust-name lisp-name free)
 
 (defstruct (manifest (:constructor %make-manifest))
-  schema abi crate crate-version target prefix errors handles functions)
+  schema abi crate crate-version target prefix errors handles functions
+  on-dump)
 
 (defun %safe-read (string)
   (with-standard-io-syntax
@@ -126,7 +127,8 @@ refuse only what we can positively identify as wrong). Returns
       (unless (<= schema 1)
         (error 'manifest-error
                :message (format nil "manifest schema ~D is newer than supported (1)" schema)))
-      (%make-manifest
+      (%validate-on-dump
+       (%make-manifest
        :schema schema
        :abi (%getf-int p :abi)
        :crate (%getf-string p :crate)
@@ -142,7 +144,26 @@ refuse only what we can positively identify as wrong). Returns
                  #'handle-spec-lisp-name #'handle-spec-rust-name "handle")
        :functions (%check-unique-lisp-names
                    (mapcar #'%parse-fn (getf p :functions))
-                   #'fn-spec-lisp-name #'fn-spec-rust-name "function")))))
+                   #'fn-spec-lisp-name #'fn-spec-rust-name "function")
+       :on-dump (%getf-string p :on-dump :optional t))))))
+
+(defun %validate-on-dump (manifest)
+  "BOUNDARY §10: :on-dump must name a declared zero-parameter :unit
+function — the hook is called through a fixed () -> int32 signature, so a
+mismatch here would be undefined behavior, not a wrong answer."
+  (let ((sym (manifest-on-dump manifest)))
+    (when sym
+      (let ((spec (find sym (manifest-functions manifest)
+                        :key #'fn-spec-symbol :test #'string=)))
+        (unless spec
+          (error 'manifest-error
+                 :message (format nil ":on-dump ~S names no declared function" sym)))
+        (unless (and (null (fn-spec-params spec))
+                     (eq (fn-spec-result spec) :unit))
+          (error 'manifest-error
+                 :message (format nil ":on-dump ~S must take no parameters and return :unit"
+                                  sym))))))
+  manifest)
 
 (defun %check-unique-lisp-names (specs lisp-name-of rust-name-of what)
   "Two exports mapping to one Lisp name would silently shadow each other —

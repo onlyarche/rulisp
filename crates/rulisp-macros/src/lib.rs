@@ -1079,6 +1079,7 @@ struct ModuleInput {
     name: LitStr,
     handles: Vec<Path>,
     fns: Vec<Path>,
+    on_dump: Option<Ident>,
 }
 
 impl Parse for ModuleInput {
@@ -1086,6 +1087,7 @@ impl Parse for ModuleInput {
         let mut name = None;
         let mut handles = None;
         let mut fns = None;
+        let mut on_dump = None;
         while !input.is_empty() {
             let key: Ident = input.parse()?;
             input.parse::<Token![:]>()?;
@@ -1109,10 +1111,13 @@ impl Parse for ModuleInput {
                             .collect(),
                     );
                 }
+                "on_dump" => on_dump = Some(input.parse::<Ident>()?),
                 other => {
                     return Err(Error::new(
                         key.span(),
-                        format!("rulisp: unknown module! key `{other}` (expected name/handles/fns)"),
+                        format!(
+                            "rulisp: unknown module! key `{other}` (expected name/handles/fns/on_dump)"
+                        ),
                     ))
                 }
             }
@@ -1124,6 +1129,7 @@ impl Parse for ModuleInput {
             name: name.ok_or_else(|| input.error("rulisp: module! needs name:"))?,
             handles: handles.ok_or_else(|| input.error("rulisp: module! needs handles: []"))?,
             fns: fns.ok_or_else(|| input.error("rulisp: module! needs fns: []"))?,
+            on_dump,
         })
     }
 }
@@ -1164,6 +1170,33 @@ pub fn module(input: TokenStream) -> TokenStream {
     }
     let prefix = crate_prefix();
 
+    // BOUNDARY §10: the on-dump export must be a zero-arg free fn declared
+    // in fns (the loader independently validates params/result from the
+    // manifest). The fn-pointer coercion rejects any parameters here.
+    let (on_dump_meta, on_dump_guard) = match &input.on_dump {
+        Some(f) => {
+            let sym = f.to_string();
+            if !input.fns.iter().any(|p| p.is_ident(f)) {
+                return Error::new(
+                    f.span(),
+                    "rulisp: on_dump must name a free fn that also appears in fns: [...]",
+                )
+                .to_compile_error()
+                .into();
+            }
+            (
+                quote! { ::core::option::Option::Some(#sym) },
+                quote! {
+                    const _: () = {
+                        fn __rulisp_assert_zero_arg<R>(_: fn() -> R) {}
+                        fn __rulisp_on_dump_shape() { __rulisp_assert_zero_arg(#f); }
+                    };
+                },
+            )
+        }
+        None => (quote! { ::core::option::Option::None }, quote! {}),
+    };
+
     let handle_metas: Vec<TokenStream2> = input
         .handles
         .iter()
@@ -1188,11 +1221,14 @@ pub fn module(input: TokenStream) -> TokenStream {
                     #name,
                     env!("CARGO_PKG_VERSION"),
                     #prefix,
+                    #on_dump_meta,
                     &[#(#handle_metas),*],
                     &[#(&#fn_metas),*],
                 )
             })
         }
+
+        #on_dump_guard
 
         #[no_mangle]
         pub extern "C" fn #abi_ident() -> u32 {

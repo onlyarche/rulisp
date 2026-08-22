@@ -22,7 +22,13 @@
     (setf *fetch-crate*
           (rulisp:use-crate (asdf:system-relative-pathname
                              :rulisp "../examples/fetch/")))
-    (load (asdf:system-relative-pathname :rulisp "../examples/fetch/http.lisp"))
+    (load (asdf:system-relative-pathname :rulisp "../examples/fetch/http.lisp")))
+  ;; the dump-hook tests legitimately shut down every client in the crate,
+  ;; including this shared one — recreate it when that happened
+  (when (and *fetch-client* (fc "CLIENT-IS-DOWN" *fetch-client*))
+    (rulisp:free *fetch-client*)
+    (setf *fetch-client* nil))
+  (unless *fetch-client*
     (setf *fetch-client* (fc "MAKE-CLIENT" 2 16 8 3000)
           *base* (fc "CLIENT-START-TEST-SERVER" *fetch-client*)))
   *fetch-client*)
@@ -426,3 +432,130 @@ mid-transfer and detaches when the OS thread exits."
            (is (= 1 peak) "~D Lisp threads existed mid-transfer" peak))
       (fc "REQ-CANCEL" r)
       (rulisp:free r))))
+
+;;; ---------------------------------------------------------------------------
+;;; §10: the declared dump hook (v0.4). These are the two tests the v0.3
+;;; risk table promised and never shipped.
+;;; ---------------------------------------------------------------------------
+
+(defun os-thread-count ()
+  "OS-level threads of this process (tokio workers are invisible to
+bt:all-threads). NIL where /proc is unavailable."
+  (ignore-errors
+    (with-open-file (s "/proc/self/status" :if-does-not-exist nil)
+      (when s
+        (loop for line = (read-line s nil)
+              while line
+              when (and (> (length line) 8) (string= "Threads:" line :end2 8))
+                return (parse-integer line :start 8 :junk-allowed t))))))
+
+(test fetch.dump-hook-quiesces
+  "With requests in flight, the crate's declared :on-dump hook must stop
+every tokio thread and leave every client refusing — no foreign thread may
+survive into a dumped image half-alive."
+  (ensure-fetch)
+  (let ((baseline (os-thread-count))
+        (r (fc "MAKE-REQ" *fetch-client* "GET" (url "/drip/300/20")
+               nil nil nil 30000 0)))
+    (fc "REQ-READ" r 1024 200)          ; the transfer is genuinely live
+    ;; what uiop:dump-image will run, invoked directly
+    (rulisp::%run-crate-dump-hooks)
+    (is (fc "CLIENT-IS-DOWN" *fetch-client*))
+    (is (equal "usage"
+               (kind-of-signal
+                 (fc "MAKE-REQ" *fetch-client* "GET" (url "/bytes/1")
+                     nil nil nil 5000 0))))
+    ;; the in-flight request reached its terminal state
+    (loop repeat 60 until (fc "REQ-DONE" r)
+          do (handler-case (fc "REQ-READ" r 65536 50)
+               (rulisp:rust-error () nil)))
+    (is (fc "REQ-DONE" r))
+    (rulisp:free r)
+    ;; tokio's workers are OS threads, not Lisp threads: count them
+    (let ((now (os-thread-count)))
+      (if (and baseline now)
+          (progn
+            (loop repeat 100 while (> (or (os-thread-count) 0) baseline)
+                  do (sleep 0.05))
+            (is (<= (or (os-thread-count) 0) baseline)
+                "~D OS threads survived the dump hook (baseline ~D)"
+                (os-thread-count) baseline))
+          (pass "no /proc on this host; thread-count assertion skipped")))))
+
+(test fetch.dump-restore-refuses
+  "The flagship end-to-end: dump an image with a tokio-owning client LIVE —
+the declared hook quiesces it during uiop:dump-image — then restore and
+assert the pre-dump client refuses with rulisp's typed condition while a
+fresh client works."
+  #-(or sbcl ccl)
+  (pass "skipped: no uiop:dump-image on this host (ECL ships via program-op)")
+  #+(or sbcl ccl)
+  (let* ((tmp (uiop:temporary-directory))
+         (exe (merge-pathnames "rulisp-fetch-restore-test" tmp))
+         (script (merge-pathnames "rulisp-fetch-dump-phase.lisp" tmp))
+         (lisp-dir (asdf:system-relative-pathname :rulisp ""))
+         (fetch-dir (asdf:system-relative-pathname :rulisp "../examples/fetch/")))
+    (uiop:delete-file-if-exists exe)
+    (with-open-file (out script :direction :output :if-exists :supersede)
+      (format out "~
+(require :asdf)
+#-quicklisp
+(let ((q (merge-pathnames \"quicklisp/setup.lisp\" (user-homedir-pathname))))
+  (when (probe-file q) (load q)))
+(push ~S asdf:*central-registry*)
+(ql:quickload '(:cffi :babel :trivial-garbage :bordeaux-threads) :silent t)
+(asdf:load-system :rulisp)
+(rulisp:use-crate ~S)
+(defvar *c* (funcall (find-symbol \"MAKE-CLIENT\" \"FETCH\") 2 8 8 3000))
+;; a request is IN FLIGHT while the image dumps; only the declared hook
+;; stands between this tokio runtime and a corrupt dump
+(defvar *base* (funcall (find-symbol \"CLIENT-START-TEST-SERVER\" \"FETCH\") *c*))
+(defvar *r* (funcall (find-symbol \"MAKE-REQ\" \"FETCH\") *c* \"GET\"
+                     (format nil \"~~A/drip/500/20\" *base*) nil nil nil 60000 0))
+(funcall (find-symbol \"REQ-READ\" \"FETCH\") *r* 1024 200)
+(setf uiop:*image-entry-point*
+      (lambda ()
+        (handler-case
+            (progn
+              ;; the pre-dump client is a dead-session handle now
+              (handler-case
+                  (progn (funcall (find-symbol \"CLIENT-IN-FLIGHT\" \"FETCH\") *c*)
+                         (format t \"FAIL: pre-dump client did not signal~~%\")
+                         (uiop:quit 1))
+                (rulisp:stale-handle-error () t))
+              (assert (eq t (rulisp:free *c*)))
+              ;; and the crate works from scratch in the restored image
+              (let* ((c2 (funcall (find-symbol \"MAKE-CLIENT\" \"FETCH\") 1 4 4 3000))
+                     (b2 (funcall (find-symbol \"CLIENT-START-TEST-SERVER\" \"FETCH\") c2))
+                     (r2 (funcall (find-symbol \"MAKE-REQ\" \"FETCH\") c2 \"GET\"
+                                  (format nil \"~~A/bytes/64\" b2) nil nil nil 10000 0))
+                     (got 0))
+                (loop for chunk = (funcall (find-symbol \"REQ-READ\" \"FETCH\") r2 65536 100)
+                      while (or chunk (not (funcall (find-symbol \"REQ-DONE\" \"FETCH\") r2)))
+                      when chunk do (incf got (length chunk)))
+                (assert (= 64 got))
+                (rulisp:free r2)
+                (funcall (find-symbol \"CLIENT-SHUTDOWN\" \"FETCH\") c2 100)
+                (rulisp:free c2))
+              (format t \"FETCH-RESTORE-OK~~%\")
+              (uiop:quit 0))
+          (error (e)
+            (format t \"FAIL: ~~A~~%\" e)
+            (uiop:quit 1)))))
+(uiop:dump-image ~S :executable t)~%"
+              (namestring lisp-dir) (namestring fetch-dir) (namestring exe)))
+    (multiple-value-bind (out err code)
+        (uiop:run-program
+         (append #+sbcl (list "sbcl" "--non-interactive")
+                 #+ccl (list (first ccl:*command-line-argument-list*) "--batch")
+                 (list "--load" (uiop:native-namestring script)))
+         :output :string :error-output :string
+         :ignore-error-status t)
+      (declare (ignore out))
+      (is (zerop code) "dump phase failed:~%~A" err))
+    (multiple-value-bind (out err code)
+        (uiop:run-program (list (uiop:native-namestring exe))
+                          :output :string :error-output :string
+                          :ignore-error-status t)
+      (is (zerop code) "restore phase failed: out=~A err=~A" out err)
+      (is (search "FETCH-RESTORE-OK" out)))))

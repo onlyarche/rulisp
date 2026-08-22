@@ -397,6 +397,39 @@ pub unsafe extern "C" fn wordbag_rulisp_word_bag_poison(this: *const c_void) -> 
     })
 }
 
+static DUMP_PREPS: AtomicI64 = AtomicI64::new(0);
+static DUMP_PREP_FAIL: AtomicI64 = AtomicI64::new(0);
+
+/// The declared dump hook (BOUNDARY §10 :on-dump): zero-arg, unit result,
+/// called by the loader through a fixed () -> int32 signature.
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_dump_prep() -> i32 {
+    rt::shim(|| {
+        DUMP_PREPS.fetch_add(1, Ordering::SeqCst);
+        if DUMP_PREP_FAIL.load(Ordering::SeqCst) != 0 {
+            rt::set_last_error("Error", "dump_prep armed to fail");
+            return rt::STATUS_ERR;
+        }
+        rt::STATUS_OK
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_set_dump_prep_fail(fail: u8) -> i32 {
+    rt::shim(|| {
+        DUMP_PREP_FAIL.store(if fail != 0 { 1 } else { 0 }, Ordering::SeqCst);
+        rt::STATUS_OK
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_test_dump_preps(out: *mut i64) -> i32 {
+    rt::shim(|| {
+        unsafe { *out = DUMP_PREPS.load(Ordering::SeqCst) };
+        rt::STATUS_OK
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Grenade: a handle whose Drop panics when armed (BOUNDARY §2's exception —
 // a panic inside a *_free shim is caught, logged and swallowed)

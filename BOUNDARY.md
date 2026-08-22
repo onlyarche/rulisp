@@ -204,9 +204,22 @@ Differences from the borrowed form:
   does not see threads a glue crate spawned — the dump succeeds and those
   threads simply do not exist in the restored image, while any state they
   owned is gone. A crate that owns threads (an async runtime, a watcher)
-  must export an explicit shutdown entry point, and the application must
-  call it from a dump hook (`uiop:register-image-dump-hook`) before
-  dumping.
+  must export an explicit shutdown entry point.
+- **Declared dump hooks** (`:on-dump`, wire-additive since 0.4): a crate
+  may name ONE of its own exports in the manifest key
+  `(:on-dump "symbol")`. The named function must be declared in
+  `:functions` with zero parameters and `:unit` result (`:error` may name
+  a type); the loader refuses the manifest otherwise. The loader
+  registers a single image-dump hook that, immediately before a dump,
+  calls every loaded crate's declared hook **in load order**. A non-OK
+  status (error or panic) is reported as a warning and the dump proceeds
+  — a dump must never be wedged by its own cleanup. Hook bodies are
+  subject to §7's capped-wait rule as a normative requirement: an
+  unbounded wait here makes the image undumpable. The hook is
+  **dump-only**: reload does not call it (stale-generation state is
+  already recoverable through §9), and the restored image never re-runs
+  it. Crates without the key keep the manual pattern: export a shutdown
+  function and have the application register the hook itself.
 
 ## 11. Manifest
 
@@ -345,7 +358,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Then each crate reloads from its recorded artifact path and all bindings regenerate | test | `m7.dump-restore` (`tests/suite/m1.lisp:310-311`: post-restore GREET works); mechanism `lisp/src/crate.lisp:311-319` |
 | Freeing a dead-session handle performs no foreign call | runtime-check | `lisp/src/handle.lisp:69-75` (`%maybe-foreign-free` session gate); m7 exercises explicit free + GC-finalizer path (`m1.lisp:317,324-329`) |
 | No guardrail against dumping with live foreign threads; they vanish on restore, their state gone | UB-by-design | `BOUNDARY.md:202-209` |
-| Thread-owning crates must export a shutdown entry point; apps must call it from a dump hook | **GAP** (scheduled: v0.4 item 3) | v0.4 plan item 3 (`#[rulisp(on_dump)]`) — not yet shipped (grep confirms `on_dump` exists only in `docs/design/v04-plan.md`) |
+| Thread-owning crates quiesce before a dump via the declared `:on-dump` hook (or the manual pattern) | runtime-check | `%run-crate-dump-hooks` + `%validate-on-dump`; tests `v04.on-dump-*`, `fetch.dump-hook-quiesces`, `fetch.dump-restore-refuses` | v0.4 plan item 3 (`#[rulisp(on_dump)]`) — not yet shipped (grep confirms `on_dump` exists only in `docs/design/v04-plan.md`) |
 | **§11 — Manifest** | | |
 | Manifest read hardened: `*read-eval*` nil, symbols land in a scratch package | runtime-check | `lisp/src/manifest.lisp:8-10,24-33`; test `fx.read-eval-blocked` (`tests/suite/m2.lisp:26-29`) |
 | Grammar closed: keywords, strings, integers, lists, nil only — anything else rejected | runtime-check | `lisp/src/manifest.lisp:35-49` (`%sanitize`); test `fx.unknown-symbols-rejected` (`tests/suite/m2.lisp:31-33`) |

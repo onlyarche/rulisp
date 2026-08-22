@@ -254,6 +254,11 @@ impl ClientInner {
     }
 }
 
+/// Every live client, for the crate-level dump hook: BOUNDARY §10 says a
+/// thread-owning crate must be able to quiesce ALL its threads before an
+/// image dump, not just the handles the application remembered to close.
+static CLIENTS: Mutex<Vec<std::sync::Weak<ClientInner>>> = Mutex::new(Vec::new());
+
 #[rulisp::handle]
 pub struct Client {
     inner: Arc<ClientInner>,
@@ -299,8 +304,7 @@ impl Client {
                 .build()
                 .map_err(|e| HttpError::new("runtime", e.to_string()))?
         };
-        Ok(Client {
-            inner: Arc::new(ClientInner {
+        let inner = Arc::new(ClientInner {
                 rt: Mutex::new(Some(rt)),
                 http,
                 admission: Arc::new(tokio::sync::Semaphore::new(
@@ -313,8 +317,13 @@ impl Client {
                 cancel_all: CancellationToken::new(),
                 queue_chunks: queue_chunks.clamp(1, 4096) as usize,
                 stall: Duration::from_millis(if stall_ms == 0 { 30_000 } else { stall_ms }),
-            }),
-        })
+            });
+        {
+            let mut reg = CLIENTS.lock().unwrap();
+            reg.retain(|w| w.strong_count() > 0);
+            reg.push(Arc::downgrade(&inner));
+        }
+        Ok(Client { inner })
     }
 
     /// Id of a request that has settled, or NIL. Waits at most WAIT_CAP_MS.
@@ -750,6 +759,27 @@ async fn run_request(
     Ok(())
 }
 
+/// The crate's declared dump hook (BOUNDARY §10 :on-dump): quiesce every
+/// live client — cancel all requests, stop their runtimes — so no tokio
+/// thread survives into a dumped image half-alive. Bounded wait per
+/// client (§7's capped-wait rule is normative for hook bodies).
+#[rulisp::export]
+pub fn shutdown_all() {
+    let clients: Vec<Arc<ClientInner>> = {
+        let mut reg = CLIENTS.lock().unwrap();
+        reg.retain(|w| w.strong_count() > 0);
+        reg.iter().filter_map(|w| w.upgrade()).collect()
+    };
+    for inner in clients {
+        inner.down.store(true, Ordering::SeqCst);
+        inner.cancel_all.cancel();
+        let rt = inner.rt.lock().unwrap().take();
+        if let Some(rt) = rt {
+            rt.shutdown_timeout(Duration::from_millis(2_000));
+        }
+    }
+}
+
 rulisp::module! {
     name: "fetch",
     handles: [Client, Req],
@@ -760,5 +790,7 @@ rulisp::module! {
         Req::error_kind, Req::error_message, Req::status, Req::head_done,
         Req::headers, Req::header, Req::received, Req::total, Req::buffered,
         Req::read, Req::wait, Req::cancel,
+        shutdown_all,
     ],
+    on_dump: shutdown_all,
 }

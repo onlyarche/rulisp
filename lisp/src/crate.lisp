@@ -27,7 +27,8 @@
    (last-error-ptr :initform nil :accessor crate-last-error-ptr)
    (dealloc-ptr :initform nil :accessor crate-dealloc-ptr)
    (symbols :initform nil :accessor crate-symbols)
-   (handle-frees :initform nil :accessor crate-handle-frees)))
+   (handle-frees :initform nil :accessor crate-handle-frees)
+   (on-dump-ptr :initform nil :accessor crate-on-dump-ptr)))
 
 (defmethod print-object ((c crate) stream)
   (print-unreadable-object (c stream :type t)
@@ -57,6 +58,10 @@
 Guarded by *registry-lock*.")
 
 (defvar *copy-counter* 0)
+
+(defvar *crate-load-order* '()
+  "Crate names in first-load order — BOUNDARY §10 requires declared dump
+hooks to run in load order.")
 
 (defun cache-directory ()
   (let ((dir (uiop:xdg-cache-home "rulisp/")))
@@ -129,11 +134,14 @@ use but can still be freed."
                  :message (format nil "manifest says crate ~S, expected ~S"
                                   canonical crate-arg)))
         (let ((crate (or (gethash canonical *crates*)
-                         (setf (gethash canonical *crates*)
-                               (make-instance 'crate
-                                              :name canonical
-                                              :package (ensure-crate-package
-                                                        (or package (string-upcase canonical))))))))
+                         (progn
+                           (setf *crate-load-order*
+                                 (append *crate-load-order* (list canonical)))
+                           (setf (gethash canonical *crates*)
+                                 (make-instance 'crate
+                                                :name canonical
+                                                :package (ensure-crate-package
+                                                          (or package (string-upcase canonical)))))))))
           (%commit-generation crate path lib manifest raw copy)
           crate)))))
 
@@ -185,6 +193,8 @@ slots and the package mutated."
                                                   full (crate-name crate)))))))
          (last-error-ptr (funcall resolve "last_error"))
          (dealloc-ptr (funcall resolve "dealloc"))
+         (on-dump-ptr (let ((sym (manifest-on-dump manifest)))
+                        (and sym (funcall resolve sym))))
          (frees (loop for h in (manifest-handles manifest)
                       collect (cons (handle-spec-rust-name h)
                                     (funcall resolve (handle-spec-free h)))))
@@ -204,7 +214,8 @@ slots and the package mutated."
           (crate-cache-path crate) copy
           (crate-last-error-ptr crate) last-error-ptr
           (crate-dealloc-ptr crate) dealloc-ptr
-          (crate-handle-frees crate) frees)
+          (crate-handle-frees crate) frees
+          (crate-on-dump-ptr crate) on-dump-ptr)
     (commit-bindings crate prepared)
     (%sweep-crate-cache (crate-name crate) copy)
     crate))
@@ -318,4 +329,26 @@ stale copies are swept on a later run once nothing has them open."
            (%stub-crate crate (format nil "reload failed on image restore: ~A" e)))))
      *crates*)))
 
+(defun %run-crate-dump-hooks ()
+  "BOUNDARY §10: immediately before an image dump, call every loaded
+crate's declared :on-dump export, in load order. A failing hook — error
+status, panic, or a Lisp-side condition — is warned and skipped: a dump
+must never be wedged by its own cleanup."
+  (dolist (name *crate-load-order*)
+    (let ((crate (gethash name *crates*)))
+      (when (and crate (crate-on-dump-ptr crate) (crate-lib-handle crate))
+        (handler-case
+            (let ((status (cffi:foreign-funcall-pointer
+                           (crate-on-dump-ptr crate) () :int32)))
+              (unless (zerop status)
+                (multiple-value-bind (type msg)
+                    (read-crate-last-error (crate-last-error-ptr crate))
+                  (warn "rulisp: dump hook of ~A failed (status ~D, ~A: ~A); ~
+                         the dump proceeds"
+                        name status type msg))))
+          (serious-condition (e)
+            (warn "rulisp: dump hook of ~A signaled ~A; the dump proceeds"
+                  name e)))))))
+
+(uiop:register-image-dump-hook '%run-crate-dump-hooks nil)
 (uiop:register-image-restore-hook '%restore-all-crates nil)

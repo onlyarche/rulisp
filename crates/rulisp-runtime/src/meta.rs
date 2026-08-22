@@ -248,6 +248,7 @@ pub fn render_manifest(
     crate_name: &str,
     crate_version: &str,
     prefix: &str,
+    on_dump: Option<&str>,
     handles: &[&HandleMeta],
     fns: &[&FnMeta],
 ) -> String {
@@ -262,7 +263,14 @@ pub fn render_manifest(
     out.push_str(TARGET);
     out.push_str("\"\n :prefix \"");
     out.push_str(prefix);
-    out.push_str("\"\n :errors (");
+    out.push('"');
+    // wire-additive since 0.4 (BOUNDARY §10): pre-0.4 loaders ignore it
+    if let Some(sym) = on_dump {
+        out.push_str("\n :on-dump \"");
+        out.push_str(sym);
+        out.push('"');
+    }
+    out.push_str("\n :errors (");
     let mut seen: Vec<&str> = Vec::new();
     for f in fns {
         if let Some(e) = f.error {

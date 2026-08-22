@@ -21,6 +21,16 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   in wordbag and rx never cross); out-params survive an ERR return
   untouched (FFI-level sentinel test); ECL's missing-C-compiler failure is
   the named `manifest-error` (injected via `c::*cc*`).
+- **`on_dump: <fn>` in `rulisp::module!`** — a declared, zero-arg shutdown
+  export the loader auto-registers as an image-dump hook (new wire-additive
+  manifest key `(:on-dump "symbol")`; ABI 1 intact). Hooks run in load
+  order; a failing hook is warned and skipped — a dump is never wedged by
+  its own cleanup. The manifest refuses a declaration whose function takes
+  parameters or returns a value (the call goes through a fixed signature),
+  and `module!` rejects it at compile time too. `examples/fetch` converts:
+  its hook quiesces every live tokio runtime, and the suite proves the
+  whole story by dumping an image with a request in flight and restoring
+  it (the two tests the v0.3 risk table promised).
 - The dump/restore test (m7) now really runs on CCL — and Windows —
   instead of passing vacuously off SBCL, with a new assertion: a pre-dump
   handle GC'd after restore must not make a foreign call.

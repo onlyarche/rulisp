@@ -5,6 +5,7 @@
  :crate-version "0.1.0"
  :target "x86_64-unknown-linux-gnu"
  :prefix "wordbag_rulisp_"
+ :on-dump "dump_prep"
  :errors ("ParseError")
  :handles
  ((:handle :rust-name "WordBag" :lisp-name "word-bag" :free "word_bag_free")
@@ -71,4 +72,10 @@
   (:fn :rust-name "test_live_word_bags" :lisp-name "test-live-word-bags" :symbol "test_live_word_bags"
    :params () :result :i64 :error nil)
   (:fn :rust-name "test_cb_guard_drops" :lisp-name "test-cb-guard-drops" :symbol "test_cb_guard_drops"
+   :params () :result :i64 :error nil)
+  (:fn :rust-name "dump_prep" :lisp-name "dump-prep" :symbol "dump_prep"
+   :params () :result :unit :error "Error")
+  (:fn :rust-name "set_dump_prep_fail" :lisp-name "set-dump-prep-fail" :symbol "set_dump_prep_fail"
+   :params ((:name "fail" :type :bool)) :result :unit :error nil)
+  (:fn :rust-name "test_dump_preps" :lisp-name "test-dump-preps" :symbol "test_dump_preps"
    :params () :result :i64 :error nil)))
