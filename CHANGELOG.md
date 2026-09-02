@@ -31,6 +31,11 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   its hook quiesces every live tokio runtime, and the suite proves the
   whole story by dumping an image with a request in flight and restoring
   it (the two tests the v0.3 risk table promised).
+- **docs/benchmarks.md** — a dated, release-profile baseline with the
+  method; every number quoted in this changelog traces to it.
+- **The ECL CI job is required** (was best-effort): 24 consecutive green
+  runs since the 0.2 trampoline fix, now including the program-op
+  deployment smoke. The workflow documents the demotion procedure.
 - **`tools/rulisp-audit.sh`** — BOUNDARY §7 as a command for any glue
   crate (signal-disposition imports on the artifact, tokio signal/process
   features, `block_on`), run over every example by `make audit` in CI. A

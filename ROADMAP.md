@@ -50,10 +50,14 @@ panel with two verifying judges).
    all four examples by `make audit` in CI; `tools/audit-fixture` imports
    `signal()` on purpose and the self-test requires the audit to reject
    it. The last GAP row in BOUNDARY §12 closed with it.
-7. **docs/benchmarks.md** — the 24×/307× numbers get a documented,
-   dated, release-profile method (`make bench` already builds release).
-8. **ECL CI promotion to required** — gated on item 4 plus a green
-   streak; "fully supported" and "may fail" cannot both be true.
+7. ✅ **docs/benchmarks.md** — dated, release-profile baseline with host,
+   toolchain and raw `make bench` output; the CHANGELOG multipliers trace
+   to two of its rows. It also says plainly that `:string` is the slow
+   path (UTF-8 codec, deliberately deferred) — pass bulk data as `:bytes`.
+8. ✅ **ECL CI promoted to required** — 24 consecutive green runs since
+   2026-07-29 (35 days), item 4's program-op smoke included. The workflow
+   carries a written demotion procedure so a flake is handled in one
+   honest commit, never by quietly flipping a flag.
 
 Not in v0.4 (causes in the plan): boundary vocabulary round 2
 (`(:vec :string)`, multiple values, tagged enums), the push/doorbell

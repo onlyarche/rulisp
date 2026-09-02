@@ -97,9 +97,16 @@ jobs:
         run: make test-m4
 
   ecl-linux:
-    name: ECL / Linux (best-effort, may fail)
+    # Promoted to required 2026-09-02 after 24 consecutive green runs since
+    # 2026-07-29 (the ECL trampoline fix), with the program-op deployment
+    # smoke added in v0.4. "Fully supported" and "may fail" cannot both be
+    # true. DEMOTION PROCEDURE, should ECL flake: restore
+    # `continue-on-error: true` and the "(best-effort, may fail)" name in
+    # ONE commit that also (a) links the failing run, (b) notes the cause
+    # in ROADMAP.md item 8, and (c) downgrades CHANGELOG/README wording
+    # from "supported" to "best-effort" — never silently.
+    name: ECL / Linux (required)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
