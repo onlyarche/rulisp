@@ -303,3 +303,21 @@ mismatched declaration would be UB — the manifest must refuse it."
            (is (probe-file current) "the current copy was swept"))
       (dolist (f (list own-old foreign-fresh current))
         (ignore-errors (delete-file f))))))
+
+;;; ---------------------------------------------------------------------------
+;;; A second constructor on one handle type is expressible only with
+;;; #[rulisp(constructor, name = …)] — the derived name make-<type> would
+;;; collide, and duplicate lisp names are a load-time error.
+;;; ---------------------------------------------------------------------------
+
+(test v04.constructor-name-attribute
+  (ensure-crate)
+  (let ((plain (wb-call "MAKE-WORD-BAG"))
+        (named (wb-call "MAKE-WORD-BAG-FROM" "alpha, beta,gamma,,")))
+    (is (= 0 (wb-call "WORD-BAG-LEN" plain)))
+    (is (= 3 (wb-call "WORD-BAG-LEN" named)))
+    (is (typep named (wb "WORD-BAG")) "the named constructor returns the same handle class")
+    (wb-call "WORD-BAG-ADD" named "delta")
+    (is (= 4 (wb-call "WORD-BAG-LEN" named)))
+    (rulisp:free plain)
+    (rulisp:free named)))

@@ -41,9 +41,11 @@ panel with two verifying judges).
    a cache could crash each other (copy names were unique only per
    process) — and rulisp's load-time compiles went quiet, since a
    deployed ECL program printed fifty compiler notes per crate load.
-5. **`#[rulisp(constructor, name = "…")]`** — now load-bearing: since
-   duplicate `:lisp-name` became a hard error, a two-constructor handle
-   type is inexpressible without it. Scheduled for v0.4 by the v0.3 plan.
+5. ✅ **`#[rulisp(constructor, name = "…")]`** — wordbag's second
+   constructor (`make-word-bag-from`) is the demand case; the attribute
+   grammar became strict on the way (misspelled keys used to be ignored
+   silently). Oracle, manifest and golden co-updated; trybuild pins the
+   four rejection paths.
 6. **Reusable signal-audit tool** — extract fetch's audit.sh into
    `tools/rulisp-audit.sh`, run it over all examples in CI, with a
    deliberately-failing fixture so the gate can never go inert again.

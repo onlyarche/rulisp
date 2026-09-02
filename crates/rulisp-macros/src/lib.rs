@@ -1002,24 +1002,69 @@ fn export_impl(mut i: ItemImpl) -> Result<TokenStream2, Error> {
 
     for item in &mut i.items {
         let ImplItem::Fn(m) = item else { continue };
-        // detect + strip #[rulisp(constructor)]
+        // detect + strip #[rulisp(constructor)] / #[rulisp(constructor, name = "…")]
         let mut is_ctor = false;
+        let mut ctor_name: Option<LitStr> = None;
+        let mut attr_err: Option<Error> = None;
         m.attrs.retain(|a| {
-            if a.path().is_ident("rulisp") {
-                let mut ctor = false;
-                let _ = a.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("constructor") {
-                        ctor = true;
-                    }
+            if !a.path().is_ident("rulisp") {
+                return true;
+            }
+            let mut ctor = false;
+            let mut name: Option<LitStr> = None;
+            let r = a.parse_nested_meta(|meta| {
+                if meta.path.is_ident("constructor") {
+                    ctor = true;
                     Ok(())
-                });
-                if ctor {
-                    is_ctor = true;
-                    return false; // strip
+                } else if meta.path.is_ident("name") {
+                    let lit: LitStr = meta.value()?.parse()?;
+                    name = Some(lit);
+                    Ok(())
+                } else {
+                    Err(meta.error(
+                        "rulisp: unknown attribute key — expected `constructor` \
+                         or `constructor, name = \"…\"`",
+                    ))
                 }
+            });
+            if let Err(e) = r {
+                attr_err = Some(e);
+                return true;
+            }
+            if name.is_some() && !ctor {
+                attr_err = Some(Error::new(
+                    a.span(),
+                    "rulisp: `name = …` is only meaningful on a constructor \
+                     (#[rulisp(constructor, name = \"make-…\")])",
+                ));
+                return true;
+            }
+            if ctor {
+                is_ctor = true;
+                ctor_name = name;
+                return false; // strip
             }
             true
         });
+        if let Some(e) = attr_err {
+            return Err(e);
+        }
+        // An explicit constructor name is a Lisp symbol name: it must read as
+        // one token in the generated package.
+        if let Some(lit) = &ctor_name {
+            let v = lit.value();
+            let bad = v.is_empty()
+                || v.chars().any(|c| {
+                    c.is_whitespace() || matches!(c, ':' | '"' | '(' | ')' | '|' | '#' | ';' | '\'')
+                });
+            if bad {
+                return Err(Error::new(
+                    lit.span(),
+                    "rulisp: constructor name must be a non-empty Lisp symbol name \
+                     without whitespace or reader syntax (e.g. \"make-bag-from\")",
+                ));
+            }
+        }
 
         let method = m.sig.ident.clone();
         let mname = method.to_string();
@@ -1037,7 +1082,12 @@ fn export_impl(mut i: ItemImpl) -> Result<TokenStream2, Error> {
         let (ok_ty, err) = split_result(&m.sig.output);
         let exported = ExportedFn {
             rust_name: format!("{ty_ident}::{mname}"),
-            lisp_name: if is_ctor {
+            lisp_name: if let Some(lit) = &ctor_name {
+                // two constructors on one type both derive make-<type>, and
+                // duplicate lisp names are a load-time error — the explicit
+                // name is what makes a second constructor expressible
+                lit.value()
+            } else if is_ctor {
                 format!("make-{kebab}")
             } else {
                 format!("{}-{}", kebab, snake_to_kebab(&mname))

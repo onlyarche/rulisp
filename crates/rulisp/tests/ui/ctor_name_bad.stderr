@@ -1,0 +1,23 @@
+error: expected string literal
+  --> tests/ui/ctor_name_bad.rs:15:34
+   |
+15 |     #[rulisp(constructor, name = 42)]
+   |                                  ^^
+
+error: rulisp: constructor name must be a non-empty Lisp symbol name without whitespace or reader syntax (e.g. "make-bag-from")
+  --> tests/ui/ctor_name_bad.rs:24:34
+   |
+24 |     #[rulisp(constructor, name = "has space")]
+   |                                  ^^^^^^^^^^^
+
+error: rulisp: `name = …` is only meaningful on a constructor (#[rulisp(constructor, name = "make-…")])
+  --> tests/ui/ctor_name_bad.rs:33:5
+   |
+33 |     #[rulisp(name = "bag-len")]
+   |     ^
+
+error: rulisp: unknown attribute key — expected `constructor` or `constructor, name = "…"`
+  --> tests/ui/ctor_name_bad.rs:42:14
+   |
+42 |     #[rulisp(constuctor)]
+   |              ^^^^^^^^^^

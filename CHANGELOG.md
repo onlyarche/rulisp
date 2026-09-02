@@ -31,6 +31,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   its hook quiesces every live tokio runtime, and the suite proves the
   whole story by dumping an image with a request in flight and restoring
   it (the two tests the v0.3 risk table promised).
+- **`#[rulisp(constructor, name = "…")]`** — an explicit Lisp name for a
+  constructor. Load-bearing since 0.3 made duplicate `:lisp-name` a hard
+  error: two constructors on one type both derived `make-<type>`, so a
+  second constructor was inexpressible. The attribute grammar is now
+  strict — a misspelled key, a non-string name, a name with reader syntax,
+  or `name` on a non-constructor are compile errors (previously unknown
+  keys were silently ignored).
 - **ECL deployment story** (docs/distribution.md Pattern B′): ECL has no
   image dump; applications ship as `asdf:program-op` executables. The
   documented recipe (`:no-uiop t` because the distro ECL cannot satisfy

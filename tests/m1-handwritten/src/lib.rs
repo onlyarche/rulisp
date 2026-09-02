@@ -227,6 +227,32 @@ pub unsafe extern "C" fn wordbag_rulisp_word_bag_new(out: *mut *mut c_void) -> i
     })
 }
 
+/// WordBag::from_csv(csv: &str) -> WordBag — the second constructor,
+/// exported under an explicit lisp name ("make-word-bag-from").
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_word_bag_from_csv(
+    csv_ptr: *const u8,
+    csv_len: usize,
+    out: *mut *mut c_void,
+) -> i32 {
+    rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
+        let csv = match unsafe { rt::str_arg(&_frame, csv_ptr, csv_len) } {
+            Ok(s) => s,
+            Err(status) => return status,
+        };
+        let bag = WordBag::new();
+        {
+            let mut words = bag.words.lock().unwrap();
+            for w in csv.split(',').map(str::trim).filter(|w| !w.is_empty()) {
+                words.push(w.to_owned());
+            }
+        }
+        unsafe { *out = rt::handle_new(bag) };
+        rt::STATUS_OK
+    })
+}
+
 /// WordBag::add(&self, word: &str) -> Result<(), Error>
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_word_bag_add(

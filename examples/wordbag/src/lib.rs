@@ -163,6 +163,20 @@ impl WordBag {
         }
     }
 
+    /// A second constructor. Without `name = …` this would also be
+    /// `make-word-bag`, which the loader rejects as a duplicate.
+    #[rulisp(constructor, name = "make-word-bag-from")]
+    pub fn from_csv(csv: &str) -> WordBag {
+        let bag = WordBag::new();
+        {
+            let mut words = bag.words.lock().unwrap();
+            for w in csv.split(',').map(str::trim).filter(|w| !w.is_empty()) {
+                words.push(w.to_owned());
+            }
+        }
+        bag
+    }
+
     pub fn add(&self, word: &str) -> Result<(), Error> {
         if word.is_empty() {
             return Err(Error::msg("empty word not allowed"));
@@ -323,6 +337,7 @@ rulisp::module! {
         WordBag::poison, Grenade::new,
         test_live_allocations, test_live_word_bags, test_cb_guard_drops,
         dump_prep, set_dump_prep_fail, test_dump_preps,
+        WordBag::from_csv,
     ],
     on_dump: dump_prep,
 }

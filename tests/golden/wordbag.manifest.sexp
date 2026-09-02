@@ -78,4 +78,6 @@
   (:fn :rust-name "set_dump_prep_fail" :lisp-name "set-dump-prep-fail" :symbol "set_dump_prep_fail"
    :params ((:name "fail" :type :bool)) :result :unit :error nil)
   (:fn :rust-name "test_dump_preps" :lisp-name "test-dump-preps" :symbol "test_dump_preps"
-   :params () :result :i64 :error nil)))
+   :params () :result :i64 :error nil)
+  (:fn :rust-name "WordBag::from_csv" :lisp-name "make-word-bag-from" :symbol "word_bag_from_csv"
+   :params ((:name "csv" :type :string)) :result (:handle "WordBag") :error nil)))
