@@ -282,8 +282,13 @@ generation let a stale wrapper dereference a new generation's handle — UB)."
   (pass "skipped: no uiop:dump-image on this host (ECL has none — its executables ship via asdf:program-op, docs/distribution.md Pattern B′)")
   #+(or sbcl ccl)
   (let* ((tmp (uiop:temporary-directory))
-         (exe (merge-pathnames "rulisp-m1-restore-test" tmp))
-         (script (merge-pathnames "rulisp-m1-dump-phase.lisp" tmp))
+         ;; per-process names: two suites on one machine (say SBCL and CCL
+         ;; side by side) must not overwrite each other's executable while
+         ;; it is running ("Text file busy")
+         (exe (merge-pathnames (format nil "rulisp-m1-restore-test-~A"
+                                       rulisp::*process-tag*) tmp))
+         (script (merge-pathnames (format nil "rulisp-m1-dump-phase-~A.lisp"
+                                          rulisp::*process-tag*) tmp))
          (lisp-dir (asdf:system-relative-pathname :rulisp "")))
     (uiop:delete-file-if-exists exe)
     (with-open-file (out script :direction :output :if-exists :supersede)
@@ -353,4 +358,8 @@ generation let a stale wrapper dereference a new generation's handle — UB)."
                           :output :string :error-output :string
                           :ignore-error-status t)
       (is (zerop code) "restore phase failed: out=~A err=~A" out err)
-      (is (search "RESTORE-OK" out)))))
+      (is (search "RESTORE-OK" out))))
+    ;; a dumped executable is tens of MB; per-process names mean nothing
+    ;; overwrites it, so remove it (and the script) here
+    (uiop:delete-file-if-exists exe)
+    (uiop:delete-file-if-exists script)))

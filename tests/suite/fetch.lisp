@@ -164,11 +164,20 @@ the livelock two of the three candidate designs shipped."
          (progn
            (fc "REQ-READ" r 1024 200)   ; let some bytes arrive
            (fc "REQ-CANCEL" r)
+           ;; drain: buffered bytes come out first; the loop may also end
+           ;; because REQ-DONE went true before a read observed the error
            (loop repeat 60 until (or signalled (fc "REQ-DONE" r))
                  do (handler-case (fc "REQ-READ" r 65536 50)
                       (rulisp:rust-error (e) (setf signalled (err-kind e)))))
-           (is (equal "cancelled" signalled))
-           (is (fc "REQ-DONE" r)))
+           (is (fc "REQ-DONE" r))
+           ;; the contract: once settled with an error, READ signals it —
+           ;; whether or not an earlier read happened to be waiting when the
+           ;; cancel landed (on CCL it never was; the test's first run there
+           ;; exposed this as a race in the test, not the crate)
+           (unless signalled
+             (handler-case (fc "REQ-READ" r 65536 0)
+               (rulisp:rust-error (e) (setf signalled (err-kind e)))))
+           (is (equal "cancelled" signalled)))
       (rulisp:free r))))
 
 (test fetch.terminal-state-on-every-path
@@ -419,17 +428,22 @@ against its own capacity check."
 
 (test fetch.no-adoption-during-transfer
   "Sampling only before and after cannot see an adoption that happens
-mid-transfer and detaches when the OS thread exits."
+mid-transfer and detaches when the OS thread exits. The count is relative
+to the host's resting thread count — CCL runs an initial thread plus the
+listener, so an absolute 1 was an SBCL assumption (first finding of the
+fetch suite's first run on CCL)."
   (ensure-fetch)
-  (let ((r (fc "MAKE-REQ" *fetch-client* "GET" (url "/drip/60/10")
-               nil nil nil 20000 0))
-        (peak 0))
+  (let* ((baseline (length (bt:all-threads)))
+         (r (fc "MAKE-REQ" *fetch-client* "GET" (url "/drip/60/10")
+                nil nil nil 20000 0))
+         (peak baseline))
     (unwind-protect
          (progn
            (loop repeat 40 until (fc "REQ-DONE" r)
                  do (fc "REQ-READ" r 65536 20)
                     (setf peak (max peak (length (bt:all-threads)))))
-           (is (= 1 peak) "~D Lisp threads existed mid-transfer" peak))
+           (is (= baseline peak)
+               "~D Lisp threads existed mid-transfer (baseline ~D)" peak baseline))
       (fc "REQ-CANCEL" r)
       (rulisp:free r))))
 
@@ -491,8 +505,12 @@ fresh client works."
   (pass "skipped: no uiop:dump-image on this host (ECL ships via program-op)")
   #+(or sbcl ccl)
   (let* ((tmp (uiop:temporary-directory))
-         (exe (merge-pathnames "rulisp-fetch-restore-test" tmp))
-         (script (merge-pathnames "rulisp-fetch-dump-phase.lisp" tmp))
+         ;; per-process names — see m7: side-by-side suites must not clobber
+         ;; a running executable
+         (exe (merge-pathnames (format nil "rulisp-fetch-restore-test-~A"
+                                       rulisp::*process-tag*) tmp))
+         (script (merge-pathnames (format nil "rulisp-fetch-dump-phase-~A.lisp"
+                                          rulisp::*process-tag*) tmp))
          (lisp-dir (asdf:system-relative-pathname :rulisp ""))
          (fetch-dir (asdf:system-relative-pathname :rulisp "../examples/fetch/")))
     (uiop:delete-file-if-exists exe)
@@ -558,4 +576,8 @@ fresh client works."
                           :output :string :error-output :string
                           :ignore-error-status t)
       (is (zerop code) "restore phase failed: out=~A err=~A" out err)
-      (is (search "FETCH-RESTORE-OK" out)))))
+      (is (search "FETCH-RESTORE-OK" out))))
+    ;; a dumped executable is tens of MB; per-process names mean nothing
+    ;; overwrites it, so remove it (and the script) here
+    (uiop:delete-file-if-exists exe)
+    (uiop:delete-file-if-exists script)))

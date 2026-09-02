@@ -34,6 +34,8 @@ jobs:
         run: make test-m2
       - name: full gate (macro pipeline + hardening)
         run: make test-m4
+      - name: fetch suite (async HTTPS example; the §7/§10 enforcement §12 cites)
+        run: make test-fetch
 
   ccl-linux:
     name: CCL / Linux x86-64 (required)
@@ -52,6 +54,8 @@ jobs:
           sbcl --non-interactive --load quicklisp.lisp \
                --eval '(quicklisp-quickstart:install)'
       - run: make test-ccl CCL="$HOME/ccl/lx86cl64"
+      - name: fetch suite on CCL
+        run: make test-fetch-ccl CCL="$HOME/ccl/lx86cl64"
 
   sbcl-macos:
     name: SBCL / macOS arm64 (required)
@@ -66,6 +70,11 @@ jobs:
           sbcl --non-interactive --load quicklisp.lisp \
                --eval '(quicklisp-quickstart:install)'
       - run: make test-m4
+      # first time the fetch suite runs on macOS; promoted by the written
+      # procedure in the ECL job once it has a streak
+      - name: fetch suite (best-effort on macOS)
+        continue-on-error: true
+        run: make test-fetch
 
   sbcl-windows:
     name: SBCL / Windows x86-64 (required)

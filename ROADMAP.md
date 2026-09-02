@@ -1,5 +1,54 @@
 # Roadmap
 
+## v0.5 — a 1.0 candidate a stranger can verify
+
+Make every front door true — CI runs what BOUNDARY §12 cites, releases
+exist, docs.rs and the REPL explain themselves — fix the two defects §12
+cannot see, and write down what 1.0 promises. No new boundary feature, no
+flagship (still no external request; the tracker holds one closed
+soundness issue). ABI 1 frozen; every wire change is an additive manifest
+key. Full plan with demand cases, acceptance criteria and cut order:
+docs/design/v05-plan.md (three-proposal panel, two verifying judges).
+
+1. **Run the fetch suite in CI** — 23 tests §12 cites as enforcement have
+   only ever run on the maintainer's machine.
+2. **docs/stability.md** — the four versioned surfaces (Rust API, 32-symbol
+   Lisp API, manifest schema, C ABI), semver and deprecation policy, host
+   support = the required matrix, and the 1.0 exit criteria; Quicklisp
+   prerequisites listed, not scheduled.
+3. **CCL pin semantics** — on CCL, CFFI's `with-pointer-to-vector-data` is
+   `without-gcing`: every `:string`/`:bytes`/`:vec` argument stops the
+   world for the whole export, callbacks included. Copy via `foreign-alloc`
+   there; a `pin-does-not-stop-the-world` test on every host.
+4. **Falsifiable fuzzers** — end-of-run live-count reconciliation, a
+   reload-under-load test, a seed from the environment printed on failure.
+5. **Manifest skew rule + `:rulisp-version`** — a 0.4 on_dump crate on a
+   0.3 loader silently drops its hook. No retroactive `:schema` bump (it
+   would refuse every 0.5 crate on 0.4.0 loaders); instead the key-class
+   rule in BOUNDARY §11 and an informational version key with a
+   style-warning on skew.
+6. **REPL front door** — docstrings synthesized from the manifest,
+   `describe` on a crate, then Rust `///` carried as a wire-additive `:doc`
+   key (the M part; cut first if the cycle runs long).
+7. **docs.rs front door** — `///` on the three macros with the full
+   attribute grammar, `missing_docs` clean.
+8. **Release engineering + Linux aarch64** — GitHub Releases with audited
+   blobs for every required host and all four examples, `rust-version`
+   with an MSRV job, `make check-versions`, docs/releasing.md; an arm CI
+   job (best-effort first).
+9. **`:string` ASCII fast path** — a typed ASCII loop before babel (both
+   judges measured ~2.5×); zero-copy `:string` stays refused.
+10. **Miri over the generated shims** — optional; cut first.
+11. **User-facing docs claim audit, last** — README still says
+    "Scope (v0.1)"; every capability claim gets a citation or is deleted.
+
+Not in v0.5 (causes in the plan): a flagship example, vocabulary round 2,
+zero-copy `:string`, a retroactive `:schema 2`, print-object polish, a
+soak workflow, cargo-fuzz/sanitizers (Miri fits; sanitizers cannot
+coexist with SBCL's signal-driven GC), `cargo rulisp new`, LispWorks/
+Allegro/ABCL/ocicl, macOS x86_64 blobs, Quicklisp (1.0), constructor
+`&key`, push callbacks, dlclose, any ABI bump.
+
 ## v0.4 — enforced, everywhere
 
 Issue #1's reporter praised the boundary because "the surrounding

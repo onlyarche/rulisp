@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-ccl test-ecl-program audit bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit bench clean
 
 build:
 	$(CARGO) build
@@ -23,6 +23,11 @@ test-m4:
 test-fetch:
 	sh examples/fetch/audit.sh
 	$(SBCL) --non-interactive --load tests/run-fetch.lisp
+
+# the same suite on Clozure CL (the dump tests use the CCL harness from m7)
+test-fetch-ccl:
+	sh examples/fetch/audit.sh
+	$(CCL) --batch --load tests/run-fetch.lisp
 
 # ECL has no image dump: applications ship as asdf:program-op executables.
 # Builds the minimal consumer in tests/ecl-program and runs it against the
