@@ -112,3 +112,5 @@ jobs:
       - run: |
           ecl --norc --load tests/run-m4.lisp 2>&1 | tee ecl.log
           grep -q "Pass: " ecl.log && ! grep -qE "Fail: *[1-9]" ecl.log
+      - name: program-op executable (the ECL deployment story)
+        run: make test-ecl-program

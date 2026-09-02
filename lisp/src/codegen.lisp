@@ -101,11 +101,15 @@ static C function instead: no libffi, no hazard."
       (let ((*package* (find-package '#:rulisp)))
         (format out "(in-package #:rulisp)~%~S~%" form)))
     (handler-case
-        (multiple-value-bind (fasl warnings failure) (compile-file src)
+        (multiple-value-bind (fasl warnings failure)
+            ;; a deployed program must not print compiler chatter every
+            ;; time it loads a crate with callbacks
+            (let ((*compile-verbose* nil) (*compile-print* nil))
+              (compile-file src))
           (declare (ignore warnings))
           (when (or failure (null fasl))
             (error "compile-file reported failure"))
-          (load fasl)
+          (let ((*load-verbose* nil)) (load fasl))
           (ignore-errors (delete-file fasl)))
       (error (e)
         (error 'manifest-error
@@ -123,7 +127,12 @@ static C function instead: no libffi, no hazard."
           ,@(loop for (ty p l) in specs
                   append (cond ((eq ty :string) `((,p :pointer) (,l uintptr)))
                                (t `((,p ,(scalar-cffi ty)))))))
-       (declare (ignore %userdata))
+       ;; ECL's defcallback drops declarations, so an unused-variable style
+       ;; warning would print on every trampoline compile — the bare
+       ;; reference is what silences it there; the declaration keeps
+       ;; SBCL/CCL from noting the same thing about the reference
+       (declare (ignorable %userdata))
+       %userdata
        (let ((%done nil))
          (unwind-protect
               (handler-case

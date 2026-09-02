@@ -12,3 +12,6 @@ examples/*/target-abort-check/
 *.so
 *.dylib
 !tests/golden/*
+# ECL program-op smoke executable and its logs
+tests/ecl-program/rulisp-ecl-smoke
+ecl-program-*.log

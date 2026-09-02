@@ -28,9 +28,14 @@ panel with two verifying judges).
    loader). fetch converted; the flagship test dumps an image with a
    tokio transfer live and restores it — the two tests v0.3's risk table
    promised.
-4. **ECL deploy story** — no `dump-image` exists there;
-   `asdf:program-op` is the delivery path and rulisp's restore hook
-   already runs in its epilogue. Document + smoke-test it.
+4. ✅ **ECL deploy story** — no `dump-image` exists there (verified);
+   `asdf:program-op` is the delivery path. Two traps found and documented
+   (docs/distribution.md Pattern B′): the distro ECL cannot link ASDF
+   statically (no `libasdf.a`), so `:no-uiop t` + a prologue `require`;
+   and `:no-uiop` also drops the entry-point wiring. `tests/ecl-program`
+   is the smoke consumer, run by the ECL job (`make test-ecl-program`).
+   Along the way rulisp's load-time compiles went quiet — a deployed ECL
+   program printed fifty compiler notes per crate load.
 5. **`#[rulisp(constructor, name = "…")]`** — now load-bearing: since
    duplicate `:lisp-name` became a hard error, a two-constructor handle
    type is inexpressible without it. Scheduled for v0.4 by the v0.3 plan.

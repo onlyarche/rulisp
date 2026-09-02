@@ -263,7 +263,12 @@ fully intact (half-generated packages are banned — DESIGN.md §8 M2)."
                                                      (lambda (w)
                                                        (when (find-restart 'muffle-warning w)
                                                          (muffle-warning w)))))
-                                                (compile nil form))
+                                                (let ((*compile-verbose* nil) (*compile-print* nil))
+                                                  ;; ECL's compile prints
+                                                  ;; per-function notes
+                                                  ;; otherwise — a deployed
+                                                  ;; program must stay quiet
+                                                  (compile nil form)))
                                               crate ctx fn-ptr))))))
     (list classes fns (gen-ctx-error-conditions ctx))))
 

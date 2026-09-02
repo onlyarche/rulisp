@@ -31,11 +31,20 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   its hook quiesces every live tokio runtime, and the suite proves the
   whole story by dumping an image with a request in flight and restoring
   it (the two tests the v0.3 risk table promised).
+- **ECL deployment story** (docs/distribution.md Pattern B′): ECL has no
+  image dump; applications ship as `asdf:program-op` executables. The
+  documented recipe (`:no-uiop t` because the distro ECL cannot link ASDF
+  statically, a prologue `require`, an explicit epilogue entry call) is
+  exercised by `tests/ecl-program`, a minimal consumer the ECL CI job
+  builds and runs (`make test-ecl-program`).
 - The dump/restore test (m7) now really runs on CCL — and Windows —
   instead of passing vacuously off SBCL, with a new assertion: a pre-dump
   handle GC'd after restore must not make a foreign call.
 
 ### Fixed
+- rulisp's load-time compiles are quiet now: on ECL, `compile` prints
+  per-function notes, so a deployed program printed dozens of lines every
+  time it loaded a crate.
 - The loader now rejects `(:option :bool)` in a hand-written manifest
   (`option-inner`); previously only the macro refused to emit it.
 

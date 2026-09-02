@@ -121,6 +121,53 @@ Two things to get right, both of which bite silently:
    the dump succeeds and the threads are simply gone in the restored image
    — with whatever they were doing left half-done.
 
+## Pattern B′ — ECL: `program-op` is the dump
+
+ECL has no image dump: `uiop:dump-image` signals "Dumping an executable
+is not supported on this implementation". An ECL application ships as an
+`asdf:program-op` executable instead, and rulisp works unchanged inside
+one — `tests/ecl-program/` is the smallest such consumer, built and run by
+the ECL CI job (`make test-ecl-program`). Three facts shape the system
+definition, all verified against ECL 21.2.1 as packaged by Debian/Ubuntu:
+
+```lisp
+(defsystem "my-app"
+  :class :program-system
+  :no-uiop t
+  :prologue-code (let ((*load-verbose* nil)) (require :asdf))
+  :epilogue-code (funcall (intern "MAIN" "MY-APP"))
+  :build-operation "program-op"
+  :build-pathname "my-app"
+  :depends-on ("rulisp")
+  :components ((:file "main")))
+```
+
+1. **ASDF must exist at startup, and cannot be linked in.** cffi's compiled
+   code references ASDF packages at object-load time (its lazy
+   `cffi-libffi` loader), and rulisp calls UIOP at runtime. ASDF's default
+   on ECL is to link `cmp` and `asdf` statically into the program — but
+   the distro package ships `asdf.fas` without `libasdf.a`/`libcmp.a`, so
+   that link fails. `:no-uiop t` turns the static link off and the
+   prologue `require`s `asdf.fas` before any linked module initializes.
+   The executable already needs the ECL runtime (`libecl.so`, per `ldd`)
+   from the same installation, so this adds no new deployment dependency.
+2. **With `:no-uiop`, ASDF stops wiring the entry point too** — the program
+   would fall through into ECL's REPL. Call `main` from the epilogue
+   (interned at runtime; the package does not exist when the `.asd` is
+   read) and end it with `uiop:quit`.
+3. **Loading a crate compiles at runtime.** Bindings are generated at load
+   time by design, and on ECL `compile` goes through the C compiler; a
+   crate with callbacks additionally native-compiles its trampolines
+   (BOUNDARY §7). The deployed machine therefore needs `gcc`, exactly as
+   the REPL does. rulisp keeps this quiet (`*compile-verbose*` is bound
+   off around its own compiles).
+
+Load the glue artifact from `main` with `rulisp:load-crate` /
+`rulisp:load-blob-crate` — there is no pre-dump state, so rulisp's
+restore hook has nothing to invalidate. One more ECL habit: it exits 0
+even from its debugger on EOF, so a wrapper script or CI step must gate
+on a printed marker, never on the exit code alone.
+
 ## Pattern C — build on the user's machine (developers)
 
 `rulisp:use-crate` is the dev path: cargo build + load, with
