@@ -576,7 +576,7 @@ fresh client works."
                           :output :string :error-output :string
                           :ignore-error-status t)
       (is (zerop code) "restore phase failed: out=~A err=~A" out err)
-      (is (search "FETCH-RESTORE-OK" out))))
+      (is (search "FETCH-RESTORE-OK" out)))
     ;; a dumped executable is tens of MB; per-process names mean nothing
     ;; overwrites it, so remove it (and the script) here
     (uiop:delete-file-if-exists exe)
