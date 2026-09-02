@@ -27,15 +27,18 @@ test-fetch:
 # ECL has no image dump: applications ship as asdf:program-op executables.
 # Builds the minimal consumer in tests/ecl-program and runs it against the
 # wordbag artifact. ECL exits 0 even from its debugger, so the marker is
-# the gate, not the exit code.
+# the gate, not the exit code — except a timeout kill (124), which must
+# fail on its own, so the run is not piped (a pipe would discard it).
 ECL ?= ecl
 test-ecl-program:
 	$(CARGO) build -p wordbag
 	rm -f tests/ecl-program/rulisp-ecl-smoke
-	$(ECL) --norc --load tests/ecl-program/build.lisp 2>&1 | tee ecl-program-build.log | grep -q BUILD-DONE
+	$(ECL) --norc --load tests/ecl-program/build.lisp > ecl-program-build.log 2>&1; \
+	  grep -q BUILD-DONE ecl-program-build.log || { tail -40 ecl-program-build.log; exit 1; }
 	RULISP_SMOKE_CRATE=$(CURDIR)/target/debug/libwordbag.so timeout 120 \
-	  tests/ecl-program/rulisp-ecl-smoke </dev/null 2>&1 | tee ecl-program-run.log
-	grep -q ECL-PROGRAM-OK ecl-program-run.log && ! grep -q FAIL ecl-program-run.log
+	  tests/ecl-program/rulisp-ecl-smoke </dev/null > ecl-program-run.log 2>&1; \
+	  st=$$?; cat ecl-program-run.log; test $$st -eq 0 \
+	  && grep -q ECL-PROGRAM-OK ecl-program-run.log && ! grep -q FAIL ecl-program-run.log
 
 bench:
 	$(SBCL) --non-interactive --load tests/bench.lisp

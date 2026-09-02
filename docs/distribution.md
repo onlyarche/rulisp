@@ -123,12 +123,19 @@ Two things to get right, both of which bite silently:
 
 ## Pattern B′ — ECL: `program-op` is the dump
 
-ECL has no image dump: `uiop:dump-image` signals "Dumping an executable
-is not supported on this implementation". An ECL application ships as an
-`asdf:program-op` executable instead, and rulisp works unchanged inside
-one — `tests/ecl-program/` is the smallest such consumer, built and run by
-the ECL CI job (`make test-ecl-program`). Three facts shape the system
-definition, all verified against ECL 21.2.1 as packaged by Debian/Ubuntu:
+ECL has no image dump: `(uiop:dump-image … :executable t)` signals
+"Dumping an executable is not supported on this implementation!
+Aborting." An ECL application ships as an `asdf:program-op` executable
+instead, and rulisp works unchanged inside one. `tests/ecl-program/` is
+the smallest such consumer, built and run by the ECL CI job
+(`make test-ecl-program`); build yours the way its `build.lisp` does —
+`ecl --norc --load build.lisp`, where the script loads Quicklisp (rulisp's
+dependencies come from there), pushes rulisp's `lisp/` directory and the
+application's own directory onto `asdf:*central-registry*`, loads the
+dependencies (fact 4 below), and calls `(asdf:make "my-app")`. The
+executable lands next to the `.asd`. Four facts shape the system
+definition and that build script, all verified against ECL 21.2.1 as
+packaged by Debian/Ubuntu (bundled ASDF 3.1.8.8):
 
 ```lisp
 (defsystem "my-app"
@@ -142,30 +149,61 @@ definition, all verified against ECL 21.2.1 as packaged by Debian/Ubuntu:
   :components ((:file "main")))
 ```
 
-1. **ASDF must exist at startup, and cannot be linked in.** cffi's compiled
-   code references ASDF packages at object-load time (its lazy
+1. **ASDF must exist at startup, and cannot be linked in.** cffi's
+   compiled code references ASDF packages at object-load time (its lazy
    `cffi-libffi` loader), and rulisp calls UIOP at runtime. ASDF's default
-   on ECL is to link `cmp` and `asdf` statically into the program — but
-   the distro package ships `asdf.fas` without `libasdf.a`/`libcmp.a`, so
-   that link fails. `:no-uiop t` turns the static link off and the
-   prologue `require`s `asdf.fas` before any linked module initializes.
-   The executable already needs the ECL runtime (`libecl.so`, per `ldd`)
-   from the same installation, so this adds no new deployment dependency.
-2. **With `:no-uiop`, ASDF stops wiring the entry point too** — the program
-   would fall through into ECL's REPL. Call `main` from the epilogue
-   (interned at runtime; the package does not exist when the `.asd` is
-   read) and end it with `uiop:quit`.
+   on ECL is to link `cmp` — and `uiop`/`asdf` when it finds a prebuilt
+   one — statically into the program. The distro package ships only the
+   `.fas` files, neither `libcmp.a` nor `libasdf.a`, yet its `cmp.asd`
+   still declares `:lib #P"SYS:LIBCMP.A"`, so the link fails with
+   `ld: cannot find …/ecl-21.2.1/libcmp.a`. `:no-uiop t` turns the static
+   link off and the prologue `require`s `asdf.fas` before any linked
+   module initializes. The executable already needs the ECL runtime
+   (`libecl.so`, per `ldd`) from the same installation, so this adds no
+   new deployment dependency.
+2. **With `:no-uiop`, ASDF stops wiring the entry point too** — the
+   program would fall through into ECL's REPL (with `main` defined and
+   never called). Call `main` from the epilogue (interned at runtime; the
+   package does not exist when the `.asd` is read) and end it with
+   `uiop:quit`. `:entry-point` does nothing under `:no-uiop`.
 3. **Loading a crate compiles at runtime.** Bindings are generated at load
    time by design, and on ECL `compile` goes through the C compiler; a
    crate with callbacks additionally native-compiles its trampolines
-   (BOUNDARY §7). The deployed machine therefore needs `gcc`, exactly as
-   the REPL does. rulisp keeps this quiet (`*compile-verbose*` is bound
-   off around its own compiles).
+   (BOUNDARY §7) — `strace` shows a `gcc` invocation per generated
+   wrapper. The deployed machine therefore needs `gcc`, exactly as the
+   REPL does, and a writable crate cache: `load-crate` copies the artifact
+   under `$XDG_CACHE_HOME/rulisp/` (default `~/.cache/rulisp/`). With
+   `HOME` unset, as under many service managers and containers, that
+   resolves to `/.cache` and the program fails with
+   `Could not create directory "/.cache" … Permission denied`; setting
+   `XDG_CACHE_HOME` alone is enough. rulisp keeps a successful run quiet
+   (`*compile-verbose*` is bound off around its own compiles); when `gcc`
+   is missing, ECL itself prints `;;; Internal error: ** Error code 1 when
+   executing (EXT:RUN-PROGRAM "gcc" …)` before `load-crate` signals — that
+   line is the tell.
+4. **Load the dependencies before `program-op`.** With the bundled ASDF
+   3.1.8.8, `(asdf:make "my-app")` from a cold output cache dies about two
+   minutes in with `COMPILE-FILE-ERROR while compiling #<cl-source-file
+   "cffi" "src" "early-types">` / `The function WARN-IF-KW-OR-BELONGS-TO-CL
+   is undefined`: `program-op` compiles a dependency's files without
+   loading the earlier ones, so cffi's macro-time helpers are missing. A
+   rerun on that half-built cache fails faster (`There exists no package
+   with name "CFFI"`). `(ql:quickload '(:cffi :babel :trivial-garbage
+   :bordeaux-threads))` — or `(asdf:load-system "rulisp")` — before
+   `asdf:make` sidesteps it; a warm cache hides the problem, which is why
+   it is easy to miss.
 
 Load the glue artifact from `main` with `rulisp:load-crate` /
-`rulisp:load-blob-crate` — there is no pre-dump state, so rulisp's
-restore hook has nothing to invalidate. One more ECL habit: it exits 0
-even from its debugger on EOF, so a wrapper script or CI step must gate
+`rulisp:load-blob-crate`. The crate's package (`WORDBAG` — the manifest
+crate name, upcased) exists only after that call, so `main.lisp` cannot
+name `wordbag:greet` literally; reach the bindings late-bound, as
+`tests/ecl-program/main.lisp` does with `find-symbol` (or
+`uiop:symbol-call`). There is no pre-dump state, so rulisp's image-restore
+hook has nothing to invalidate. Several instances may share one cache:
+each copy is named with a per-process tag, and the sweep leaves other
+processes' fresh copies alone. One more ECL habit: an error that reaches
+its debugger with stdin at EOF exits 0 (a memory fault instead aborts
+with exit 134 and a core dump), so a wrapper script or CI step must gate
 on a printed marker, never on the exit code alone.
 
 ## Pattern C — build on the user's machine (developers)

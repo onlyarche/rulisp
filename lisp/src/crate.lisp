@@ -59,6 +59,35 @@ Guarded by *registry-lock*.")
 
 (defvar *copy-counter* 0)
 
+(defun %compute-process-tag ()
+  "A per-process component for cache copy names. The pid where the host
+exposes one; a random tag otherwise (SBCL seeds MAKE-RANDOM-STATE from the
+OS, so two processes started in the same second still differ there)."
+  (let ((pid (ignore-errors
+              #+sbcl (let ((f (find-symbol "UNIX-GETPID" "SB-UNIX")))
+                       (and f (fboundp f) (funcall f)))
+              #+ccl (funcall (find-symbol "GETPID" "CCL"))
+              #+ecl (ext:getpid)
+              #-(or sbcl ccl ecl) nil)))
+    (if (integerp pid)
+        (format nil "p~D" pid)
+        (format nil "r~36R" (random (expt 36 10) (make-random-state t))))))
+
+(defvar *process-tag* (%compute-process-tag)
+  "Recomputed on image restore: a dumped image inherits the dumper's tag,
+and two restored instances of it would otherwise collide in the cache.")
+
+(defun %cache-copy-name (provisional)
+  "Cache copy name for a load of crate PROVISIONAL. Unique across processes
+sharing one cache (the process tag), across loads within a process (the
+counter), and across restarts of a pid-recycling host (the time). Before
+the tag, two instances started in the same second wrote the same file —
+copy-file rewrote a library the other process had already mapped, and
+that process died with a segmentation fault."
+  (format nil "~A-~A-c~D-~D.~A"
+          provisional *process-tag* (incf *copy-counter*)
+          (get-universal-time) (shared-library-type)))
+
 (defvar *crate-load-order* '()
   "Crate names in first-load order — BOUNDARY §10 requires declared dump
 hooks to run in load order.")
@@ -114,18 +143,14 @@ use but can still be freed."
                           :message "artifact does not exist")))
          (provisional (substitute #\_ #\- (or crate-arg (derive-crate-name path))))
          (prefix-guess (format nil "~A_rulisp_" provisional))
-         ;; unique name per load: defeats dlopen path caching (macOS dyld
-         ;; would otherwise hand back the old image) and sidesteps the
-         ;; Windows lock on a loaded DLL
-         (copy (merge-pathnames (format nil "~A-c~D-~D.~A"
-                                        provisional
-                                        (incf *copy-counter*)
-                                        (get-universal-time)
-                                        (shared-library-type))
-                                (cache-directory))))
+         ;; unique name per load AND per process: defeats dlopen path
+         ;; caching (macOS dyld would otherwise hand back the old image),
+         ;; sidesteps the Windows lock on a loaded DLL, and keeps two
+         ;; processes sharing a cache from rewriting each other's mapping
+         (copy (merge-pathnames (%cache-copy-name provisional) (cache-directory))))
     (uiop:copy-file path copy)
     (multiple-value-bind (lib manifest raw)
-        (%open-and-verify provisional copy prefix-guess)
+        (%open-and-verify provisional copy prefix-guess path)
       (let ((canonical (manifest-crate manifest)))
         (when (and crate-arg
                    (string/= (substitute #\_ #\- canonical)
@@ -145,8 +170,8 @@ use but can still be freed."
           (%commit-generation crate path lib manifest raw copy)
           crate)))))
 
-(defun %open-and-verify (display-name copy prefix)
-  (let* ((lib (dlopen* copy))
+(defun %open-and-verify (display-name copy prefix &optional origin)
+  (let* ((lib (dlopen* copy :origin origin))
          (abi-ptr (or (dlsym-ptr lib (concatenate 'string prefix "abi_version"))
                       (error 'abi-mismatch-error
                              :expected +abi-version+ :actual nil
@@ -296,16 +321,25 @@ fmakunbound."
         (setf (crate-symbols crate) new-symbols)))))
 
 (defun %sweep-crate-cache (name current-copy)
-  "Delete this crate's older cache copies. Unlinking a still-mapped file is
-safe on POSIX (the mapping keeps the inode alive); copies left by previous
-OS processes reference no live mapping at all. On Windows a loaded DLL
-cannot be deleted at all, so the delete simply fails and is ignored —
-stale copies are swept on a later run once nothing has them open."
-  (let ((prefix (format nil "~A-c" (substitute #\_ #\- name))))
+  "Delete this crate's older cache copies: this process's own previous
+generations right away, and other processes' copies only once they are an
+hour old. The age rule closes the window between another process copying
+its artifact and dlopening it — unlinking a still-MAPPED file is safe on
+POSIX (the mapping keeps the inode alive), but an unlinked not-yet-mapped
+copy makes that process's dlopen fail. On Windows a loaded DLL cannot be
+deleted at all, so the delete simply fails and is ignored."
+  (let* ((base (substitute #\_ #\- name))
+         (any (format nil "~A-" base))
+         (own (format nil "~A-~A-c" base *process-tag*))
+         (now (get-universal-time)))
     (dolist (f (uiop:directory-files (cache-directory)))
-      (when (and (uiop:string-prefix-p prefix (file-namestring f))
-                 (not (equal (namestring f) (namestring current-copy))))
-        (ignore-errors (delete-file f))))))
+      (let ((fname (file-namestring f)))
+        (when (and (uiop:string-prefix-p any fname)
+                   (not (equal (namestring f) (namestring current-copy)))
+                   (or (uiop:string-prefix-p own fname)
+                       (let ((written (ignore-errors (file-write-date f))))
+                         (and written (> (- now written) 3600)))))
+          (ignore-errors (delete-file f)))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Image dump / restore (DESIGN.md §6.5)
@@ -323,6 +357,9 @@ stale copies are swept on a later run once nothing has them open."
   ;; Session bump comes FIRST: even if reloading fails below, every pre-dump
   ;; handle and captured wrapper is already invalid and nothing can
   ;; dereference a dead pointer.
+  ;; a dumped image carries the dumper's tag; every restored instance needs
+  ;; its own before it reloads anything into the shared cache
+  (setf *process-tag* (%compute-process-tag))
   (incf *session*)
   (bt:with-lock-held (*registry-lock*)
     (maphash

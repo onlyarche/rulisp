@@ -7,11 +7,12 @@
   ;; Two facts decide this shape. (1) cffi's compiled code references ASDF
   ;; packages at object-load time (its lazy cffi-libffi loader), and rulisp
   ;; itself calls UIOP at runtime — so both must exist before any linked
-  ;; module initializes. (2) Debian/Ubuntu's ECL ships asdf.fas but not
-  ;; libasdf.a/libcmp.a, so ASDF's default of linking cmp+asdf statically
-  ;; into the program (its image-op on ECL) fails at link time. Hence:
-  ;; :no-uiop t turns that static link off, and the prologue requires
-  ;; asdf.fas at startup instead. The executable already needs the ECL
+  ;; module initializes. (2) Debian/Ubuntu's ECL ships asdf.fas and cmp.fas
+  ;; but no libcmp.a/libasdf.a, while its cmp.asd still declares
+  ;; :lib SYS:LIBCMP.A — so ASDF's default of linking cmp (plus asdf where
+  ;; it finds a prebuilt one) statically into the program fails at link
+  ;; time: ld cannot find libcmp.a. Hence: :no-uiop t turns that static
+  ;; link off, and the prologue requires asdf.fas at startup instead. The executable already needs the ECL
   ;; runtime (libecl.so) from the same installation — ldd shows it — so
   ;; this adds no new deployment dependency.
   :no-uiop t
@@ -24,5 +25,4 @@
   :depends-on ("rulisp")
   :build-operation "program-op"
   :build-pathname "rulisp-ecl-smoke"
-  :entry-point "rulisp-ecl-smoke:main"
   :components ((:file "main")))

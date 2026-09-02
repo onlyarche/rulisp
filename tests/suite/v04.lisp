@@ -265,3 +265,41 @@ mismatched declaration would be UB — the manifest must refuse it."
                   (rulisp::parse-manifest
                    (mf "(:fn :rust-name \"f\" :lisp-name \"f\" :symbol \"f\" :params () :result :unit :error \"Error\")"
                        "f")))))))
+
+;;; ---------------------------------------------------------------------------
+;;; §9: the cache copy name must be unique ACROSS processes sharing a cache.
+;;; Found by the ECL deployment verification: two instances started in the
+;;; same second wrote the same copy, and copy-file rewrote a library the
+;;; other process had already mapped — SEGV. Also: the sweep must not delete
+;;; a fresh copy another process may still be about to dlopen.
+;;; ---------------------------------------------------------------------------
+
+(test v04.cache-copy-names-are-process-unique
+  (let ((a (rulisp::%cache-copy-name "wordbag"))
+        (b (rulisp::%cache-copy-name "wordbag")))
+    (is (search rulisp::*process-tag* a) "name carries no process tag: ~A" a)
+    (is (string/= a b) "two loads in one process got the same copy name")
+    ;; a fresh tag computation (what a restored image does) is the same
+    ;; process, hence the same tag; the field is still non-empty and tagged
+    (is (> (length rulisp::*process-tag*) 1))
+    (is (find (char rulisp::*process-tag* 0) "pr"))))
+
+(test v04.cache-sweep-spares-other-processes-fresh-copies
+  (let* ((dir (rulisp::cache-directory))
+         (own-old (merge-pathnames
+                   (format nil "sweeptest-~A-c1-1.so" rulisp::*process-tag*) dir))
+         (foreign-fresh (merge-pathnames "sweeptest-pOTHER-c1-1.so" dir))
+         (current (merge-pathnames
+                   (format nil "sweeptest-~A-c2-2.so" rulisp::*process-tag*) dir)))
+    (unwind-protect
+         (progn
+           (dolist (f (list own-old foreign-fresh current))
+             (with-open-file (s f :direction :output :if-exists :supersede)
+               (write-string "x" s)))
+           (rulisp::%sweep-crate-cache "sweeptest" current)
+           (is (null (probe-file own-old)) "own older generation not swept")
+           (is (probe-file foreign-fresh)
+               "another process's fresh copy was deleted — that process may not have dlopened it yet")
+           (is (probe-file current) "the current copy was swept"))
+      (dolist (f (list own-old foreign-fresh current))
+        (ignore-errors (delete-file f))))))

@@ -33,15 +33,29 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   it (the two tests the v0.3 risk table promised).
 - **ECL deployment story** (docs/distribution.md Pattern B′): ECL has no
   image dump; applications ship as `asdf:program-op` executables. The
-  documented recipe (`:no-uiop t` because the distro ECL cannot link ASDF
-  statically, a prologue `require`, an explicit epilogue entry call) is
-  exercised by `tests/ecl-program`, a minimal consumer the ECL CI job
-  builds and runs (`make test-ecl-program`).
+  documented recipe (`:no-uiop t` because the distro ECL cannot satisfy
+  ASDF's default static link of `cmp` — no `libcmp.a` — a prologue
+  `require`, an explicit epilogue entry call, and the dependencies loaded
+  before `program-op`, which the bundled ASDF 3.1.8.8 cannot build from a
+  cold cache) is exercised by `tests/ecl-program`, a minimal consumer the
+  ECL CI job builds and runs (`make test-ecl-program`).
 - The dump/restore test (m7) now really runs on CCL — and Windows —
   instead of passing vacuously off SBCL, with a new assertion: a pre-dump
   handle GC'd after restore must not make a foreign call.
 
 ### Fixed
+- **Two processes sharing one crate cache could crash each other.** The
+  cache copy was named `<crate>-c<n>-<universal-time>` with `n` counted per
+  process, so two instances started in the same second wrote the same
+  file, and `copy-file` rewrote a library the other process had already
+  mapped — a segmentation fault (found by the ECL deployment verification,
+  reproduced 5/5). Copies now carry a per-process tag (pid, or a random
+  tag where the host has none), recomputed on image restore; the sweep
+  deletes this process's older generations immediately and other
+  processes' copies only after an hour, so it can no longer unlink a copy
+  another process is about to `dlopen`.
+- A failed `dlopen` names the artifact the user asked for, not only the
+  cache copy.
 - rulisp's load-time compiles are quiet now: on ECL, `compile` prints
   per-function notes, so a deployed program printed dozens of lines every
   time it loaded a crate.

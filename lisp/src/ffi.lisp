@@ -64,14 +64,17 @@
   (defun %find-symbol-in (handle name)
     (%get-proc-address handle name)))
 
-(defun dlopen* (path)
+(defun dlopen* (path &key origin)
   "Load the shared library at PATH; signal with the OS error text on
-failure. Never unloaded — see BOUNDARY.md §9."
+failure. ORIGIN is the artifact PATH was copied from — the name the user
+actually typed, so the error can say so. Never unloaded — see BOUNDARY.md
+§9."
   (let ((h (%open-library (uiop:native-namestring path))))
     (when (cffi:null-pointer-p h)
       (error 'crate-not-loaded-error
-             :name (namestring path)
-             :message (%library-error)))
+             :name (namestring (or origin path))
+             :message (format nil "~A~@[ (cache copy ~A)~]"
+                              (%library-error) (and origin (namestring path)))))
     h))
 
 (defun dlsym-ptr (lib-handle name)

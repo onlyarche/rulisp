@@ -279,7 +279,7 @@ generation let a stale wrapper dereference a new generation's handle — UB)."
   ;; the restore hooks — i.e. after %restore-all-crates has bumped the
   ;; session and reloaded the crate).
   #-(or sbcl ccl)
-  (pass "skipped: no uiop:dump-image on this host — ECL has none; ECL executables ship via asdf:program-op (docs/design/v04-plan.md item 4)")
+  (pass "skipped: no uiop:dump-image on this host (ECL has none — its executables ship via asdf:program-op, docs/distribution.md Pattern B′)")
   #+(or sbcl ccl)
   (let* ((tmp (uiop:temporary-directory))
          (exe (merge-pathnames "rulisp-m1-restore-test" tmp))
