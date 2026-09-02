@@ -5,7 +5,7 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
-## Unreleased (0.4 development)
+## 0.4.0 — 2026-09-02
 
 ### Added
 - **BOUNDARY.md §12: the conformance table.** Every normative claim in

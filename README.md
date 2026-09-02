@@ -106,7 +106,7 @@ threat model: [SECURITY.md](SECURITY.md).
 
 ## Status
 
-0.3.0. CI-verified matrix: SBCL on Linux x86-64, macOS arm64 and
+0.4.0. CI-verified matrix: SBCL on Linux x86-64, macOS arm64 and
 Windows x86-64, Clozure CL 1.13 on Linux x86-64, and ECL 21+ on Linux
 (races, nested callbacks, reload, dump/restore, 10k-op fuzz — all
 green). ECL notes: a C toolchain is required for callbacks (rulisp
@@ -116,7 +116,7 @@ callbacks are unsupported there.
 
 Versions up to 0.2.1 have a soundness hole (issue #1: an explicit
 `'static` in an export signature could retain a Lisp-owned buffer past
-the call) and are yanked — depend on 0.3.0.
+the call) and are yanked — depend on 0.3.0 or later.
 
 Requirements: a Rust toolchain (`cargo`), CFFI-capable Lisp, Quicklisp
 (deps: cffi, babel, trivial-garbage, bordeaux-threads).
