@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-ccl test-ecl-program bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-ccl test-ecl-program audit bench clean
 
 build:
 	$(CARGO) build
@@ -39,6 +39,14 @@ test-ecl-program:
 	  tests/ecl-program/rulisp-ecl-smoke </dev/null > ecl-program-run.log 2>&1; \
 	  st=$$?; cat ecl-program-run.log; test $$st -eq 0 \
 	  && grep -q ECL-PROGRAM-OK ecl-program-run.log && ! grep -q FAIL ecl-program-run.log
+
+# BOUNDARY §7 as a gate over every example, with a self-test proving the
+# audit can still fail (tools/audit-fixture imports signal()).
+audit:
+	sh tools/rulisp-audit-selftest.sh
+	$(CARGO) build --workspace
+	for c in wordbag rx wasm fetch; do \
+	  sh tools/rulisp-audit.sh target/debug/lib$$c.so examples/$$c || exit 1; done
 
 bench:
 	$(SBCL) --non-interactive --load tests/bench.lisp

@@ -1,0 +1,11 @@
+[package]
+name = "audit-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Deliberately imports signal(): tools/rulisp-audit.sh must reject this"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]

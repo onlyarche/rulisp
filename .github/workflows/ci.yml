@@ -15,6 +15,8 @@ jobs:
       - run: cargo test --workspace
       - name: build the ABI oracle (standalone crate)
         run: cargo build --manifest-path tests/m1-handwritten/Cargo.toml
+      - name: BOUNDARY §7 signal audit over every example (with self-test)
+        run: make audit
 
   sbcl-linux:
     name: SBCL / Linux x86-64 (required)

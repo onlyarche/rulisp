@@ -206,6 +206,19 @@ its debugger with stdin at EOF exits 0 (a memory fault instead aborts
 with exit 134 and a core dump), so a wrapper script or CI step must gate
 on a printed marker, never on the exit code alone.
 
+## Audit your glue crate
+
+BOUNDARY.md §7 asks every glue author to keep signal handlers out of the
+dependency graph. `tools/rulisp-audit.sh ARTIFACT [CRATE_DIR]` makes that
+a command: it fails if the built artifact imports a signal-disposition
+symbol (`sigaction`, `signal`, `sigprocmask`, …), if tokio's `signal` or
+`process` features are on, or if `block_on` appears in the glue sources.
+`make audit` runs it over every example in CI, after a self-test that
+builds a library which deliberately imports `signal()` and requires the
+audit to reject it — the check that keeps the gate from going inert (an
+anchored regex once made it so). Linux and macOS; on Windows it prints a
+SKIP line (`dumpbin /imports` is the manual equivalent).
+
 ## Pattern C — build on the user's machine (developers)
 
 `rulisp:use-crate` is the dev path: cargo build + load, with

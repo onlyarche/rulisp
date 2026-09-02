@@ -31,6 +31,12 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   its hook quiesces every live tokio runtime, and the suite proves the
   whole story by dumping an image with a request in flight and restoring
   it (the two tests the v0.3 risk table promised).
+- **`tools/rulisp-audit.sh`** — BOUNDARY §7 as a command for any glue
+  crate (signal-disposition imports on the artifact, tokio signal/process
+  features, `block_on`), run over every example by `make audit` in CI. A
+  self-test builds a library that deliberately imports `signal()` and
+  requires the audit to reject it, so the gate cannot go inert unnoticed
+  again. fetch's `audit.sh` is now a wrapper adding its OpenSSL rule.
 - **`#[rulisp(constructor, name = "…")]`** — an explicit Lisp name for a
   constructor. Load-bearing since 0.3 made duplicate `:lisp-name` a hard
   error: two constructors on one type both derived `make-<type>`, so a

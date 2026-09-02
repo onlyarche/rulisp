@@ -46,9 +46,10 @@ panel with two verifying judges).
    grammar became strict on the way (misspelled keys used to be ignored
    silently). Oracle, manifest and golden co-updated; trybuild pins the
    four rejection paths.
-6. **Reusable signal-audit tool** — extract fetch's audit.sh into
-   `tools/rulisp-audit.sh`, run it over all examples in CI, with a
-   deliberately-failing fixture so the gate can never go inert again.
+6. ✅ **Reusable signal-audit tool** — `tools/rulisp-audit.sh`, run over
+   all four examples by `make audit` in CI; `tools/audit-fixture` imports
+   `signal()` on purpose and the self-test requires the audit to reject
+   it. The last GAP row in BOUNDARY §12 closed with it.
 7. **docs/benchmarks.md** — the 24×/307× numbers get a documented,
    dated, release-profile method (`make bench` already builds release).
 8. **ECL CI promotion to required** — gated on item 4 plus a green

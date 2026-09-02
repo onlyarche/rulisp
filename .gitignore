@@ -15,3 +15,4 @@ examples/*/target-abort-check/
 # ECL program-op smoke executable and its logs
 tests/ecl-program/rulisp-ecl-smoke
 ecl-program-*.log
+tools/audit-fixture/target/

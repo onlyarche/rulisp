@@ -94,6 +94,9 @@ methods become `rx:regex-is-match` etc., free fns keep their kebab-cased
 name. What the macros add for you: panic catching in every shim, UTF-8
 `(ptr,len)` string passing, opaque-handle lifecycle with GC finalizers,
 error → condition mapping, and the embedded manifest the Lisp side reads.
+A second constructor on the same type needs its own name —
+`#[rulisp(constructor, name = "make-regex-from-parts")]` — because the
+derived one would collide, and duplicate Lisp names are a load-time error.
 
 ## 2. Load and use it
 
