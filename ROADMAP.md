@@ -53,8 +53,13 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    generated code, `make check-versions` (fails on a skewed site),
    docs/releasing.md, and `SBCL / Linux aarch64 (best-effort)` — green on
    its first run.
-9. **`:string` ASCII fast path** — a typed ASCII loop before babel (both
-   judges measured ~2.5×); zero-copy `:string` stays refused.
+9. ✅ **`:string` ASCII fast path** — a typed check-and-store loop in
+   both directions, babel from the first char/byte ≥ 128, a peek before
+   any allocation so non-ASCII text pays nothing extra: 64 KiB ASCII
+   1015 → 318 µs (3.2×), non-ASCII unchanged. Differentially tested
+   against babel on all three hosts (no counterexample in ~12k checks)
+   and swept adversarially through echo; zero-copy `:string` stays
+   refused.
 10. **Miri over the generated shims** — optional; cut first.
 11. **User-facing docs claim audit, last** — README still says
     "Scope (v0.1)"; every capability claim gets a citation or is deleted.
