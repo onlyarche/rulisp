@@ -29,6 +29,12 @@ pub use meta::{
 /// Bumped only on a wire-format break of the C ABI protocol (DESIGN.md §4).
 pub const ABI_VERSION: u32 = 1;
 
+/// The rulisp release a glue crate was built with — rendered into its
+/// manifest as `:rulisp-version` so a loader can warn about skew
+/// (docs/stability.md §7). Informational: an enhancement key, never
+/// load-bearing.
+pub const RULISP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub const STATUS_OK: i32 = 0;
 pub const STATUS_ERR: i32 = 1;
 pub const STATUS_PANIC: i32 = 2;

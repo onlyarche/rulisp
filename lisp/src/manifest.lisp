@@ -20,7 +20,7 @@
 
 (defstruct (manifest (:constructor %make-manifest))
   schema abi crate crate-version target prefix errors handles functions
-  on-dump)
+  on-dump rulisp-version)
 
 (defun %safe-read (string)
   (with-standard-io-syntax
@@ -127,8 +127,9 @@ refuse only what we can positively identify as wrong). Returns
       (unless (<= schema 1)
         (error 'manifest-error
                :message (format nil "manifest schema ~D is newer than supported (1)" schema)))
-      (%validate-on-dump
-       (%make-manifest
+      (%check-rulisp-version
+       (%validate-on-dump
+        (%make-manifest
        :schema schema
        :abi (%getf-int p :abi)
        :crate (%getf-string p :crate)
@@ -145,7 +146,26 @@ refuse only what we can positively identify as wrong). Returns
        :functions (%check-unique-lisp-names
                    (mapcar #'%parse-fn (getf p :functions))
                    #'fn-spec-lisp-name #'fn-spec-rust-name "function")
-       :on-dump (%getf-string p :on-dump :optional t))))))
+       :on-dump (%getf-string p :on-dump :optional t)
+       :rulisp-version (%getf-string p :rulisp-version :optional t)))))))
+
+(defun %check-rulisp-version (manifest)
+  "docs/stability.md §7: a crate built with a NEWER rulisp major.minor than
+this loader may declare keys the loader ignores — say so, as a
+style-warning, and load anyway. Older or equal: silent. Absent (pre-0.5
+crate): silent."
+  (let* ((built-with (manifest-rulisp-version manifest))
+         (theirs (and built-with (%version-major-minor built-with)))
+         (ours (%version-major-minor *rulisp-version*)))
+    (when (and theirs ours
+               (or (> (first theirs) (first ours))
+                   (and (= (first theirs) (first ours))
+                        (> (second theirs) (second ours)))))
+      (warn 'rulisp-version-skew
+            :crate (manifest-crate manifest)
+            :built-with built-with
+            :loader *rulisp-version*)))
+  manifest)
 
 (defun %validate-on-dump (manifest)
   "BOUNDARY §10: :on-dump must name a declared zero-parameter :unit

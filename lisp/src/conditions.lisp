@@ -73,3 +73,20 @@
              (format s "ABI mismatch: ~@[~A; ~]expected ~A, got ~A"
                      (abi-mismatch-message c)
                      (abi-mismatch-expected c) (abi-mismatch-actual c)))))
+
+
+(define-condition rulisp-version-skew (style-warning)
+  ((crate :initarg :crate :reader rulisp-version-skew-crate)
+   (built-with :initarg :built-with :reader rulisp-version-skew-built-with)
+   (loader :initarg :loader :reader rulisp-version-skew-loader))
+  (:report (lambda (c s)
+             (format s "crate ~A was built with rulisp ~A but this loader is ~A: ~
+                        manifest keys it relies on may be ignored here ~
+                        (docs/stability.md §7)"
+                     (rulisp-version-skew-crate c)
+                     (rulisp-version-skew-built-with c)
+                     (rulisp-version-skew-loader c))))
+  (:documentation "Signaled (as a style-warning) when a crate's manifest
+declares a newer rulisp major.minor than the loader's. Informational: an
+older loader still loads the crate; only enhancement keys it does not know
+are ignored, and a load-bearing key would have raised :schema instead."))

@@ -7,6 +7,21 @@
 
 (defconstant +abi-version+ 1)
 
+(defparameter *rulisp-version*
+  #.(or (ignore-errors (asdf:component-version (asdf:find-system :rulisp)))
+        "0.0.0")
+  "This loader's release, read from rulisp.asd when this file is compiled
+(so a program-op executable carries it without ASDF at runtime). Compared
+with a crate's :rulisp-version for the skew warning (docs/stability.md §7).")
+
+(defun %version-major-minor (string)
+  "\"0.5.2\" -> (0 5); anything unparsable -> NIL."
+  (ignore-errors
+    (let* ((dot1 (position #\. string))
+           (dot2 (and dot1 (position #\. string :start (1+ dot1)))))
+      (list (parse-integer string :end dot1)
+            (parse-integer string :start (1+ dot1) :end dot2)))))
+
 ;; uintptr_t / size_t is pointer-sized on every target: LP64 (Linux, macOS),
 ;; LLP64 (Windows — where `unsigned long` is only 32 bits, which is why
 ;; deriving this from the pointer size rather than naming a C type is the

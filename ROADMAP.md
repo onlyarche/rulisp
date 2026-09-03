@@ -29,11 +29,12 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    copy), `RULISP_FUZZ_SEED` in messages and as a CI dispatch input, and
    `m4h.reload-under-load` for the §4 cross-reload claim. Mutation-tested:
    skipping half the frees makes the race fuzzer fail.
-5. **Manifest skew rule + `:rulisp-version`** — a 0.4 on_dump crate on a
-   0.3 loader silently drops its hook. No retroactive `:schema` bump (it
-   would refuse every 0.5 crate on 0.4.0 loaders); instead the key-class
-   rule in BOUNDARY §11 and an informational version key with a
-   style-warning on skew.
+5. ✅ **Manifest skew rule + `:rulisp-version`** — the key-class rule is
+   normative in BOUNDARY §11; every crate records the rulisp it was built
+   with, and an older loader warns (`rulisp-version-skew`, a
+   style-warning) and loads anyway. The golden carries a placeholder
+   version so a release bump does not rewrite it. The 0.3-loader exposure
+   of `on_dump` is stated in the changelog rather than re-fixed.
 6. **REPL front door** — docstrings synthesized from the manifest,
    `describe` on a crate, then Rust `///` carried as a wire-additive `:doc`
    key (the M part; cut first if the cycle runs long).

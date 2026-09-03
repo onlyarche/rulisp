@@ -85,3 +85,34 @@ an absolute threshold measured GC speed, not inhibition."
                 (is (>= gcs floor)
                     ":vec borrow held for 600 ms: ~D collections completed vs ~D unpinned"
                     gcs control)))))))
+
+;;; ---------------------------------------------------------------------------
+;;; §11 key classes: a crate built with a NEWER rulisp than the loader may
+;;; declare keys the loader ignores — the loader must say so (style-warning)
+;;; and load anyway; older or equal, or a pre-0.5 crate without the key,
+;;; must stay silent.
+;;; ---------------------------------------------------------------------------
+
+(defun %manifest-with-rulisp-version (v)
+  (format nil "(:rulisp-manifest :schema 1 :abi 1 :crate \"x\" :prefix \"x_rulisp_\"~
+               ~@[ :rulisp-version ~S~] :functions ())" v))
+
+(test v05.newer-rulisp-warns
+  (is (rulisp::%version-major-minor rulisp::*rulisp-version*)
+      "the loader's own version ~S does not parse" rulisp::*rulisp-version*)
+  (signals rulisp::rulisp-version-skew
+    (rulisp::parse-manifest (%manifest-with-rulisp-version "99.0.0")))
+  ;; the warning is informational: parsing still succeeds and records it
+  (let ((m (handler-bind ((style-warning #'muffle-warning))
+             (rulisp::parse-manifest (%manifest-with-rulisp-version "99.0.0")))))
+    (is (string= "99.0.0" (rulisp::manifest-rulisp-version m))))
+  ;; older, equal, absent, and unparsable: silent
+  (dolist (v (list "0.0.1" rulisp::*rulisp-version* nil "garbage"))
+    (finishes
+      (handler-bind ((style-warning (lambda (w) (fail "unexpected warning for ~S: ~A" v w))))
+        (rulisp::parse-manifest (%manifest-with-rulisp-version v)))))
+  ;; the example crate we just loaded was built with THIS rulisp
+  (ensure-crate)
+  (is (string= rulisp::*rulisp-version*
+               (rulisp::manifest-rulisp-version
+                (rulisp::crate-manifest rulisp/test::*crate*)))))

@@ -8,6 +8,16 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.5 development)
 
 ### Added
+- **`:rulisp-version` in the manifest, and the key-class rule** (BOUNDARY
+  §11): a load-bearing manifest key raises `:schema`; an enhancement key
+  rides the ignore-unknown-keys rule. Every crate now records the rulisp
+  it was built with, and a loader whose major.minor is older signals
+  `rulisp-version-skew` (a `style-warning`) and loads anyway. Stated
+  plainly, because this rule is new: a crate built with 0.4 or later that
+  declares `on_dump` loads cleanly on a **0.3** loader with its dump hook
+  silently dropped — `:on-dump` predates the rule and stays at `:schema` 1,
+  since a retroactive bump would refuse every newer crate on the 0.4.0
+  loaders that support it fully. Upgrade the loader.
 - **docs/stability.md** — what is stable and what 1.0 will promise: the
   four versioned surfaces (Rust API, the 32-symbol Lisp API, the manifest
   schema, the C ABI) and what breaks each; semver and deprecation policy;

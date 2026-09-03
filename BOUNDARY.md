@@ -253,6 +253,21 @@ Differences from the borrowed form:
   transfer at len 0 — minus UTF-8 validation; Rust sees `&[u8]` in and
   returns `Vec<u8>`.
 
+- **Key classes (0.5).** A new manifest key is an *enhancement* — an
+  older loader that ignores it still runs the crate correctly — or
+  *load-bearing*: a crate that declares it is not correct without it. A
+  load-bearing key raises `:schema` in the release that introduces it,
+  so an older loader refuses the crate instead of mis-running it; an
+  enhancement key rides the ignore-unknown-keys rule. `:on-dump` (0.4) is
+  load-bearing and predates this rule; it stays at `:schema` 1 because a
+  retroactive bump would refuse every newer crate on the 0.4.0 loaders
+  that support it fully — the 0.3-loader exposure (a hook silently never
+  runs) is documented in CHANGELOG 0.5 rather than re-fixed.
+- **`:rulisp-version`** (0.5, enhancement): the rulisp release the crate
+  was built with, e.g. `(:rulisp-version "0.5.0")`. A loader whose own
+  major.minor is older signals `rulisp-version-skew`, a `style-warning`,
+  and loads the crate anyway.
+
 ## 12. Conformance: claim → enforcement
 
 Issue #1 was a documented claim that turned out to be enforced by nothing.
@@ -375,6 +390,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | `:target` checked against the host; unknown tokens pass | runtime-check | `lisp/src/manifest.lisp:103-118` + `lisp/src/crate.lisp:154-160`; test `fx.target-check` (`tests/suite/m2.lisp:71-78`) |
 | Required keys and well-formed specs; any corruption signals a named `manifest-error` | runtime-check | `lisp/src/manifest.lisp:51-61,120-145`; tests `fx.missing-required-keys`, `fx.not-a-manifest`, `fx.bad-param-form` (`tests/suite/m2.lisp`) |
 | `:errors` names become condition classes, subclasses of `rulisp:rust-error` | test | `m3.typed-conditions` (`tests/suite/m3.lisp:11-28`); mechanism `lisp/src/crate.lisp:191-193,267-269` |
+| Load-bearing keys raise `:schema`; enhancement keys ride the ignore rule; a newer crate warns `rulisp-version-skew` on an older loader | test | `v05.newer-rulisp-warns` (`tests/suite/v05.lisp`); `%check-rulisp-version` (`lisp/src/manifest.lisp`); rule text §11 |
 | Unknown keys are ignored everywhere; additive evolution is free | test | `fx.unknown-keys-ignored` (`tests/suite/m2.lisp:57-61`); getf-based parsing ignores by construction |
 | Type vocabulary is closed: tokens outside it signal `manifest-error` at binding generation | runtime-check | `lisp/src/codegen.lisp:40-42,63-69,141-149`; test `fx.partial-generation-ban` (`m2.lisp:96-118`); macro side: trybuild `ui/bad_type.rs` |
 | `(:option T)`: leading uint8 present flag; value meaningful only when present; Lisp NIL ↔ None | test | `v02.option-result` + `v02.option-param` (`tests/suite/v02.lisp:52-62`); mechanism `codegen.lisp:248-269,360-379`, `ffi.lisp:183-193` |

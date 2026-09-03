@@ -259,6 +259,9 @@ pub fn render_manifest(
     out.push_str(crate_name);
     out.push_str("\"\n :crate-version \"");
     out.push_str(crate_version);
+    // enhancement key (docs/stability.md §7): pre-0.5 loaders ignore it
+    out.push_str("\"\n :rulisp-version \"");
+    out.push_str(crate::RULISP_VERSION);
     out.push_str("\"\n :target \"");
     out.push_str(TARGET);
     out.push_str("\"\n :prefix \"");
