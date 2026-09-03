@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc bench clean
 
 build:
 	$(CARGO) build
@@ -52,6 +52,11 @@ audit:
 	$(CARGO) build --workspace
 	for c in wordbag rx wasm fetch; do \
 	  sh tools/rulisp-audit.sh target/debug/lib$$c.so examples/$$c || exit 1; done
+
+# what docs.rs will show: no missing docs, no broken links, doctest compiles
+doc:
+	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --no-deps -p rulisp -p rulisp-macros -p rulisp-runtime
+	$(CARGO) test --doc -p rulisp
 
 bench:
 	$(SBCL) --non-interactive --load tests/bench.lisp

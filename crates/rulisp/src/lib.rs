@@ -3,12 +3,59 @@
 //! Write plain Rust, annotate it with `#[rulisp::handle]` / `#[rulisp::export]`,
 //! list the exports in `rulisp::module!`, build a cdylib — then load it from
 //! Common Lisp with `(rulisp:use-crate #p"...")`.
+//!
+//! ```
+//! use rulisp::prelude::*;
+//! use std::sync::Mutex;
+//!
+//! /// An opaque object Lisp holds by handle; freed by `rulisp:free` or the GC.
+//! #[rulisp::handle]
+//! pub struct WordBag { words: Mutex<Vec<String>> }
+//!
+//! #[rulisp::export]
+//! impl WordBag {
+//!     #[rulisp(constructor)]                 // -> (wordbag:make-word-bag)
+//!     pub fn new() -> WordBag { WordBag { words: Mutex::new(Vec::new()) } }
+//!
+//!     /// Rejects the empty word — an `Err` becomes a Lisp condition.
+//!     pub fn add(&self, word: &str) -> Result<(), Error> {
+//!         if word.is_empty() { return Err(Error::msg("empty word not allowed")); }
+//!         self.words.lock().unwrap().push(word.to_owned());
+//!         Ok(())
+//!     }
+//!
+//!     pub fn len(&self) -> u64 { self.words.lock().unwrap().len() as u64 }
+//! }
+//!
+//! #[rulisp::export]
+//! pub fn greet(name: &str) -> String { format!("Hello, {name}!") }
+//! # fn main() {}
+//! ```
+//!
+//! The last piece, `rulisp::module!`, lists the exports and must live in
+//! the cdylib crate (its `name:` is checked against the package name):
+//!
+//! ```ignore
+//! rulisp::module! {
+//!     name: "wordbag",
+//!     handles: [WordBag],
+//!     fns: [greet, WordBag::new, WordBag::add, WordBag::len],
+//! }
+//! ```
+//!
+//! What crosses the boundary, how errors and panics map to conditions, and
+//! what is undefined, is the contract in `BOUNDARY.md`; the attribute
+//! grammar and the type vocabulary are on [`export`], [`handle`] and
+//! [`module`].
+#![warn(missing_docs)]
 
 pub use rulisp_macros::{export, handle, module};
 pub use rulisp_runtime as runtime;
 
 use std::marker::PhantomData;
 
+/// Everything a glue crate normally needs: the three macros, [`Error`],
+/// [`Callback`] and [`StoredCallback`].
 pub mod prelude {
     pub use crate::{export, handle, module, Callback, Error, StoredCallback};
 }
@@ -19,6 +66,8 @@ pub mod prelude {
 pub struct Error(String);
 
 impl Error {
+    /// An error carrying just a message; on the Lisp side it signals
+    /// `<crate>:rust-error` with that message.
     pub fn msg(m: impl Into<String>) -> Self {
         Error(m.into())
     }
@@ -56,7 +105,9 @@ impl From<CallbackError> for Error {
 /// and the manifest agree on; also what makes `&T` parameters type-check as
 /// handle parameters.
 pub trait HandleType: Send + Sync + 'static {
+    /// The Rust type name as it appears in the manifest (`"WordBag"`).
     const RUST_NAME: &'static str;
+    /// The Lisp class name the loader generates (`"word-bag"`).
     const LISP_NAME: &'static str;
 }
 
@@ -148,6 +199,10 @@ impl<A> StoredCallback<A, ()> {
         }
     }
 
+    /// Invoke the registered Lisp closure, from any thread. `Err` means the
+    /// closure signaled (the condition was warned about on the Lisp side)
+    /// or its token has been unregistered or garbage-collected — a dead
+    /// token fails safely, it never dangles.
     pub fn call<Args: CbArgsFor<A>>(&self, args: Args) -> Result<(), CallbackError> {
         let status =
             unsafe { CbArgsFor::invoke(self.fnptr as *const (), self.id, args) };

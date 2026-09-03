@@ -8,6 +8,10 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.5 development)
 
 ### Added
+- **docs.rs front door** — the three macros document the full attribute
+  grammar and the closed type vocabulary, every public item in `rulisp`
+  has a doc, the crate-level example is a compiled doctest, and CI builds
+  the docs with `missing_docs` and broken links as errors.
 - **Docstrings, `describe`, and `:doc`** — the REPL front door. Every
   generated function and handle class now has a docstring synthesized
   from the manifest (the Lisp call shape, the Rust signature, and which

@@ -3,6 +3,7 @@
 //! The generated shims are pinned by the hand-written ABI oracle in
 //! `tests/m1-handwritten/` and the manifest formatting by the golden
 //! snapshot in `tests/golden/` (byte-identity gate, DESIGN.md §8 M3).
+#![warn(missing_docs)]
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -856,6 +857,19 @@ fn meta_const_ident(name: &str) -> Ident {
 // #[rulisp::handle]
 // ---------------------------------------------------------------------------
 
+/// Mark a struct as an opaque handle type: Lisp holds it by pointer, calls
+/// `&self` methods on it, and frees it with `rulisp:free` or lets the GC
+/// finalizer do it.
+///
+/// ```ignore
+/// #[rulisp::handle]
+/// pub struct WordBag { words: Mutex<Vec<String>> }
+/// ```
+///
+/// Requirements, enforced at compile time: `Send + Sync + 'static` (the
+/// finalizer may drop on any thread; concurrent `&self` calls are
+/// allowed). Methods are exported with [`export`] on an `impl` block. A
+/// `///` comment on the struct becomes the Lisp class docstring.
 #[proc_macro_attribute]
 pub fn handle(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as ItemStruct);
@@ -914,6 +928,50 @@ pub fn handle(_attr: TokenStream, item: TokenStream) -> TokenStream {
 // #[rulisp::export]
 // ---------------------------------------------------------------------------
 
+/// Export a free function, or every method of an `impl` block of a
+/// [`handle`] type, to Lisp.
+///
+/// ```ignore
+/// #[rulisp::export]
+/// pub fn greet(name: &str) -> String { format!("Hello, {name}!") }
+///
+/// #[rulisp::export]
+/// impl WordBag {
+///     #[rulisp(constructor)]                      // (wordbag:make-word-bag)
+///     pub fn new() -> WordBag { ... }
+///     #[rulisp(constructor, name = "make-word-bag-from")]
+///     pub fn from_csv(csv: &str) -> WordBag { ... }
+///     pub fn add(&self, word: &str) -> Result<(), Error> { ... }
+/// }
+/// ```
+///
+/// # Attribute grammar (inside an exported `impl`)
+///
+/// | Attribute | Meaning |
+/// |---|---|
+/// | `#[rulisp(constructor)]` | an associated fn returning the handle type (or `Result` of it); Lisp name `make-<type>` |
+/// | `#[rulisp(constructor, name = "…")]` | the same with an explicit Lisp name — required for a second constructor, since duplicate Lisp names are a load-time error |
+///
+/// Anything else — an unknown key, a non-string name, a name that would
+/// not read as one Lisp symbol, `name` on a non-constructor, a constructor
+/// taking `&self`, `&mut self`, by-value `self` — is a compile error.
+///
+/// # The type vocabulary (closed; BOUNDARY.md §11)
+///
+/// | Rust | Lisp |
+/// |---|---|
+/// | `i8..i64`, `u8..u64`, `f32`, `f64`, `bool` | numbers, `t`/`nil` |
+/// | `&str` param, `String` result | string |
+/// | `&[u8]` param, `Vec<u8>` result | `(unsigned-byte 8)` vector |
+/// | `&[scalar]` param, `Vec<scalar>` result | specialized vector |
+/// | `Option<T>` of the above (not `bool`) | `nil` ↔ `None` |
+/// | `&Handle` param, `Handle` result | a handle object |
+/// | `Callback<(A, …), ()>` param | a Lisp function, callable during the call only |
+/// | `StoredCallback<(A, …)>` param | a `rulisp:callback` token Rust may keep and call from any thread |
+/// | `Result<T, E>` result | `T`, or the condition `<crate>:<e>` — `E: Display` |
+///
+/// Explicit lifetimes are rejected: a borrowed argument is valid for the
+/// duration of the call only. A `///` comment becomes the Lisp docstring.
 #[proc_macro_attribute]
 pub fn export(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item2: TokenStream2 = item.clone().into();
@@ -1243,6 +1301,23 @@ fn meta_path(p: &Path) -> Result<TokenStream2, Error> {
     }
 }
 
+/// Declare the crate's export registry and emit the manifest, the ABI
+/// entry points and the per-crate allocator. Exactly one per cdylib.
+///
+/// ```ignore
+/// rulisp::module! {
+///     name: "wordbag",                 // must equal the cargo package name
+///     handles: [WordBag],              // every #[rulisp::handle] type
+///     fns: [greet, WordBag::new, WordBag::add],   // every export, in manifest order
+///     on_dump: shutdown_all,           // optional: a zero-arg export run before an image dump
+/// }
+/// ```
+///
+/// The registry is explicit by design: a function missing from `fns` is
+/// simply not exported, and a typo there is a compile error (unresolved
+/// constant). `on_dump` must name a zero-argument fn that also appears
+/// in `fns`; the loader calls it before `save-lisp-and-die` so a crate
+/// that owns threads can quiesce them (BOUNDARY.md §10).
 #[proc_macro]
 pub fn module(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ModuleInput);

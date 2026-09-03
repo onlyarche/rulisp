@@ -39,8 +39,10 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    the manifest on every function and handle class, `describe-object` on
    a crate, and Rust `///` carried as the `:doc` enhancement key with a
    proper string escaper in the renderer (the golden now carries nine).
-7. **docs.rs front door** — `///` on the three macros with the full
-   attribute grammar, `missing_docs` clean.
+7. ✅ **docs.rs front door** — `///` on the three macros with the
+   attribute grammar and the type table, `missing_docs` clean on `rulisp`
+   and `rulisp-macros`, a compiled crate-level doctest, `make doc` and a
+   CI step with `RUSTDOCFLAGS=-D warnings`.
 8. **Release engineering + Linux aarch64** — GitHub Releases with audited
    blobs for every required host and all four examples, `rust-version`
    with an MSRV job, `make check-versions`, docs/releasing.md; an arm CI

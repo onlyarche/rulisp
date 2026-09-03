@@ -24,6 +24,10 @@ jobs:
       - run: cargo test --workspace
       - name: build the ABI oracle (standalone crate)
         run: cargo build --manifest-path tests/m1-handwritten/Cargo.toml
+      - name: docs.rs front door (missing_docs, broken links)
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p rulisp -p rulisp-macros -p rulisp-runtime
+      - name: crate-level doctest
+        run: cargo test --doc -p rulisp
       - name: BOUNDARY §7 signal audit over every example (with self-test)
         run: make audit
 
