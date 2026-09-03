@@ -310,7 +310,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Strings have align 1; `len == capacity` guaranteed by construction | runtime-check | `crates/rulisp-runtime/src/lib.rs:168-181` (`into_boxed_slice`); align-1 dealloc `lisp/src/ffi.lisp:243-245` |
 | Empty transfer: len 0 carries no allocation and dealloc is skipped | test | `v02.bytes-roundtrip` + `v02.bytes-alloc-pairing` (`tests/suite/v02.lisp:20,33`); `m3.strings` ECHO `""` |
 | len-0 dangling pointer never dereferenced; size-0 dealloc is a no-op | runtime-check | `lisp/src/ffi.lisp:134-150,234-241`; `crates/rulisp-runtime/src/lib.rs:231-234` |
-| Never libc free/another library's dealloc; gen-N buffers freed via gen N's dealloc across reloads | runtime-check | `lisp/src/codegen.lisp:13-21,286-298` (immutable gen-ctx captures dealloc-ptr); no concurrent-reload test |
+| Never libc free/another library's dealloc; gen-N buffers freed via gen N's dealloc across reloads | test | `m4h.reload-under-load` (`tests/suite/m4.lisp`): threads round-trip strings across three live reloads and every generation's allocation counter returns to zero; mechanism `lisp/src/codegen.lisp` (immutable gen-ctx captures dealloc-ptr) |
 | **§5 — Handles** | | |
 | Handle is `void*` = `Box::into_raw(Box<T>)`; constructors return it via `void **out` | runtime-check | `crates/rulisp-runtime/src/lib.rs:243-245` (`handle_new`); `crates/rulisp-macros/src/lib.rs:623-626` (`out: *mut *mut c_void`) |
 | Method shims reborrow `const void*` → `&T` | runtime-check | `crates/rulisp-runtime/src/lib.rs:253-255` (`handle_ref`); `crates/rulisp-macros/src/lib.rs:535-544` |

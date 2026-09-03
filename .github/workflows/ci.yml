@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      fuzz_seed:
+        description: 'RULISP_FUZZ_SEED for the m4 fuzzers (empty = default 42)'
+        required: false
+        default: ''
+
+env:
+  RULISP_FUZZ_SEED: ${{ github.event.inputs.fuzz_seed || '' }}
 
 jobs:
   rust:

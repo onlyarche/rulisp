@@ -23,8 +23,11 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    version counted requests and passed on the broken code, its second
    let a warm-up window through; the shipped one starts counting at the
    call.
-4. **Falsifiable fuzzers** — end-of-run live-count reconciliation, a
-   reload-under-load test, a seed from the environment printed on failure.
+4. ✅ **Falsifiable fuzzers** — per-generation live-count reconciliation
+   (captured wrappers, so reloaded generations reconcile against their own
+   copy), `RULISP_FUZZ_SEED` in messages and as a CI dispatch input, and
+   `m4h.reload-under-load` for the §4 cross-reload claim. Mutation-tested:
+   skipping half the frees makes the race fuzzer fail.
 5. **Manifest skew rule + `:rulisp-version`** — a 0.4 on_dump crate on a
    0.3 loader silently drops its hook. No retroactive `:schema` bump (it
    would refuse every 0.5 crate on 0.4.0 loaders); instead the key-class

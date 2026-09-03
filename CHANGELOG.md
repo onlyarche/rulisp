@@ -19,6 +19,18 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   inhibited GC. `v05.pin-does-not-stop-the-world` proves it on all three.
 
 ### Changed
+- **The fuzzers can fail now.** `m4h.thread-race` and
+  `m4h.random-op-sequence` asserted only "no unexpected condition"; a
+  leaked in-flight count or a free that never reached Rust passed. Both
+  now reconcile every generation's live-handle and live-allocation
+  counters at the end (captured as wrapper closures, so generations
+  reloaded mid-run reconcile against their own library copy), take their
+  seed from `RULISP_FUZZ_SEED` (a `workflow_dispatch` input in CI) and
+  print it on failure. Verified by mutation: with half of all frees
+  skipped, the race fuzzer reports the leak. New `m4h.reload-under-load`
+  proves BOUNDARY §4's cross-reload claim — strings round-tripped by four
+  threads across three live reloads are released through their own
+  generation's dealloc; every generation ends at zero.
 - The fetch suite runs in CI (SBCL/Linux and CCL/Linux required; macOS
   best-effort) — the 23 tests BOUNDARY §12 cites had only ever run on the
   maintainer's machine. Its first run on CCL fixed two host assumptions in
