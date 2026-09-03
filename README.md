@@ -8,6 +8,7 @@ live reload included.
 
 ```rust
 use rulisp::prelude::*;
+use std::sync::Mutex;
 
 #[rulisp::handle]
 pub struct WordBag { words: Mutex<Vec<String>> }
@@ -72,9 +73,10 @@ The hard problems are handled structurally, not by convention:
 - **Panics** become `rulisp:rust-panic` conditions; `panic = "abort"`
   builds fail to compile.
 - **Handles** are gated by a state machine (in-flight counting + deferred
-  free): double frees, use-after-free, free-during-call races, stale
-  handles after reload or image restore — all signal named conditions
-  instead of corrupting memory.
+  free): a second free is refused (idempotent, returns NIL), use-after-free
+  and stale handles after reload or image restore signal named
+  conditions, and a free racing an in-flight call is deferred until that
+  call returns — memory is never corrupted.
 - **Callbacks** are borrowed, same-thread, lifetime-pinned (`!Send`):
   storing one is a compile error. A Lisp condition tunnels through Rust
   (destructors run) and re-signals as the *same object*.
@@ -83,14 +85,14 @@ The hard problems are handled structurally, not by convention:
 - **Image dump/restore** (`save-lisp-and-die`) invalidates every pre-dump
   handle via a session counter and regenerates all bindings on startup.
 
-**Start here:** [docs/installation.md](docs/installation.md) (Linux/macOS
-setup, dependencies), then [docs/quickstart.md](docs/quickstart.md) —
-wrapping the real `regex` crate in 10 minutes (the finished example is
-[`examples/rx/`](examples/rx/)). [docs/usage.md](docs/usage.md) explains
+**Start here:** [docs/installation.md](docs/installation.md)
+(Linux/macOS/Windows setup, dependencies), then
+[docs/quickstart.md](docs/quickstart.md) — wrapping the real `regex`
+crate (the finished example is [`examples/rx/`](examples/rx/)). [docs/usage.md](docs/usage.md) explains
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
 toolchain needed) vs building your own. For something bigger,
 [`examples/wasm/`](examples/wasm/) gives Common Lisp a WebAssembly runtime
-in ~190 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
+in under 250 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
 their exports under a fuel-metered CPU budget (runaway guest code traps as
 a condition instead of hanging the image), move byte buffers in and out of
 the guest's linear memory (bounds-checked; out-of-bounds is a condition),
@@ -98,7 +100,10 @@ wire host functions so GUEST code calls straight into your Lisp closures
 (stored callbacks; a condition in the closure becomes a guest trap), and
 watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
-matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
+matters). [`examples/fetch/`](examples/fetch/) is an async HTTPS client
+on tokio and rustls: the pattern for a crate that owns threads (capped
+waits, no signal handlers, a declared dump hook), with its own suite in
+CI. The full contract is in [BOUNDARY.md](BOUNDARY.md);
 architecture and rationale in [DESIGN.md](DESIGN.md) (Korean). Measured boundary costs, with the method:
 [docs/benchmarks.md](docs/benchmarks.md). What is stable, what 1.0 will
 promise, and how hosts are supported: [docs/stability.md](docs/stability.md). Release
@@ -107,10 +112,20 @@ threat model: [SECURITY.md](SECURITY.md).
 
 ## Status
 
-0.4.0. CI-verified matrix: SBCL on Linux x86-64, macOS arm64 and
-Windows x86-64, Clozure CL 1.13 on Linux x86-64, and ECL 21+ on Linux
-(races, nested callbacks, reload, dump/restore, 10k-op fuzz — all
-green). ECL notes: a C toolchain is required for callbacks (rulisp
+0.4.0. A host is supported exactly when it is a **required** CI job
+(docs/stability.md §5); this table is that matrix, and nothing else is
+claimed:
+
+| Host | Linux x86-64 | macOS arm64 | Windows x86-64 | Linux aarch64 |
+|---|---|---|---|---|
+| SBCL 2.1.11+ | required | required | required | best-effort |
+| Clozure CL 1.13 | required | — | — | — |
+| ECL 21.2.1 | required | — | — | — |
+
+Every required job runs the full gate (races, nested callbacks, reload,
+the 10k-op fuzzers, and dump/restore where the host dumps images); SBCL
+and CCL on Linux also run the async HTTPS example, and the ECL job
+builds and runs a `program-op` executable. ECL notes: a C toolchain is required for callbacks (rulisp
 natively compiles trampolines to dodge an upstream GC bug we root-caused
 — docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread stored
 callbacks are unsupported there.
@@ -123,23 +138,28 @@ Requirements: a Rust toolchain (`cargo`), CFFI-capable Lisp, Quicklisp
 (deps: cffi, babel, trivial-garbage, bordeaux-threads).
 
 ```sh
-make test-m4    # full gate: cargo tests + all suites on SBCL
-make test-ccl   # same suites on Clozure CL
+make test-m4    # full gate: cargo tests + every suite but fetch, on SBCL
+make test-fetch # the async HTTPS example (hermetic)
+make test-ccl   # the m4 suites on Clozure CL
 ```
 
-## Scope (v0.1)
+## What crosses the boundary
 
-In: scalars, `bool`, `&str`/`String`, `&[u8]`/`Vec<u8>` byte buffers,
-`Option<T>` (NIL ↔ None), `&[scalar]`/`Vec<scalar>` vectors, opaque
-handles (`&self` methods, constructors), borrowed same-thread callbacks
-AND stored any-thread callbacks (`StoredCallback` + `rulisp:callback`
-tokens — fail-safe lifetime, verified cross-thread on SBCL and CCL),
-`Result` errors → typed conditions, prebuilt-blob loading
-(`load-blob-crate`, no Rust toolchain needed), live reload, image
-dump/restore, `use-value`/`retry-build` restarts.
+Scalars, `bool`, `&str`/`String`, `&[u8]`/`Vec<u8>` byte buffers,
+`Option<T>` (NIL ↔ None; `Option<bool>` is refused), `&[scalar]`/
+`Vec<scalar>` vectors, opaque handles (`&self` methods, constructors),
+borrowed same-thread callbacks and stored any-thread callbacks
+(`StoredCallback` + `rulisp:callback` tokens — fail-safe lifetime,
+verified cross-thread on SBCL and CCL), `Result` errors → typed
+conditions, prebuilt-blob loading (`load-blob-crate`, no Rust toolchain
+needed), live reload, image dump/restore on SBCL and CCL (ECL has no
+image dump — ship a `program-op` executable, docs/distribution.md),
+`use-value`/`retry-build` restarts. The closed type vocabulary, token by
+token, is BOUNDARY.md §11; every claim on this page has a citation in
+docs/claims.md, the claims register.
 
-Out for now — see [ROADMAP.md](ROADMAP.md): `Vec<String>`/nested
-containers, multiple return values, non-SBCL image dump.
+Out — see [ROADMAP.md](ROADMAP.md): `Vec<String>`/nested containers,
+multiple return values.
 
 rulisp is for writing glue crates — it does not auto-bind arbitrary
 existing crates, by design (neither does PyO3).

@@ -79,6 +79,32 @@ jobs:
             --eval '(format t "LOADED-WITHOUT-CARGO~%")' \
             | tee no-cargo.log
           grep -q LOADED-WITHOUT-CARGO no-cargo.log
+      # docs/installation.md "Getting rulisp": the local-projects route,
+      # verified as written — nothing pushed onto asdf:*central-registry*
+      - name: load :rulisp from quicklisp local-projects
+        run: |
+          ln -s "$PWD" "$HOME/quicklisp/local-projects/rulisp"
+          sbcl --non-interactive \
+            --eval '(load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))' \
+            --eval '(ql:quickload :rulisp :silent t)' \
+            --eval '(format t "LOCAL-PROJECTS-OK~%")' | tee lp.log
+          grep -q LOCAL-PROJECTS-OK lp.log
+      # docs/usage.md Case A, as written: the latest release's asset,
+      # downloaded and loaded with load-blob-crate, cargo out of reach
+      - name: load a downloaded release asset with load-blob-crate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/blobs
+          gh release download --pattern 'libwordbag-linux-x86_64.so' --dir /tmp/blobs
+          env -i HOME="$HOME" PATH=/bin /usr/bin/sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval '(load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))' \
+            --eval '(push (merge-pathnames "lisp/" (uiop:getcwd)) asdf:*central-registry*)' \
+            --eval '(ql:quickload :rulisp :silent t)' \
+            --eval '(rulisp:load-blob-crate #p"/tmp/blobs/" "wordbag")' \
+            --eval '(format t "BLOB-ASSET-OK ~A~%" (uiop:symbol-call :wordbag :greet "release"))' | tee blob.log
+          grep -q "BLOB-ASSET-OK Hello, release!" blob.log
 
   ccl-linux:
     name: CCL / Linux x86-64 (required)

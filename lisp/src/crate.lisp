@@ -351,9 +351,10 @@ from, which generation, what it exports and with which signatures."
               (loop for h in (manifest-handles m)
                     append (list (package-name pkg) (handle-spec-lisp-name h))))
       (format stream "  Exports (~D):~%" (length (manifest-functions m)))
+      ;; the call shape, not the docstring's first line — for a ///-documented
+      ;; export that line is prose (the v0.5 docs audit caught it)
       (dolist (f (manifest-functions m))
-        (format stream "    ~A~%" (first (uiop:split-string (synthesize-fn-doc f pkg)
-                                                             :separator '(#\Newline))))))))
+        (format stream "    ~A~%" (%call-shape f pkg))))))
 
 (defun %sweep-crate-cache (name current-copy)
   "Delete this crate's older cache copies: this process's own previous

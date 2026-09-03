@@ -58,12 +58,12 @@ from crates.io (0.1.0–0.2.1 were, for issue #1); the ASDF system is not
 
 ## 5. Host support
 
-A host is supported exactly when it is a **required** CI job. Today:
-SBCL on Linux x86-64, macOS arm64 and Windows x86-64; Clozure CL 1.13 on
-Linux x86-64; ECL 21.2.1 on Linux x86-64. A **best-effort** job (today:
-SBCL on Linux aarch64) runs on every push without being required, and is
-not a supported host until promoted. Everything else (LispWorks, Allegro,
-ABCL, other architectures) is untested and unclaimed.
+A host is supported exactly when it is a **required** CI job. The one
+support table lives in [README §Status](../README.md#status) and equals
+the required jobs in `.github/workflows/ci.yml`; a **best-effort** job
+(today: SBCL on Linux aarch64) runs on every push without being required
+and is not a supported host until promoted. Everything else (LispWorks,
+Allegro, ABCL, other architectures) is untested and unclaimed.
 
 Promotion and demotion follow the procedure written into
 `.github/workflows/ci.yml`: a job becomes required after a documented
@@ -126,3 +126,13 @@ the last minute:
 - The examples are not part of the ASDF system and stay out of the dist.
 - The manifest key-class rule (§7) in force, so a dist user on an older
   loader is refused rather than mis-run by a newer crate.
+
+## Appendix: the claims register
+
+Every capability, host and performance claim in README.md and the
+docs/ pages, each with what enforces or demonstrates it — a suite test,
+a trybuild case, a CI job or step, a bench row, or a code site — is
+[docs/claims.md](claims.md), built by the v0.5 docs audit. It is a
+separate file because it is some three hundred rows; the next audit is
+a diff of that file against the pages. A claim it marks **unverified**
+is worded as such on its page.

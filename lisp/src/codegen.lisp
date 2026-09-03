@@ -375,14 +375,21 @@ PTR."
   "\"WordBag\" -> \"word-bag\" (handle class naming, mirrors the macro)."
   (string-downcase (camel-to-kebab rust-name)))
 
+(defun %call-shape (fspec pkg)
+  "The Lisp call shape, e.g. \"(rx:make-regex pattern)\": the first
+synthesized line of the docstring, and what DESCRIBE lists per export
+(the ///-paragraph, when there is one, leads the docstring, not this)."
+  (format nil "(~A:~A~{ ~A~})"
+          (string-downcase (package-name pkg))
+          (string-downcase (fn-spec-lisp-name fspec))
+          (mapcar (lambda (p) (string-downcase (param-name p))) (fn-spec-params fspec))))
+
 (defun synthesize-fn-doc (fspec pkg)
   (let* ((pkg-name (string-downcase (package-name pkg)))
-         (lisp-name (string-downcase (fn-spec-lisp-name fspec)))
          (params (fn-spec-params fspec))
          (err (fn-spec-error fspec))
          (lines
-           (list (format nil "(~A:~A~{ ~A~})" pkg-name lisp-name
-                         (mapcar (lambda (p) (string-downcase (param-name p))) params))
+           (list (%call-shape fspec pkg)
                  (format nil "Rust: ~A(~{~A~^, ~}) -> ~A~@[, Err(~A)~]"
                          (fn-spec-rust-name fspec)
                          (mapcar (lambda (p) (format nil "~(~A~): ~A" (param-name p)
@@ -390,10 +397,17 @@ PTR."
                                  params)
                          (%doc-type (fn-spec-result fspec) pkg)
                          err)
-                 (if err
-                     (format nil "Signals: ~A:~(~A~) (a rulisp:rust-error) on Err."
-                             pkg-name (if (string= err "Error") "rust-error" (camel-to-kebab err)))
-                     "Signals: rulisp:rust-panic on a Rust panic; never a Rust error."))))
+                 ;; a type NAMED Error (rulisp::Error, regex::Error, ...) has no
+                 ;; class of its own: the manifest's :errors excludes it and the
+                 ;; condition is rulisp:rust-error itself — <crate>:rust-error
+                 ;; is not a symbol (the v0.5 docs audit caught the docstring
+                 ;; naming one)
+                 (cond ((null err)
+                        "Signals: rulisp:rust-panic on a Rust panic; never a Rust error.")
+                       ((string= err "Error")
+                        "Signals: rulisp:rust-error on Err.")
+                       (t (format nil "Signals: ~A:~(~A~) (a rulisp:rust-error) on Err."
+                                  pkg-name (camel-to-kebab err)))))))
     (format nil "~@[~A~%~%~]~{~A~^~%~}" (fn-spec-doc fspec) lines)))
 
 (defun synthesize-handle-doc (hspec pkg)

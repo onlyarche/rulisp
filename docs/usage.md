@@ -46,7 +46,10 @@ The four examples ship this way: every release at
 `wasm` and `fetch` for Linux x86-64, macOS arm64 and Windows x86-64,
 built by `.github/workflows/blobs.yml` and audited (docs/distribution.md,
 "Audit your glue crate"). Download the ones for your host into a
-directory and Case A needs no Rust toolchain at all.
+directory and Case A needs no Rust toolchain at all — the SBCL/Linux CI
+job does exactly that with the latest release's `wordbag` on every push.
+(macOS: a dylib downloaded by a browser is quarantined by Gatekeeper —
+see distribution.md, Pattern A.)
 
 Two things to know:
 
@@ -56,9 +59,11 @@ Two things to know:
    `rulisp:abi-mismatch-error` ("not a rulisp crate"). To use an arbitrary
    existing crate (say, an ML or compression library), *someone* writes the
    glue crate once — that's case B.
-2. **The artifact is platform-specific.** A Linux x86-64 `.so` won't load
-   on macOS; rulisp's `:target` check refuses a mismatched artifact with a
-   clear condition instead of an obscure dlopen error.
+2. **The artifact is platform-specific.** A binary the OS cannot map (a
+   Linux `.so` on macOS) fails at `dlopen`, and rulisp signals
+   `rulisp:crate-not-loaded-error` carrying the loader's message; one that
+   maps but was built for another target is refused by the manifest's
+   `:target` check with `rulisp:abi-mismatch-error`.
 
 ## Case B — building your own
 
@@ -129,7 +134,7 @@ This mirrors how PyO3 works (PyO3 is on crates.io, not PyPI):
 - **crates.io** (`rulisp`, `rulisp-macros`, `rulisp-runtime`) serves
   **case-B authors** at *compile time*: cargo fetches them to expand the
   macros and statically link the runtime into your `.so`.
-- **Ultralisp/Quicklisp** (the `rulisp` ASDF system) serves **Lisp users**
+- **Ultralisp** (the `rulisp` ASDF system; Quicklisp at 1.0) serves **Lisp users**
   at *load/run time*: the loader that dlopens artifacts and generates
   bindings.
 - The glue `.so` itself plays the role of Python's wheel: once built, it
@@ -143,19 +148,23 @@ crate answers `describe`:
 
 ```lisp
 CL-USER> (documentation 'rx:make-regex 'function)
-"(rx:make-regex pattern)
+"(rx:make-regex \"[0-9]+\") — a bad pattern signals rulisp:rust-error
+carrying regex's excellent multi-line parse error message.
+
+(rx:make-regex pattern)
 Rust: Regex::new(pattern: :string) -> rx:regex, Err(Error)
-Signals: rx:rust-error (a rulisp:rust-error) on Err."
+Signals: rulisp:rust-error on Err."
 
 CL-USER> (describe (rulisp:use-crate #p"examples/rx/"))
-#<RULISP:CRATE "rx" gen 1 ...> is a rulisp crate.
+#<RULISP:CRATE "rx" gen 1 abi 1 :: 7 fns, 1 handle, package RX> is a rulisp crate.
   Package:        RX
   Generation:     1 (session 0)
   Artifact:       .../examples/rx/target/debug/librx.so
   Built with:     rulisp 0.4.0 (this loader: 0.4.0)
   ...
-  Exports (5):
+  Exports (7):
     (rx:make-regex pattern)
+    (rx:regex-is-match self text)
     ...
 ```
 

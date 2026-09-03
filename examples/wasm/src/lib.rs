@@ -1,4 +1,4 @@
-//! A WebAssembly runtime for Common Lisp, in ~120 lines of glue.
+//! A WebAssembly runtime for Common Lisp, in under 250 lines of glue.
 //!
 //! Loads a `.wasm` (or `.wat` text) module and calls its exports from the
 //! REPL. Runtime choice is deliberate: wasmi is a pure interpreter with NO

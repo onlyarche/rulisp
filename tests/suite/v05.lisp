@@ -143,6 +143,11 @@ an absolute threshold measured GC speed, not inhibition."
     (let ((doc (documentation (find-symbol "SLOW-SUM" pkg) 'function)))
       (is (search "borrowed byte buffer" doc)
           "slow_sum's /// comment is missing from its docstring: ~S" doc))
+    ;; a Result<_, Error> export: the condition is rulisp:rust-error itself;
+    ;; <crate>:rust-error is not a symbol and must not be named
+    (let ((doc (documentation (find-symbol "WORD-BAG-ADD" pkg) 'function)))
+      (is (search "Signals: rulisp:rust-error on Err." doc))
+      (is (not (search "wordbag:rust-error" doc))))
     (let ((doc (documentation (find-class (find-symbol "GRENADE" pkg)) t)))
       (is (search "Drop panics when armed" doc)))))
 
@@ -170,7 +175,10 @@ an absolute threshold measured GC speed, not inhibition."
 (test v05.describe-crate
   (ensure-crate)
   (let ((text (with-output-to-string (s) (describe rulisp/test::*crate* s))))
-    (dolist (needle '("rulisp crate" "Built with" "make-word-bag" "Dump hook" "word-bag"))
+    ;; "(wordbag:slow-sum": the call shape, although slow_sum carries a ///
+    ;; paragraph that leads its docstring
+    (dolist (needle '("rulisp crate" "Built with" "make-word-bag" "Dump hook" "word-bag"
+                      "(wordbag:slow-sum"))
       (is (search needle text) "describe output lacks ~S" needle))))
 
 ;;; ---------------------------------------------------------------------------

@@ -60,9 +60,19 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    against babel on all three hosts (no counterexample in ~12k checks)
    and swept adversarially through echo; zero-copy `:string` stays
    refused.
-10. **Miri over the generated shims** — optional; cut first.
-11. **User-facing docs claim audit, last** — README still says
-    "Scope (v0.1)"; every capability claim gets a citation or is deleted.
+10. ✂ **Miri over the generated shims** — cut, as the plan's cut order
+    said to do first: the shims are macro-generated and byte-identical
+    to the hand-written oracle crate under the golden gate, so the
+    expected yield of a nightly Miri job did not justify another
+    best-effort CI leg this cycle. Not deferred to a date; re-proposed
+    only with a concrete UB hypothesis.
+11. ✅ **User-facing docs claim audit** — 371 claims across README and
+    the six docs pages, each cited in docs/claims.md or corrected (45
+    were flagged; 24 false). It found two loader defects, not just prose:
+    docstrings naming a nonexistent `<crate>:rust-error`, and `describe`
+    printing doc prose where the call shape belongs. One support table,
+    per-host benchmark columns, and two CI steps that follow the pages'
+    own instructions (local-projects, a downloaded release asset).
 
 Not in v0.5 (causes in the plan): a flagship example, vocabulary round 2,
 zero-copy `:string`, a retroactive `:schema 2`, print-object polish, a

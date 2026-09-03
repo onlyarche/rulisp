@@ -1,4 +1,4 @@
-# Quickstart: wrapping a real crate in 10 minutes
+# Quickstart: wrapping a real crate
 
 We'll wrap [`regex`](https://crates.io/crates/regex) — Rust's linear-time
 regular expression engine (no ReDoS, unlike backtracking engines) — and use
@@ -9,7 +9,7 @@ snippet below is taken from a real session.
 
 A Rust toolchain, SBCL (or CCL) with Quicklisp, and this repository set up
 so ASDF finds the `rulisp` system — full per-platform instructions
-(Linux/macOS, dependencies, troubleshooting) are in
+(Linux/macOS/Windows, dependencies, troubleshooting) are in
 [installation.md](installation.md).
 
 ## 1. The glue crate
@@ -63,6 +63,10 @@ impl Regex {
         self.inner.replace_all(text, replacement).into_owned()
     }
 
+    pub fn first_match(&self, text: &str) -> Option<String> {
+        self.inner.find(text).map(|m| m.as_str().to_owned())
+    }
+
     pub fn for_each_match(&self, text: &str, f: Callback<(&str,), ()>) -> Result<u64, Error> {
         let mut n = 0;
         for m in self.inner.find_iter(text) {
@@ -83,7 +87,7 @@ rulisp::module! {
     handles: [Regex],
     fns: [
         Regex::new, Regex::is_match, Regex::count, Regex::replace_all,
-        Regex::for_each_match,
+        Regex::first_match, Regex::for_each_match,
         escape,
     ],
 }
@@ -103,10 +107,10 @@ derived one would collide, and duplicate Lisp names are a load-time error.
 ```lisp
 CL-USER> (asdf:load-system :rulisp)
 CL-USER> (rulisp:use-crate #p"~/src/rx/")   ; cargo build + dlopen + codegen
-#<CRATE "rx" gen 1 abi 1 :: 6 fns, 1 handle, package RX>
+#<RULISP:CRATE "rx" gen 1 abi 1 :: 7 fns, 1 handle, package RX>
 
 CL-USER> (defvar *re* (rx:make-regex "[0-9]+"))
-#<REGEX live gen 1 {1002934303}>
+#<RX:REGEX live gen 1 {1002934303}>
 
 CL-USER> (rx:regex-is-match *re* "abc123")
 T
@@ -143,16 +147,18 @@ CL-USER> (rx:make-regex "(unclosed")
 ```
 
 A Rust panic would arrive as `rulisp:rust-panic` the same way — the image
-survives both. Error types you name in your `Result`s (other than the
-generic `rulisp::Error`) become their own condition classes, e.g. a
-`ParseError` becomes `rx:parse-error`, a subclass of `rulisp:rust-error`.
+survives both. An error type whose name is not `Error` gets its own
+condition class: a `ParseError` becomes `rx:parse-error`, a subclass of
+`rulisp:rust-error`. A type named `Error` — `regex::Error` above, or
+`rulisp::Error` — is reported as `rulisp:rust-error` itself, as the
+transcript shows.
 
 ## 4. Edit Rust, reload, keep your REPL
 
 ```lisp
 ;; ... edit src/lib.rs, then:
 CL-USER> (rulisp:use-crate #p"~/src/rx/")
-#<CRATE "rx" gen 2 ...>
+#<RULISP:CRATE "rx" gen 2 ...>
 
 CL-USER> (rx:regex-is-match *re* "1")   ; handle from generation 1
 ;; Debugger: RULISP:STALE-HANDLE-ERROR — handle gen 1, crate gen 2
@@ -164,18 +170,16 @@ Old generations stay loaded (never `dlclose`d), so stale handles fail
 politely and can always be freed. `rulisp:free` is optional — the GC
 finalizer releases unreachable handles too.
 
-## 5. Fitting your API into v1
+## 5. Fitting your API into the type vocabulary
 
-The v1 type vocabulary: integers, floats, `bool`, `&str`/`String`, opaque
-handles (`&self` methods + constructors), and synchronous same-thread
-callbacks. Patterns for things it doesn't have yet:
+The vocabulary is closed (BOUNDARY.md §11): integers, floats, `bool`,
+`&str`/`String`, `&[u8]`/`Vec<u8>` (`(unsigned-byte 8)` vectors),
+`Option<T>` of those (Lisp NIL ↔ None — `rx:regex-first-match` returns
+the match or NIL; `Option<bool>` is refused, since NIL cannot tell None
+from `Some(false)`), `&[scalar]`/`Vec<scalar>`, opaque handles (`&self`
+methods + constructors), synchronous same-thread callbacks and stored
+any-thread callbacks. Patterns for what it does not have:
 
-- **`Option<T>`** — supported (since 0.2): Lisp NIL ↔ None for scalar,
-  string and byte payloads (`rx:regex-first-match` returns the match or
-  NIL). `Option<bool>` is rejected — nil can't distinguish None from
-  Some(false).
-- **Binary data** — `&[u8]` parameters and `Vec<u8>` returns cross as
-  `(unsigned-byte 8)` vectors (the `:bytes` type, since 0.2).
 - **Iterators/collections** — either a callback (as `for_each_match`
   above) or a handle wrapping the collection with accessor methods.
 - **`&mut self`** — never: use interior mutability (`Mutex`, atomics);
@@ -184,4 +188,5 @@ callbacks. Patterns for things it doesn't have yet:
 When NOT to use rulisp: if you need crash isolation (a misbehaving native
 library must not be able to take the Lisp image down), run the Rust side
 out of process instead — in-process FFI trades that isolation for
-~50ns calls. See BOUNDARY.md for the full contract.
+~25 ns calls on SBCL (docs/benchmarks.md). See BOUNDARY.md for the full
+contract.

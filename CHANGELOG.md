@@ -67,6 +67,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   with no cargo on PATH.
 
 ### Fixed
+- **Docstrings named a symbol that does not exist** — for a
+  `Result<_, Error>` export the synthesized "Signals:" line said
+  `<crate>:rust-error`; the condition is `rulisp:rust-error` itself.
+  `describe` listed a `///`-documented export by its first doc line
+  instead of its call shape; it now prints the call shape for every
+  export. Both surfaced when the docs audit compared usage.md's
+  transcript with the loader's real output.
 - **Audit false positive on macOS** — `tools/rulisp-audit.sh` matched an
   inner `_signal` (`_dispatch_semaphore_signal`, imported by every macOS
   artifact) as a signal import; only a leading underscore is Mach-O's now,
@@ -82,6 +89,18 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   inhibited GC. `v05.pin-does-not-stop-the-world` proves it on all three.
 
 ### Changed
+- **Docs claim audit** — every capability, host and performance claim in
+  README and the docs pages (371 of them) now has a citation in
+  docs/claims.md or was corrected: the handle bullet (a second free is
+  refused, a racing free is deferred), "Scope (v0.1)" and the stale
+  "non-SBCL image dump" out-list, the quickstart's error-class rule and
+  its ~50 ns figure, usage.md's `:target`-check story and its Quicklisp
+  mention, benchmarks.md's 16× comparison, installation.md's
+  cargo-not-found and Windows cache-path rows. One support table (README
+  §Status) equals the required CI matrix; benchmarks.md carries SBCL,
+  CCL and ECL columns. CI now also loads rulisp from Quicklisp's
+  local-projects and `load-blob-crate`s a downloaded release asset, as
+  the pages instruct.
 - **The fuzzers can fail now.** `m4h.thread-race` and
   `m4h.random-op-sequence` asserted only "no unexpected condition"; a
   leaked in-flight count or a free that never reached Rust passed. Both

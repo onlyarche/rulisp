@@ -7,8 +7,8 @@ dependencies, and how to verify the install.
 
 | Dependency | Why | Verified with |
 |---|---|---|
-| Rust toolchain (`cargo`, `rustc`) | builds glue crates; invoked by `rulisp:use-crate` at development time only — loading the `rulisp` system itself needs no Rust | Rust 1.97 (anything recent works; `catch_unwind`, edition 2021) |
-| A Common Lisp | the host | SBCL 2.1.11+ on Linux, macOS and Windows; Clozure CL 1.13 and ECL 21+ on Linux |
+| Rust toolchain (`cargo`, `rustc`) | builds glue crates; invoked by `rulisp:use-crate` at development time only — loading the `rulisp` system itself needs no Rust | 1.78 or newer (the MSRV, checked in CI on exactly that toolchain); tested with 1.97 |
+| A Common Lisp | the host | the support table in [README §Status](../README.md#status) — the CI-required matrix: SBCL 2.1.11+ on Linux, macOS and Windows; Clozure CL 1.13 and ECL 21.2.1 on Linux; Linux aarch64 best-effort |
 | Quicklisp | pulls the CL dependencies | current dist |
 | CL libraries: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads` (+ `fiveam` for the test suites) | FFI, UTF-8, finalizers, locks | Quicklisp dist versions |
 | C toolchain (linker) | Rust needs a system linker | gcc / Xcode CLT / MSVC build tools |
@@ -39,9 +39,10 @@ curl -sL https://github.com/Clozure/ccl/releases/download/v1.13/ccl-1.13-linuxx8
 # binary: ~/ccl/lx86cl64
 ```
 
-musl-based distros (Alpine): glibc-built artifacts won't load; build glue
-crates with the musl target and `-C target-feature=-crt-static`. Not part
-of the tested matrix.
+musl-based distros (Alpine): glibc-built artifacts won't load; the usual
+advice is to build glue crates with the musl target and
+`-C target-feature=-crt-static`. Untested here — nothing in this
+repository's CI covers musl.
 
 ## macOS
 
@@ -146,11 +147,13 @@ cargo test --workspace                # manifest golden + compile-fail tests
 - **cargo discovery**: `use-crate` looks at `$RULISP_CARGO`, then
   `~/.cargo/bin/cargo`, then `cargo` on PATH. A build failure signals
   `rulisp:build-error` carrying cargo's stderr, with a `retry-build`
-  restart.
+  restart; a cargo that cannot be executed at all surfaces as the host's
+  own `run-program` error instead (see Troubleshooting).
 - **Release builds**: `(rulisp:use-crate dir :profile :release)`.
-- **Library cache**: every load dlopens a unique copy under
-  `~/.cache/rulisp/` (`$XDG_CACHE_HOME` respected); older copies are swept
-  automatically.
+- **Library cache**: every load dlopens a unique copy under UIOP's
+  cache directory — `~/.cache/rulisp/` on Linux and macOS,
+  `%LOCALAPPDATA%\cache\rulisp\` on Windows; `$XDG_CACHE_HOME` overrides
+  on every OS. Older copies are swept automatically.
 - **Loading rulisp itself never runs cargo** and opens no foreign
   libraries — cargo is needed only when you `use-crate` a glue crate.
 
@@ -158,7 +161,7 @@ cargo test --workspace                # manifest golden + compile-fail tests
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `rulisp:build-error` "cargo: command not found" | Rust not installed / not on PATH | install rustup, or set `RULISP_CARGO=/path/to/cargo` |
+| `Couldn't execute "…/cargo": No such file or directory` (the host's `run-program` error, not a rulisp condition) | Rust not installed / not on PATH | install rustup, or set `RULISP_CARGO=/path/to/cargo` |
 | `rulisp:crate-not-loaded-error` with a dlopen message | artifact for the wrong platform, or missing system libs | rebuild on this machine (`use-crate`), check the message |
 | `rulisp:abi-mismatch-error` "not a rulisp crate" | the cdylib wasn't built with `rulisp::module!` | add the `module!` block; check the crate name matches |
 | `rulisp:abi-mismatch-error` "different target" | artifact built for another arch/OS | rebuild locally |

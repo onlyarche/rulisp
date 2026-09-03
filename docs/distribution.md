@@ -1,7 +1,8 @@
 # Distributing rulisp-based systems
 
-(M4-(f): guide only — tooling lands in v0.2. Facts below were source-verified
-against the ecosystem in July 2026; see DESIGN.md §9 risk 8.)
+(Ecosystem facts below were source-verified in July 2026 — DESIGN.md §9
+risk 8 — and every claim on this page is cited in docs/claims.md, the
+claims register.)
 
 ## The reality
 
@@ -9,8 +10,9 @@ against the ecosystem in July 2026; see DESIGN.md §9 risk 8.)
   build machine compiles every candidate with ASDF; a `.asd` that shells out
   to cargo fails there. This is the same social contract as cffi-grovel
   needing `cc` — but cargo is a much rarer toolchain. Target
-  **Ultralisp** or **ocicl** instead (both distribute source; your users
-  build locally).
+  **Ultralisp** instead (a source dist; your users build locally — it is
+  where rulisp itself lives). ocicl is the same kind of dist, untried
+  here.
 - Developers using `rulisp:use-crate` have cargo by definition — the
   problem is only *end users* of a library or application built on rulisp.
 
@@ -27,16 +29,20 @@ static/libmycrate-mac-arm64.dylib
 ```
 
 and load with `rulisp:load-crate` picking the file by
-`(uiop:architecture)`/`(uiop:operating-system)`. This ships through any
-source dist as plain data. Caveats:
+`(uiop:architecture)`/`(uiop:operating-system)` — or name them rulisp's
+way (`lib<name>-<os>-<arch>.<ext>`, Pattern B below) and let
+`rulisp:load-blob-crate` pick. This ships through any source dist as
+plain data. Caveats:
 
 - **macOS Gatekeeper quarantines downloaded dylibs** — blobs fetched over
   the network at load time will be refused. Committed-in-repo blobs
   installed via git/quicklisp-style tarballs are fine.
 - musl hosts need separate artifacts built with
   `-C target-feature=-crt-static`.
-- The manifest `:target` check will refuse a wrong-platform artifact with a
-  clear condition instead of a confusing dlopen error.
+- A wrong-platform artifact is refused twice over: one the OS cannot map
+  fails at `dlopen` (`rulisp:crate-not-loaded-error`, carrying the
+  loader's message); one that maps but was built for another target is
+  refused by the manifest `:target` check (`rulisp:abi-mismatch-error`).
 
 ## Pattern B — Deploy (applications)
 
@@ -48,8 +54,10 @@ dump and reopens at boot.
 rulisp needs one adjustment, because Deploy's model is "reopen the same
 library" while rulisp's is "regenerate the bindings from whichever artifact
 we load now" (its own restore hook bumps the session counter and re-runs
-`load-crate`). Let rulisp own the reload and tell Deploy to leave the
-artifact alone:
+`load-crate`). Let rulisp own the reload: keep the crate *unloaded* while
+`asdf:make` runs, so Deploy finds no rulisp library to copy and reopen,
+and load it from the restore hook at boot. (This recipe is not built in
+CI; the ECL one below is.)
 
 ```lisp
 ;; my-app.asd
@@ -183,8 +191,8 @@ packaged by Debian/Ubuntu (bundled ASDF 3.1.8.8):
    executing (EXT:RUN-PROGRAM "gcc" …)` before `load-crate` signals — that
    line is the tell.
 4. **Load the dependencies before `program-op`.** With the bundled ASDF
-   3.1.8.8, `(asdf:make "my-app")` from a cold output cache dies about two
-   minutes in with `COMPILE-FILE-ERROR while compiling #<cl-source-file
+   3.1.8.8, `(asdf:make "my-app")` from a cold output cache dies with
+   `COMPILE-FILE-ERROR while compiling #<cl-source-file
    "cffi" "src" "early-types">` / `The function WARN-IF-KW-OR-BELONGS-TO-CL
    is undefined`: `program-op` compiles a dependency's files without
    loading the earlier ones, so cffi's macro-time helpers are missing. A
@@ -238,4 +246,4 @@ cargo publish -p rulisp
 ```
 
 The ASDF system (`lisp/rulisp.asd`) goes to Ultralisp (GitHub app or manual
-project registration) and/or ocicl.
+project registration); docs/releasing.md is the checklist.

@@ -24,5 +24,6 @@ need lisp/rulisp.asd   ":version \"$V\""   ":version \"$V\""
 need README.md         "^$V\. "            "status line starting \"$V.\""
 need docs/quickstart.md "^rulisp = \"$MM\"" "rulisp = \"$MM\""
 need docs/usage.md      "^rulisp = \"$MM\"" "rulisp = \"$MM\""
+need docs/usage.md      "rulisp $V [(]this loader: $V[)]" "describe transcript 'rulisp $V (this loader: $V)'"
 [ $fail -eq 0 ] && echo "versions consistent: $V (rust-version $RV)"
 exit $fail
