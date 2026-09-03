@@ -348,6 +348,62 @@ PTR."
 ;;; Wrapper generation
 ;;; ---------------------------------------------------------------------------
 
+;;; ---------------------------------------------------------------------------
+;;; Docstrings (0.5). Every generated function and handle class gets one,
+;;; synthesized from the manifest — the signature, the Rust name, the
+;;; condition an Err becomes — with the crate's own `///` text (manifest
+;;; :doc) first when it carries one. Zero wire cost for the synthesized
+;;; part; :doc is an enhancement key (BOUNDARY §11).
+;;; ---------------------------------------------------------------------------
+
+(defun %doc-type (ty pkg)
+  "Render a manifest type token the way a Lisp reader sees it."
+  (cond ((handle-type-p ty)
+         (format nil "~(~A~):~(~A~)" (package-name pkg)
+                 (let ((h (second ty))) (camel-to-kebab-name h))))
+        ((option-type-p ty) (format nil "(:option ~A)" (%doc-type (second ty) pkg)))
+        ((vec-type-p ty) (format nil "(:vec ~(~A~))" (second ty)))
+        ((callback-type-p ty)
+         (format nil "(:callback ~{~A~^ ~})" (mapcar (lambda (x) (%doc-type x pkg))
+                                                     (getf (cdr ty) :params))))
+        ((stored-callback-type-p ty)
+         (format nil "(:stored-callback ~{~A~^ ~})"
+                 (mapcar (lambda (x) (%doc-type x pkg)) (getf (cdr ty) :params))))
+        (t (format nil "~(~S~)" ty))))
+
+(defun camel-to-kebab-name (rust-name)
+  "\"WordBag\" -> \"word-bag\" (handle class naming, mirrors the macro)."
+  (string-downcase (camel-to-kebab rust-name)))
+
+(defun synthesize-fn-doc (fspec pkg)
+  (let* ((pkg-name (string-downcase (package-name pkg)))
+         (lisp-name (string-downcase (fn-spec-lisp-name fspec)))
+         (params (fn-spec-params fspec))
+         (err (fn-spec-error fspec))
+         (lines
+           (list (format nil "(~A:~A~{ ~A~})" pkg-name lisp-name
+                         (mapcar (lambda (p) (string-downcase (param-name p))) params))
+                 (format nil "Rust: ~A(~{~A~^, ~}) -> ~A~@[, Err(~A)~]"
+                         (fn-spec-rust-name fspec)
+                         (mapcar (lambda (p) (format nil "~(~A~): ~A" (param-name p)
+                                                     (%doc-type (param-type p) pkg)))
+                                 params)
+                         (%doc-type (fn-spec-result fspec) pkg)
+                         err)
+                 (if err
+                     (format nil "Signals: ~A:~(~A~) (a rulisp:rust-error) on Err."
+                             pkg-name (if (string= err "Error") "rust-error" (camel-to-kebab err)))
+                     "Signals: rulisp:rust-panic on a Rust panic; never a Rust error."))))
+    (format nil "~@[~A~%~%~]~{~A~^~%~}" (fn-spec-doc fspec) lines)))
+
+(defun synthesize-handle-doc (hspec pkg)
+  (format nil "~@[~A~%~%~]Handle class for the Rust type ~A of crate ~S: an opaque ~
+               object owned by Rust, released by rulisp:free or by the GC. ~
+               A handle from a previous generation or image session signals ~
+               rulisp:stale-handle-error; a freed one, rulisp:freed-handle-error."
+          (handle-spec-doc hspec) (handle-spec-rust-name hspec)
+          (string-downcase (package-name pkg))))
+
 (defun wrapper-form (fspec class-name-for qualified)
   "Builds (lambda (%crate %ctx %fn-ptr) (lambda (args...) ...)) implementing
 FSPEC against one immutable generation context."

@@ -35,9 +35,10 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    style-warning) and loads anyway. The golden carries a placeholder
    version so a release bump does not rewrite it. The 0.3-loader exposure
    of `on_dump` is stated in the changelog rather than re-fixed.
-6. **REPL front door** — docstrings synthesized from the manifest,
-   `describe` on a crate, then Rust `///` carried as a wire-additive `:doc`
-   key (the M part; cut first if the cycle runs long).
+6. ✅ **REPL front door** — all three layers: docstrings synthesized from
+   the manifest on every function and handle class, `describe-object` on
+   a crate, and Rust `///` carried as the `:doc` enhancement key with a
+   proper string escaper in the renderer (the golden now carries nine).
 7. **docs.rs front door** — `///` on the three macros with the full
    attribute grammar, `missing_docs` clean.
 8. **Release engineering + Linux aarch64** — GitHub Releases with audited

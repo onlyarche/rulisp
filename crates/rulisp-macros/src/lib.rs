@@ -46,6 +46,31 @@ fn snake_to_kebab(s: &str) -> String {
     s.replace('_', "-")
 }
 
+/// Collect `///` lines into one normalized string: each line loses the
+/// single leading space rustdoc keeps, lines join with newlines, and the
+/// whole is trimmed. None when there is no doc comment.
+fn doc_of(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for a in attrs {
+        if !a.path().is_ident("doc") {
+            continue;
+        }
+        if let syn::Meta::NameValue(nv) = &a.meta {
+            if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. }) = &nv.value {
+                let raw = s.value();
+                lines.push(raw.strip_prefix(' ').unwrap_or(&raw).to_string());
+            }
+        }
+    }
+    let joined = lines.join("\n");
+    let trimmed = joined.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Type classification (the closed v1 vocabulary)
 // ---------------------------------------------------------------------------
@@ -391,6 +416,7 @@ fn split_result(rt: &ReturnType) -> (Option<Type>, Option<String>) {
 // ---------------------------------------------------------------------------
 
 struct ExportedFn {
+    doc: Option<String>,
     /// e.g. "WordBag::new" or "add"
     rust_name: String,
     lisp_name: String,
@@ -731,6 +757,10 @@ fn gen_fn(f: &ExportedFn) -> Result<TokenStream2, Error> {
 }
 
 fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
+    let doc = match &f.doc {
+        Some(d) => quote! { ::core::option::Option::Some(#d) },
+        None => quote! { ::core::option::Option::None },
+    };
     let rust_name = &f.rust_name;
     let lisp_name = &f.lisp_name;
     let symbol = &f.symbol;
@@ -805,6 +835,7 @@ fn gen_meta_const(f: &ExportedFn) -> TokenStream2 {
     };
     quote! {
         ::rulisp::runtime::FnMeta {
+            doc: #doc,
             rust_name: #rust_name,
             lisp_name: #lisp_name,
             symbol: #symbol,
@@ -829,6 +860,10 @@ fn meta_const_ident(name: &str) -> Ident {
 pub fn handle(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as ItemStruct);
     let ty = &item.ident;
+    let handle_doc = match doc_of(&item.attrs) {
+        Some(d) => quote! { ::core::option::Option::Some(#d) },
+        None => quote! { ::core::option::Option::None },
+    };
     let ty_str = ty.to_string();
     let snake = camel_to_snake(&ty_str);
     let kebab = snake_to_kebab(&snake);
@@ -855,6 +890,7 @@ pub fn handle(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #[doc(hidden)]
             pub const __RULISP_HANDLE_META: ::rulisp::runtime::HandleMeta =
                 ::rulisp::runtime::HandleMeta {
+                    doc: #handle_doc,
                     rust_name: #ty_str,
                     lisp_name: #kebab,
                     free_symbol: #free_symbol,
@@ -962,6 +998,7 @@ fn export_free_fn(f: &ItemFn) -> Result<TokenStream2, Error> {
     let name = f.sig.ident.to_string();
     let (ok_ty, err) = split_result(&f.sig.output);
     let exported = ExportedFn {
+        doc: doc_of(&f.attrs),
         rust_name: name.clone(),
         lisp_name: snake_to_kebab(&name),
         symbol: name.clone(),
@@ -1081,6 +1118,7 @@ fn export_impl(mut i: ItemImpl) -> Result<TokenStream2, Error> {
         }
         let (ok_ty, err) = split_result(&m.sig.output);
         let exported = ExportedFn {
+            doc: doc_of(&m.attrs),
             rust_name: format!("{ty_ident}::{mname}"),
             lisp_name: if let Some(lit) = &ctor_name {
                 // two constructors on one type both derive make-<type>, and

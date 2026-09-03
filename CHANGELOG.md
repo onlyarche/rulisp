@@ -8,6 +8,15 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.5 development)
 
 ### Added
+- **Docstrings, `describe`, and `:doc`** — the REPL front door. Every
+  generated function and handle class now has a docstring synthesized
+  from the manifest (the Lisp call shape, the Rust signature, and which
+  condition an `Err` becomes); `(describe crate)` prints where the crate
+  came from, its generation, versions, dump hook, handle classes and every
+  export's signature. A glue crate's `///` comments travel too: the macros
+  put them in the manifest as `:doc` (an enhancement key — older loaders
+  ignore it) and they lead the docstring. `#.` inside a `:doc` is text,
+  never code: the loader's reader runs with `*read-eval*` off.
 - **`:rulisp-version` in the manifest, and the key-class rule** (BOUNDARY
   §11): a load-bearing manifest key raises `:schema`; an enhancement key
   rides the ignore-unknown-keys rule. Every crate now records the rulisp

@@ -116,3 +116,59 @@ an absolute threshold measured GC speed, not inhibition."
   (is (string= rulisp::*rulisp-version*
                (rulisp::manifest-rulisp-version
                 (rulisp::crate-manifest rulisp/test::*crate*)))))
+
+;;; ---------------------------------------------------------------------------
+;;; The REPL front door: every generated function and handle class has a
+;;; docstring; a crate's `///` arrives through the manifest's :doc key and
+;;; survives the hardened reader; (describe crate) answers the first
+;;; questions.
+;;; ---------------------------------------------------------------------------
+
+(test v05.docstrings-present
+  (ensure-crate)
+  (let* ((m (rulisp::crate-manifest rulisp/test::*crate*))
+         (pkg (rulisp::crate-package rulisp/test::*crate*)))
+    (dolist (f (rulisp::manifest-functions m))
+      (let* ((sym (find-symbol (string-upcase (rulisp::fn-spec-lisp-name f)) pkg))
+             (doc (and sym (documentation sym 'function))))
+        (is (and doc (plusp (length doc))) "no docstring on ~A" sym)
+        (is (search (rulisp::fn-spec-rust-name f) doc)
+            "docstring of ~A does not name its Rust export" sym)))
+    (dolist (h (rulisp::manifest-handles m))
+      (let* ((sym (find-symbol (string-upcase (rulisp::handle-spec-lisp-name h)) pkg))
+             (doc (documentation (find-class sym) t)))
+        (is (and doc (search (rulisp::handle-spec-rust-name h) doc))
+            "no class docstring on ~A" sym)))
+    ;; the Rust `///` text of a documented export made it through
+    (let ((doc (documentation (find-symbol "SLOW-SUM" pkg) 'function)))
+      (is (search "borrowed byte buffer" doc)
+          "slow_sum's /// comment is missing from its docstring: ~S" doc))
+    (let ((doc (documentation (find-class (find-symbol "GRENADE" pkg)) t)))
+      (is (search "Drop panics when armed" doc)))))
+
+(test v05.doc-escaping
+  "A :doc string with the characters that could break the manifest reader
+— quotes, backslashes, a #. that would be reader-eval if it were not text
+— plus a 4 KiB paragraph reads back byte for byte under the hardened reader."
+  (let* ((payload (format nil "say \"hi\" and C:\\path, then #.(uiop:quit) and ~A"
+                          (make-string 4096 :initial-element #\x)))
+         (escaped (with-output-to-string (o)
+                    (loop for c across payload
+                          do (case c
+                               (#\\ (write-string "\\\\" o))
+                               (#\" (write-string "\\\"" o))
+                               (t (write-char c o))))))
+         (m (rulisp::parse-manifest
+             (format nil "(:rulisp-manifest :schema 1 :abi 1 :crate \"x\" :prefix \"x_rulisp_\"
+                          :handles ((:handle :rust-name \"H\" :lisp-name \"h\" :free \"h_free\" :doc \"~A\"))
+                          :functions ((:fn :rust-name \"f\" :lisp-name \"f\" :symbol \"f\"
+                                       :params () :result :unit :error nil :doc \"~A\")))"
+                     escaped escaped))))
+    (is (string= payload (rulisp::fn-spec-doc (first (rulisp::manifest-functions m)))))
+    (is (string= payload (rulisp::handle-spec-doc (first (rulisp::manifest-handles m)))))))
+
+(test v05.describe-crate
+  (ensure-crate)
+  (let ((text (with-output-to-string (s) (describe rulisp/test::*crate* s))))
+    (dolist (needle '("rulisp crate" "Built with" "make-word-bag" "Dump hook" "word-bag"))
+      (is (search needle text) "describe output lacks ~S" needle))))

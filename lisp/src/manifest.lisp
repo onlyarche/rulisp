@@ -13,10 +13,10 @@
   name type)
 
 (defstruct (fn-spec (:constructor %make-fn-spec))
-  rust-name lisp-name symbol params result error)
+  rust-name lisp-name symbol params result error doc)
 
 (defstruct (handle-spec (:constructor %make-handle-spec))
-  rust-name lisp-name free)
+  rust-name lisp-name free doc)
 
 (defstruct (manifest (:constructor %make-manifest))
   schema abi crate crate-version target prefix errors handles functions
@@ -81,7 +81,8 @@
      :result (or (getf p :result)
                  (error 'manifest-error
                         :message (format nil "fn ~S has no :result" (getf p :lisp-name))))
-     :error (%getf-string p :error :optional t))))
+     :error (%getf-string p :error :optional t)
+     :doc (%getf-string p :doc :optional t))))
 
 (defun %parse-handle (form)
   (unless (and (consp form) (eq (car form) :handle))
@@ -90,7 +91,8 @@
     (%make-handle-spec
      :rust-name (%getf-string p :rust-name)
      :lisp-name (%getf-string p :lisp-name)
-     :free (%getf-string p :free))))
+     :free (%getf-string p :free)
+     :doc (%getf-string p :doc :optional t))))
 
 (defun camel-to-kebab (s)
   "\"ParseError\" → \"PARSE-ERROR\" (condition class naming)."

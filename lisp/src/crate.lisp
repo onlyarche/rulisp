@@ -269,7 +269,7 @@ fully intact (half-generated packages are banned — DESIGN.md §8 M2)."
                         (error 'manifest-error
                                :message (format nil "handle class ~S already belongs to crate ~S"
                                                 class-sym owner))))
-                 collect class-sym))
+                 collect (cons class-sym (synthesize-handle-doc h pkg))))
          (fns
            (loop for f in (manifest-functions manifest)
                  collect (let* ((sym (intern (string-upcase (fn-spec-lisp-name f)) pkg))
@@ -283,7 +283,8 @@ fully intact (half-generated packages are banned — DESIGN.md §8 M2)."
                            ;; (prepare must not mutate the package). Only
                            ;; muffle when the restart exists — some hosts
                            ;; signal warnings without it.
-                           (cons sym (funcall (handler-bind
+                           (list sym (synthesize-fn-doc f pkg)
+                                 (funcall (handler-bind
                                                   ((warning
                                                      (lambda (w)
                                                        (when (find-restart 'muffle-warning w)
@@ -308,17 +309,51 @@ fmakunbound."
       (loop for (nil . cond-sym) in error-conditions
             do (eval `(define-condition ,cond-sym (rust-error) ()))
                (export cond-sym pkg))
-      (dolist (class-sym classes)
-        (setf (get class-sym '%rulisp-class-owner) (crate-name crate))
-        (eval `(defclass ,class-sym (handle) ()))
-        (export class-sym pkg))
-      (let ((new-symbols (mapcar #'car fns)))
-        (loop for (sym . fn) in fns
+      (loop for (class-sym . doc) in classes
+            do (setf (get class-sym '%rulisp-class-owner) (crate-name crate))
+               (eval `(defclass ,class-sym (handle) () (:documentation ,doc)))
+               (export class-sym pkg))
+      (let ((new-symbols (mapcar #'first fns)))
+        (loop for (sym doc fn) in fns
               do (setf (symbol-function sym) fn)
+                 (%set-function-doc sym doc)
                  (export sym pkg))
         (dolist (sym (set-difference (crate-symbols crate) new-symbols))
-          (fmakunbound sym))
+          (fmakunbound sym)
+          (%set-function-doc sym nil))
         (setf (crate-symbols crate) new-symbols)))))
+
+(defun %set-function-doc (sym doc)
+  "ECL ignores (setf documentation) for a compiled closure installed with
+(setf symbol-function) — its documentation lives in a database keyed by
+the symbol, written only by si::set-documentation."
+  #+ecl (si::set-documentation sym 'function doc)
+  #-ecl (setf (documentation sym 'function) doc))
+
+(defmethod describe-object ((c crate) stream)
+  "(describe crate): everything the REPL user asks first — where it came
+from, which generation, what it exports and with which signatures."
+  (let ((m (crate-manifest c))
+        (pkg (crate-package c)))
+    (format stream "~&~S is a rulisp crate.~%" c)
+    (format stream "  Package:        ~A~%" (package-name pkg))
+    (format stream "  Generation:     ~D (session ~D)~%" (crate-generation c) *session*)
+    (format stream "  Artifact:       ~A~%" (crate-source-path c))
+    (format stream "  Loaded copy:    ~A~%" (crate-cache-path c))
+    (when m
+      (format stream "  Crate version:  ~A~%" (or (manifest-crate-version m) "?"))
+      (format stream "  Built with:     rulisp ~A (this loader: ~A)~%"
+              (or (manifest-rulisp-version m) "unknown (pre-0.5)") *rulisp-version*)
+      (format stream "  Target:         ~A~%" (or (manifest-target m) "?"))
+      (format stream "  ABI:            ~D, manifest schema ~D~%" (manifest-abi m) (manifest-schema m))
+      (format stream "  Dump hook:      ~A~%" (or (manifest-on-dump m) "none declared"))
+      (format stream "  Handle classes:~{ ~(~A~):~(~A~)~}~%"
+              (loop for h in (manifest-handles m)
+                    append (list (package-name pkg) (handle-spec-lisp-name h))))
+      (format stream "  Exports (~D):~%" (length (manifest-functions m)))
+      (dolist (f (manifest-functions m))
+        (format stream "    ~A~%" (first (uiop:split-string (synthesize-fn-doc f pkg)
+                                                             :separator '(#\Newline))))))))
 
 (defun %sweep-crate-cache (name current-copy)
   "Delete this crate's older cache copies: this process's own previous

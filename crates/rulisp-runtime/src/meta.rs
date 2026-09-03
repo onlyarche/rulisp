@@ -49,6 +49,8 @@ pub struct ParamMeta {
 }
 
 pub struct FnMeta {
+    /// The item's `///` doc comment, normalized (0.5, manifest `:doc`).
+    pub doc: Option<&'static str>,
     /// "add" or "WordBag::new"
     pub rust_name: &'static str,
     /// "make-word-bag"
@@ -62,6 +64,8 @@ pub struct FnMeta {
 }
 
 pub struct HandleMeta {
+    /// The struct's `///` doc comment, normalized (0.5, manifest `:doc`).
+    pub doc: Option<&'static str>,
     pub rust_name: &'static str,
     pub lisp_name: &'static str,
     /// unprefixed free symbol, e.g. "word_bag_free"
@@ -192,6 +196,21 @@ fn render_error(e: &Option<&'static str>, out: &mut String) {
 /// name line goes on one line when it fits in `WIDTH` columns; otherwise
 /// `:result`/`:error` drop to their own line; if the params list alone still
 /// overflows, params break one per line.
+/// A manifest string literal: only `\\` and `"` need escaping for the
+/// loader's reader (newlines stay literal — the hardened reader accepts
+/// them inside a string, and `#.` inside a string is just text).
+fn push_escaped(text: &str, out: &mut String) {
+    out.push('"');
+    for ch in text.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
 fn render_fn(f: &FnMeta, out: &mut String) {
     const WIDTH: usize = 100;
 
@@ -218,6 +237,12 @@ fn render_fn(f: &FnMeta, out: &mut String) {
     render_result(&f.result, &mut tail);
     tail.push_str(" :error ");
     render_error(&f.error, &mut tail);
+    // 0.5: the doc comment rides on its own line so the width rules above
+    // stay exactly what the golden froze
+    if let Some(doc) = f.doc {
+        tail.push_str("\n   :doc ");
+        push_escaped(doc, &mut tail);
+    }
     tail.push(')');
 
     let one_line = format!("   :params ({params_inline}) {tail}");
@@ -301,7 +326,12 @@ pub fn render_manifest(
         out.push_str(h.lisp_name);
         out.push_str("\" :free \"");
         out.push_str(h.free_symbol);
-        out.push_str("\")");
+        out.push('"');
+        if let Some(doc) = h.doc {
+            out.push_str("\n   :doc ");
+            push_escaped(doc, &mut out);
+        }
+        out.push(')');
     }
     out.push_str(")\n :functions\n (");
     for (i, f) in fns.iter().enumerate() {

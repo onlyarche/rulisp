@@ -128,3 +128,29 @@ This mirrors how PyO3 works (PyO3 is on crates.io, not PyPI):
 - The glue `.so` itself plays the role of Python's wheel: once built, it
   carries everything Rust-side inside it, which is why case A needs no
   Rust toolchain at all.
+
+## Reading a crate at the REPL
+
+Every generated function and handle class carries a docstring, and a
+crate answers `describe`:
+
+```lisp
+CL-USER> (documentation 'rx:make-regex 'function)
+"(rx:make-regex pattern)
+Rust: Regex::new(pattern: :string) -> rx:regex, Err(Error)
+Signals: rx:rust-error (a rulisp:rust-error) on Err."
+
+CL-USER> (describe (rulisp:use-crate #p"examples/rx/"))
+#<RULISP:CRATE "rx" gen 1 ...> is a rulisp crate.
+  Package:        RX
+  Generation:     1 (session 0)
+  Artifact:       .../examples/rx/target/debug/librx.so
+  Built with:     rulisp 0.4.0 (this loader: 0.4.0)
+  ...
+  Exports (5):
+    (rx:make-regex pattern)
+    ...
+```
+
+A `///` comment on an exported Rust fn or a `#[rulisp::handle]` struct
+leads its docstring — the macros carry it in the manifest as `:doc`.

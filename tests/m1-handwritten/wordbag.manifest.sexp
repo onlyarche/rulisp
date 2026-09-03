@@ -10,7 +10,10 @@
  :errors ("ParseError")
  :handles
  ((:handle :rust-name "WordBag" :lisp-name "word-bag" :free "word_bag_free")
-  (:handle :rust-name "Grenade" :lisp-name "grenade" :free "grenade_free"))
+  (:handle :rust-name "Grenade" :lisp-name "grenade" :free "grenade_free"
+   :doc "Drop panics when armed: BOUNDARY §2's exception — a panic inside a
+`*_free` shim is caught, logged to stderr and swallowed, never crossing
+the boundary."))
  :functions
  ((:fn :rust-name "add" :lisp-name "add" :symbol "add"
    :params ((:name "a" :type :i64) (:name "b" :type :i64)) :result :i64 :error nil)
@@ -52,7 +55,9 @@
    :params ((:name "self" :type (:handle "WordBag"))) :result :u64 :error nil)
   (:fn :rust-name "WordBag::slow_len" :lisp-name "word-bag-slow-len" :symbol "word_bag_slow_len"
    :params ((:name "self" :type (:handle "WordBag")) (:name "millis" :type :u64))
-   :result :u64 :error nil)
+   :result :u64 :error nil
+   :doc "Parks the caller inside a foreign call so tests can race rulisp:free
+against an in-flight method.")
   (:fn :rust-name "for_each_word" :lisp-name "for-each-word" :symbol "for_each_word"
    :params ((:name "bag" :type (:handle "WordBag"))
             (:name "f" :type (:callback :params (:string) :result :unit)))
@@ -60,12 +65,21 @@
   (:fn :rust-name "count_ok" :lisp-name "count-ok" :symbol "count_ok"
    :params ((:name "bag" :type (:handle "WordBag"))
             (:name "f" :type (:callback :params (:string) :result :unit)))
-   :result :u64 :error nil)
+   :result :u64 :error nil
+   :doc "Swallows callback failures and keeps counting: BOUNDARY §6.3(3), first
+sentence — a swallowed CallbackError's stash is discarded when the shim
+returns OK, so the caller sees a normal return, not a re-signal.")
   (:fn :rust-name "swallow_then_fail" :lisp-name "swallow-then-fail" :symbol "swallow_then_fail"
    :params ((:name "f" :type (:callback :params (:i64) :result :unit)))
-   :result :unit :error "Error")
+   :result :unit :error "Error"
+   :doc "Swallows a callback failure, then fails with its OWN error: BOUNDARY
+§6.3(3), second sentence — the call is conservatively status 4, so the
+stashed Lisp condition re-signals instead of this error.")
   (:fn :rust-name "WordBag::poison" :lisp-name "word-bag-poison" :symbol "word_bag_poison"
-   :params ((:name "self" :type (:handle "WordBag"))) :result :unit :error nil)
+   :params ((:name "self" :type (:handle "WordBag")))
+   :result :unit :error nil
+   :doc "Panics while holding the words mutex, poisoning it: BOUNDARY §8 —
+the NEXT lock's unwrap panics too and surfaces as status 2.")
   (:fn :rust-name "Grenade::new" :lisp-name "make-grenade" :symbol "grenade_new"
    :params ((:name "armed" :type :bool)) :result (:handle "Grenade") :error nil)
   (:fn :rust-name "test_live_allocations" :lisp-name "test-live-allocations" :symbol "test_live_allocations"
@@ -75,14 +89,27 @@
   (:fn :rust-name "test_cb_guard_drops" :lisp-name "test-cb-guard-drops" :symbol "test_cb_guard_drops"
    :params () :result :i64 :error nil)
   (:fn :rust-name "dump_prep" :lisp-name "dump-prep" :symbol "dump_prep"
-   :params () :result :unit :error "Error")
+   :params ()
+   :result :unit :error "Error"
+   :doc "The crate's declared dump hook (BOUNDARY §10 :on-dump). Counts its
+invocations so tests can observe the loader-driven call, and fails on
+demand so the warn-and-proceed contract is testable.")
   (:fn :rust-name "set_dump_prep_fail" :lisp-name "set-dump-prep-fail" :symbol "set_dump_prep_fail"
    :params ((:name "fail" :type :bool)) :result :unit :error nil)
   (:fn :rust-name "test_dump_preps" :lisp-name "test-dump-preps" :symbol "test_dump_preps"
    :params () :result :i64 :error nil)
   (:fn :rust-name "WordBag::from_csv" :lisp-name "make-word-bag-from" :symbol "word_bag_from_csv"
-   :params ((:name "csv" :type :string)) :result (:handle "WordBag") :error nil)
+   :params ((:name "csv" :type :string))
+   :result (:handle "WordBag") :error nil
+   :doc "A second constructor. Without `name = …` this would also be
+`make-word-bag`, which the loader rejects as a duplicate.")
   (:fn :rust-name "slow_sum" :lisp-name "slow-sum" :symbol "slow_sum"
-   :params ((:name "data" :type :bytes) (:name "millis" :type :u64)) :result :u64 :error nil)
+   :params ((:name "data" :type :bytes) (:name "millis" :type :u64))
+   :result :u64 :error nil
+   :doc "Holds a borrowed byte buffer for MILLIS: the fixture behind
+v05.pin-does-not-stop-the-world — on a host whose \"pin\" inhibits GC,
+every other Lisp thread stalls for the whole call.")
   (:fn :rust-name "slow_dot" :lisp-name "slow-dot" :symbol "slow_dot"
-   :params ((:name "xs" :type (:vec :i64)) (:name "millis" :type :u64)) :result :i64 :error nil)))
+   :params ((:name "xs" :type (:vec :i64)) (:name "millis" :type :u64))
+   :result :i64 :error nil
+   :doc "The (:vec ...) twin of slow_sum.")))
