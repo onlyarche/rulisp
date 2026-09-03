@@ -16,10 +16,13 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    Lisp API, manifest schema, C ABI), semver and deprecation policy, host
    support = the required matrix, and the 1.0 exit criteria; Quicklisp
    prerequisites listed, not scheduled.
-3. **CCL pin semantics** — on CCL, CFFI's `with-pointer-to-vector-data` is
-   `without-gcing`: every `:string`/`:bytes`/`:vec` argument stops the
-   world for the whole export, callbacks included. Copy via `foreign-alloc`
-   there; a `pin-does-not-stop-the-world` test on every host.
+3. ✅ **CCL pin semantics** — confirmed and fixed: with a 4 MiB buffer
+   lent for 600 ms, another thread completed 0 collections on CCL (~30
+   unpinned); the loader now pins only for a memcpy there. The test
+   counts completed collections via the host GC counter — its first
+   version counted requests and passed on the broken code, its second
+   let a warm-up window through; the shipped one starts counting at the
+   call.
 4. **Falsifiable fuzzers** — end-of-run live-count reconciliation, a
    reload-under-load test, a seed from the environment printed on failure.
 5. **Manifest skew rule + `:rulisp-version`** — a 0.4 on_dump crate on a

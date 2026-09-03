@@ -78,6 +78,22 @@ pub fn rev(data: &[u8]) -> Vec<u8> {
     v
 }
 
+/// Holds a borrowed byte buffer for MILLIS: the fixture behind
+/// v05.pin-does-not-stop-the-world — on a host whose "pin" inhibits GC,
+/// every other Lisp thread stalls for the whole call.
+#[rulisp::export]
+pub fn slow_sum(data: &[u8], millis: u64) -> u64 {
+    std::thread::sleep(std::time::Duration::from_millis(millis));
+    data.iter().map(|&b| b as u64).sum()
+}
+
+/// The (:vec ...) twin of slow_sum.
+#[rulisp::export]
+pub fn slow_dot(xs: &[i64], millis: u64) -> i64 {
+    std::thread::sleep(std::time::Duration::from_millis(millis));
+    xs.iter().sum()
+}
+
 #[rulisp::export]
 pub fn find(data: &[u8], b: u8) -> Option<u64> {
     data.iter().position(|&x| x == b).map(|i| i as u64)
@@ -338,6 +354,7 @@ rulisp::module! {
         test_live_allocations, test_live_word_bags, test_cb_guard_drops,
         dump_prep, set_dump_prep_fail, test_dump_preps,
         WordBag::from_csv,
+        slow_sum, slow_dot,
     ],
     on_dump: dump_prep,
 }

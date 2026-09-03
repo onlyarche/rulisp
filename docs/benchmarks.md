@@ -56,6 +56,11 @@ stored callback (same thread)                 180.0 ns/call
   gate (session and generation checks, in-flight counting) adds ~200 ns;
   create+free is dominated by the Rust allocation and the finalizer
   registration.
+- **Host note (CCL).** These are SBCL numbers. On CCL the inbound side is
+  a memcpy into a heap buffer rather than a zero-copy borrow, because
+  CCL's vector pin is `without-gcing` and a whole-call pin would stop
+  every other thread's collections (v0.5, `v05.pin-does-not-stop-the-
+  world`); expect the inbound rows to cost roughly one extra memcpy.
 - **Bytes and scalar vectors are memcpy-bound.** 1 MiB in at 324 µs is
   ~3.2 GB/s, and the inbound side is a true zero-copy borrow (the Lisp
   vector is pinned; BOUNDARY §4). The 0.3.0 CHANGELOG's "24× on a 1 MiB

@@ -134,6 +134,25 @@ actually typed, so the error can say so. Never unloaded — see BOUNDARY.md
 (defun %memcpy (dst src nbytes)
   (cffi:foreign-funcall "memcpy" :pointer dst :pointer src uintptr nbytes :pointer))
 
+#+ccl
+(defun %call-with-copied-buffer (vector nbytes fn len)
+  "CCL only. CFFI's with-pointer-to-vector-data is ccl:with-pointer-to-ivector
+there, whose body runs under WITHOUT-GCING: a buffer pinned for the whole
+export would stop every other thread's collections for the duration of
+the call, callbacks included (measured: 0 collections in 600 ms; see
+v05.pin-does-not-stop-the-world). So pin only for a memcpy into a heap
+foreign buffer — not with-foreign-object, which is stack allocation on
+CCL — and lend that copy to FN. Same contract for Rust (BOUNDARY §4: the
+pointer is valid for the call and must not be retained)."
+  (let ((buf (cffi:foreign-alloc :uint8 :count (max nbytes 1))))
+    (unwind-protect
+         (progn
+           (when (plusp nbytes)
+             (cffi:with-pointer-to-vector-data (src vector)
+               (%memcpy buf src nbytes)))
+           (funcall fn buf len))
+      (cffi:foreign-free buf))))
+
 (defun foreign-octets (ptr len)
   "Copy LEN bytes at PTR into a fresh (unsigned-byte 8) vector.
 LEN = 0 never touches PTR (empty-transfer convention)."
@@ -170,8 +189,9 @@ pinned and borrowed in place (no copy); anything else is coerced first."
          (cffi:with-foreign-object (buf :uint8 1)
            (funcall fn buf 0)))
         ((pinned-vector-p octets '(unsigned-byte 8))
-         (cffi:with-pointer-to-vector-data (ptr octets)
-           (funcall fn ptr len)))
+         #-ccl (cffi:with-pointer-to-vector-data (ptr octets)
+                 (funcall fn ptr len))
+         #+ccl (%call-with-copied-buffer octets len fn len))
         (t
          (cffi:with-foreign-object (buf :uint8 len)
            (dotimes (i len)
@@ -202,8 +222,10 @@ and borrowed in place; anything else is copied into a foreign array."
   (let ((len (length data)))
     (cond
       ((and (plusp len) (pinned-vector-p data lisp-type))
-       (cffi:with-pointer-to-vector-data (ptr data)
-         (funcall fn ptr len)))
+       #-ccl (cffi:with-pointer-to-vector-data (ptr data)
+               (funcall fn ptr len))
+       #+ccl (%call-with-copied-buffer
+              data (* len (cffi:foreign-type-size cffi-type)) fn len))
       (t
        (cffi:with-foreign-object (buf cffi-type (max len 1))
          (handler-case

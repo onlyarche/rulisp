@@ -80,4 +80,8 @@
   (:fn :rust-name "test_dump_preps" :lisp-name "test-dump-preps" :symbol "test_dump_preps"
    :params () :result :i64 :error nil)
   (:fn :rust-name "WordBag::from_csv" :lisp-name "make-word-bag-from" :symbol "word_bag_from_csv"
-   :params ((:name "csv" :type :string)) :result (:handle "WordBag") :error nil)))
+   :params ((:name "csv" :type :string)) :result (:handle "WordBag") :error nil)
+  (:fn :rust-name "slow_sum" :lisp-name "slow-sum" :symbol "slow_sum"
+   :params ((:name "data" :type :bytes) (:name "millis" :type :u64)) :result :u64 :error nil)
+  (:fn :rust-name "slow_dot" :lisp-name "slow-dot" :symbol "slow_dot"
+   :params ((:name "xs" :type (:vec :i64)) (:name "millis" :type :u64)) :result :i64 :error nil)))

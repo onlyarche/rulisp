@@ -1,4 +1,4 @@
-;;; M4 gate: <lisp> --load tests/run-m4.lisp
+;;; v0.5 suite only: <lisp> --load tests/run-v05.lisp
 ;;; All suites (M1..M4) against the macro-based examples/wordbag.
 ;;; Works on non-SBCL implementations too (quicklisp bootstrapped explicitly;
 ;;; SBCL-only tests guard themselves).
@@ -20,14 +20,7 @@
 (setf rulisp/test::*crate-dir*
       (asdf:system-relative-pathname :rulisp "../examples/wordbag/"))
 
-(let* ((r1 (fiveam:run :rulisp-m1))
-       (r2 (fiveam:run :rulisp-m2))
-       (r3 (fiveam:run :rulisp-m3))
-       (r4 (fiveam:run :rulisp-m4))
-       (r5 (fiveam:run :rulisp-v02))
-       (r6 (fiveam:run :rulisp-v03))
-       (r7 (fiveam:run :rulisp-v04))
-       (r8 (fiveam:run :rulisp-v05))
-       (all (append r1 r2 r3 r4 r5 r6 r7 r8)))
+(let* ((r1 (fiveam:run :rulisp-v05))
+       (all r1))
   (fiveam:explain! all)
   (uiop:quit (if (fiveam:results-status all) 0 1)))

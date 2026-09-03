@@ -194,6 +194,41 @@ pub unsafe extern "C" fn wordbag_rulisp_rev(
     })
 }
 
+/// slow_sum(data: &[u8], millis: u64) -> u64 — holds the borrow for MILLIS
+/// (v05.pin-does-not-stop-the-world fixture).
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_slow_sum(
+    data_ptr: *const u8,
+    data_len: usize,
+    millis: u64,
+    out: *mut u64,
+) -> i32 {
+    rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
+        let data = unsafe { rt::bytes_arg(&_frame, data_ptr, data_len) };
+        std::thread::sleep(std::time::Duration::from_millis(millis));
+        unsafe { *out = data.iter().map(|&b| b as u64).sum() };
+        rt::STATUS_OK
+    })
+}
+
+/// slow_dot(xs: &[i64], millis: u64) -> i64
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_slow_dot(
+    xs_ptr: *const i64,
+    xs_len: usize,
+    millis: u64,
+    out: *mut i64,
+) -> i32 {
+    rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
+        let xs = unsafe { rt::slice_arg(&_frame, xs_ptr, xs_len) };
+        std::thread::sleep(std::time::Duration::from_millis(millis));
+        unsafe { *out = xs.iter().sum() };
+        rt::STATUS_OK
+    })
+}
+
 // ---------------------------------------------------------------------------
 // WordBag handle
 // ---------------------------------------------------------------------------

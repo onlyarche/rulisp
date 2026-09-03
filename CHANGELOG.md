@@ -5,6 +5,25 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
+## Unreleased (0.5 development)
+
+### Fixed
+- **On CCL, lending a buffer to Rust stopped the world.** CFFI's
+  `with-pointer-to-vector-data` is `ccl:with-pointer-to-ivector` there,
+  whose body runs under `without-gcing` — so every `:string`, `:bytes`
+  and `:vec` argument suspended garbage collection for every thread for
+  the whole export, callbacks included (measured: 0 collections
+  completed on another thread during a 600 ms borrow; ~30 unpinned). The
+  loader now pins only long enough to memcpy into a heap buffer on CCL
+  and lends the copy. SBCL keeps the zero-copy borrow; ECL's pin never
+  inhibited GC. `v05.pin-does-not-stop-the-world` proves it on all three.
+
+### Changed
+- The fetch suite runs in CI (SBCL/Linux and CCL/Linux required; macOS
+  best-effort) — the 23 tests BOUNDARY §12 cites had only ever run on the
+  maintainer's machine. Its first run on CCL fixed two host assumptions in
+  the tests themselves.
+
 ## 0.4.0 — 2026-09-02
 
 ### Added

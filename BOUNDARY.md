@@ -54,7 +54,14 @@ logged to stderr and swallowed (finalizer context has no error channel).
 - Wire format both directions: `(const uint8_t *ptr, uintptr_t len)`,
   UTF-8, **no NUL terminator, interior NULs legal**.
 - Lisp→Rust: borrowed for the duration of the call. Rust validates UTF-8
-  (failure → status 3). Rust must not retain the pointer. Retention is a
+  (failure → status 3). Rust must not retain the pointer. How the loader
+  lends the buffer is per host and must never stop the world: on SBCL the
+  Lisp vector is pinned and Rust borrows it in place (zero-copy); on ECL
+  the pin aliases the storage without inhibiting GC; on CCL a pin is
+  `without-gcing`, so the loader pins only long enough to memcpy into a
+  heap buffer and lends the copy (`v05.pin-does-not-stop-the-world`
+  measures collections completing on another thread during a 600 ms
+  borrow on every host). Retention is a
   compile error, enforced twice (issue #1 showed one layer is not enough:
   an explicit `&'static str` in an export signature used to defeat it from
   safe Rust): the macro rejects any explicit lifetime in an export
@@ -294,6 +301,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Wire format both directions: `(ptr,len)` UTF-8 | test | `m3.strings` (`tests/suite/m1.lisp:102-108`) |
 | No NUL terminator; interior NULs legal | runtime-check | `lisp/src/ffi.lisp:178-181` (length-delimited encode); `crates/rulisp-runtime/src/lib.rs:148-162`; no interior-NUL test |
 | Lisp→Rust: borrowed for the duration of the call (dynamic-extent pin/copy) | runtime-check | `lisp/src/ffi.lisp:152-181` (`call-with-bytes-arg` / `call-with-utf8-arg`) |
+| Lending a buffer never stops the world (CCL's pin is `without-gcing`, so it copies) | test | `v05.pin-does-not-stop-the-world` (`tests/suite/v05.lisp`) on SBCL, CCL and ECL; `%call-with-copied-buffer` (`lisp/src/ffi.lisp`, `#+ccl`) |
 | Rust validates UTF-8; failure → status 3 | runtime-check | `crates/rulisp-runtime/src/lib.rs:148-162` (`str_arg`) |
 | Retention layer 1: macro rejects any explicit lifetime in an export signature | compile-error | `crates/rulisp-macros/src/lib.rs:97-138,909-917`; pinned by `crates/rulisp/tests/ui/static_lifetime.rs` (trybuild) |
 | Retention layer 2: borrowing helpers pin the returned lifetime to a per-call ShimFrame | compile-error | `crates/rulisp-runtime/src/lib.rs:130-162` (`ShimFrame` + `str_arg<'a>(&'a ShimFrame)`) |
