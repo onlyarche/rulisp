@@ -12,10 +12,11 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
 
 1. **Run the fetch suite in CI** — 23 tests §12 cites as enforcement have
    only ever run on the maintainer's machine.
-2. **docs/stability.md** — the four versioned surfaces (Rust API, 32-symbol
-   Lisp API, manifest schema, C ABI), semver and deprecation policy, host
-   support = the required matrix, and the 1.0 exit criteria; Quicklisp
-   prerequisites listed, not scheduled.
+2. ✅ **docs/stability.md** — the four versioned surfaces, semver and
+   deprecation policy, host support = the required matrix with the
+   promotion/demotion procedure, the manifest key-class rule, the 1.0 exit
+   criteria, and the Quicklisp prerequisites (listed, not scheduled). The
+   SBCL/Linux job now proves `(ql:quickload :rulisp)` needs no cargo.
 3. ✅ **CCL pin semantics** — confirmed and fixed: with a 4 MiB buffer
    lent for 600 ms, another thread completed 0 collections on CCL (~30
    unpinned); the loader now pins only for a memcpy there. The test

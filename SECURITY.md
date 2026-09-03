@@ -45,4 +45,4 @@ and bounds-checked memory.
 
 ## Supported versions
 
-The latest release only, while the project is pre-1.0.
+The latest release only, while the project is pre-1.0 (docs/stability.md §4 has the full support and deprecation policy).

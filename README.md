@@ -100,7 +100,8 @@ watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
 matters). The full contract is in [BOUNDARY.md](BOUNDARY.md);
 architecture and rationale in [DESIGN.md](DESIGN.md) (Korean). Measured boundary costs, with the method:
-[docs/benchmarks.md](docs/benchmarks.md). Release
+[docs/benchmarks.md](docs/benchmarks.md). What is stable, what 1.0 will
+promise, and how hosts are supported: [docs/stability.md](docs/stability.md). Release
 history: [CHANGELOG.md](CHANGELOG.md). Reporting a vulnerability and the
 threat model: [SECURITY.md](SECURITY.md).
 

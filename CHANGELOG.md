@@ -7,6 +7,15 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.5 development)
 
+### Added
+- **docs/stability.md** — what is stable and what 1.0 will promise: the
+  four versioned surfaces (Rust API, the 32-symbol Lisp API, the manifest
+  schema, the C ABI) and what breaks each; semver and deprecation policy;
+  host support defined as the required CI matrix with a written
+  promotion/demotion procedure; the manifest key-class rule; the 1.0 exit
+  criteria; the Quicklisp prerequisites. CI now proves the system loads
+  with no cargo on PATH.
+
 ### Fixed
 - **On CCL, lending a buffer to Rust stopped the world.** CFFI's
   `with-pointer-to-vector-data` is `ccl:with-pointer-to-ivector` there,
