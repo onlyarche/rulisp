@@ -2,6 +2,7 @@
 name = "rulisp"
 version = "0.4.0"
 edition = "2021"
+rust-version = "1.78"
 description = "Write Rust, call it from Common Lisp: user-facing crate for rulisp glue crates"
 license = "MIT"
 readme = "../../README.md"

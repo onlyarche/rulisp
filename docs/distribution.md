@@ -113,9 +113,10 @@ manual pattern:
 
 Two things to get right, both of which bite silently:
 
-1. **Name the artifact for the platform** — `lib<name>-<os>-<arch>.<ext>`,
-   which is what `load-blob-crate` looks for and what
-   `.github/workflows/blobs.yml` produces.
+1. **Name the artifact for the platform** — `lib<name>-<os>-<arch>.<ext>`
+   (`<name>-windows-x86_64.dll` on Windows), which is what
+   `load-blob-crate` looks for and what `.github/workflows/blobs.yml`
+   attaches to each GitHub Release for the four examples.
 2. **Quiesce foreign threads in a dump hook.** SBCL refuses to dump with
    several *Lisp* threads but cannot see the ones a glue crate spawned, so
    the dump succeeds and the threads are simply gone in the restored image

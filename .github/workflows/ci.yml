@@ -31,6 +31,22 @@ jobs:
       - name: BOUNDARY §7 signal audit over every example (with self-test)
         run: make audit
 
+  msrv:
+    # docs/stability.md §6: the declared rust-version is checked on exactly
+    # that toolchain, read from Cargo.toml so the number has one site. The
+    # three published crates plus wordbag: the code the macros GENERATE is
+    # held to the MSRV too, not only the macros themselves.
+    name: MSRV (cargo check on the declared rust-version)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          RV=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' crates/rulisp/Cargo.toml)
+          echo "rust-version = $RV"
+          rustup toolchain install "$RV" --profile minimal
+          cargo "+$RV" check -p rulisp -p rulisp-macros -p rulisp-runtime -p wordbag --locked
+      - run: make check-versions
+
   sbcl-linux:
     name: SBCL / Linux x86-64 (required)
     runs-on: ubuntu-latest
@@ -159,3 +175,26 @@ jobs:
           grep -q "Pass: " ecl.log && ! grep -qE "Fail: *[1-9]" ecl.log
       - name: program-op executable (the ECL deployment story)
         run: make test-ecl-program
+
+  sbcl-linux-arm64:
+    # First arm host. meta.rs's aarch64-unknown-linux-gnu target and the
+    # loader's arm64 paths (target-compatible-p in manifest.lisp,
+    # host-blob-suffix in build.lisp) had never executed before this job.
+    # Promotion follows the ECL job's procedure: a documented green streak,
+    # then in one commit drop continue-on-error, rename "(required)", add
+    # the linux-arm64 leg to blobs.yml and the host to stability.md §5.
+    name: SBCL / Linux aarch64 (best-effort)
+    runs-on: ubuntu-24.04-arm
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y sbcl
+      - name: install quicklisp
+        run: |
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)'
+      - run: make test-m4
+      - name: fetch suite on aarch64
+        run: make test-fetch

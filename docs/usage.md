@@ -33,13 +33,20 @@ committed in a library's repo (see [distribution.md](distribution.md)).
 ```
 
 When the artifacts follow the blob naming convention
-(`lib<name>-<os>-<arch>.<ext>`, e.g. `libwordbag-linux-x86_64.so` — what
-`.github/workflows/blobs.yml` produces), one call picks the right file for
+(`lib<name>-<os>-<arch>.<ext>`, e.g. `libwordbag-linux-x86_64.so`; on
+Windows `<name>-windows-x86_64.dll`), one call picks the right file for
 the host, with a clear condition when the platform isn't covered:
 
 ```lisp
 (rulisp:load-blob-crate #p"/path/to/blobs/" "mylib")
 ```
+
+The four examples ship this way: every release at
+<https://github.com/onlyarche/rulisp/releases> carries `wordbag`, `rx`,
+`wasm` and `fetch` for Linux x86-64, macOS arm64 and Windows x86-64,
+built by `.github/workflows/blobs.yml` and audited (docs/distribution.md,
+"Audit your glue crate"). Download the ones for your host into a
+directory and Case A needs no Rust toolchain at all.
 
 Two things to know:
 

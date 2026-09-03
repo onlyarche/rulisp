@@ -1,39 +1,97 @@
 name: blobs
 
 # Prebuilt per-platform artifacts for the no-Rust-toolchain path
-# (rulisp:load-blob-crate — see docs/distribution.md). Runs on demand and on
-# release tags; artifacts are named lib<crate>-<os>-<arch>.<ext>.
+# (rulisp:load-blob-crate — docs/usage.md Case A, docs/distribution.md):
+# every required host × the four examples, built in the release profile,
+# each run through tools/rulisp-audit.sh (BOUNDARY §7; on Windows the
+# script prints SKIP — §12 records that gap), then attached to the GitHub
+# Release for the tag with the tag's CHANGELOG section as the body.
+# Runs on every v* tag push; the dispatch form re-runs it for an existing
+# tag (a flaked host, a lost asset). docs/releasing.md is the checklist.
 
 on:
-  workflow_dispatch:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach assets to (e.g. v0.5.0)'
+        required: true
+
+permissions:
+  contents: write   # create the release and upload assets; nothing else
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             suffix: linux-x86_64
             ext: so
+            lib: lib
           - os: macos-latest
             suffix: darwin-arm64
             ext: dylib
+            lib: lib
+          - os: windows-latest
+            suffix: windows-x86_64
+            ext: dll
+            lib: ''      # cargo drops the prefix on Windows; so does load-blob-crate
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release -p wordbag -p rx -p wasm
-      - name: collect blobs
+      - run: cargo build --release --locked -p wordbag -p rx -p wasm -p fetch
+      - name: audit (BOUNDARY §7) and name for load-blob-crate
         run: |
           mkdir -p blobs
-          for c in wordbag rx wasm; do
-            cp "target/release/lib${c}.${{ matrix.ext }}" \
-               "blobs/lib${c}-${{ matrix.suffix }}.${{ matrix.ext }}"
+          for c in wordbag rx wasm fetch; do
+            src="target/release/${{ matrix.lib }}${c}.${{ matrix.ext }}"
+            sh tools/rulisp-audit.sh "$src" "examples/$c"
+            cp "$src" "blobs/${{ matrix.lib }}${c}-${{ matrix.suffix }}.${{ matrix.ext }}"
           done
           ls -la blobs/
       - uses: actions/upload-artifact@v4
         with:
           name: blobs-${{ matrix.suffix }}
           path: blobs/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blobs-*
+          path: blobs
+          merge-multiple: true
+      - name: release notes = this version's CHANGELOG section
+        run: |
+          V=${TAG#v}
+          awk -v v="$V" '$1=="##" && $2==v {p=1; next} $1=="##" {p=0} p' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "no '## $V' section in CHANGELOG.md"; exit 1; }
+          cat notes.md
+      - name: create the GitHub Release (or replace its assets)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la blobs/
+          n=$(ls blobs | wc -l)
+          [ "$n" -eq 12 ] || { echo "expected 12 assets (3 hosts × 4 crates), got $n"; exit 1; }
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
+          gh release upload "$TAG" blobs/* --clobber

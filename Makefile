@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions bench clean
 
 build:
 	$(CARGO) build
@@ -57,6 +57,11 @@ audit:
 doc:
 	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --no-deps -p rulisp -p rulisp-macros -p rulisp-runtime
 	$(CARGO) test --doc -p rulisp
+
+# one version string across the crates, the path pins, the ASDF system
+# and the docs (docs/releasing.md step 1); fails on any site that disagrees
+check-versions:
+	sh tools/check-versions.sh
 
 bench:
 	$(SBCL) --non-interactive --load tests/bench.lisp

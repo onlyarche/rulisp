@@ -60,8 +60,10 @@ from crates.io (0.1.0–0.2.1 were, for issue #1); the ASDF system is not
 
 A host is supported exactly when it is a **required** CI job. Today:
 SBCL on Linux x86-64, macOS arm64 and Windows x86-64; Clozure CL 1.13 on
-Linux x86-64; ECL 21.2.1 on Linux x86-64. Everything else (LispWorks,
-Allegro, ABCL, other architectures) is untested and unclaimed.
+Linux x86-64; ECL 21.2.1 on Linux x86-64. A **best-effort** job (today:
+SBCL on Linux aarch64) runs on every push without being required, and is
+not a supported host until promoted. Everything else (LispWorks, Allegro,
+ABCL, other architectures) is untested and unclaimed.
 
 Promotion and demotion follow the procedure written into
 `.github/workflows/ci.yml`: a job becomes required after a documented
@@ -73,8 +75,11 @@ quietly flipping the flag.
 
 ## 6. Minimum supported Rust version
 
-The declared `rust-version` in the three `Cargo.toml`s is the MSRV (set
-and CI-checked in v0.5). Raising it is a **minor**, named in CHANGELOG.md.
+The declared `rust-version` in the three `Cargo.toml`s is the MSRV —
+**1.78**, the oldest cargo that reads this repository's lockfile. The
+`MSRV` CI job installs exactly that toolchain and checks the three crates
+plus the `wordbag` example, so the code the macros generate is held to it
+as well. Raising it is a **minor**, named in CHANGELOG.md.
 
 ## 7. Manifest keys: which may ride the ignore-unknown-keys rule
 

@@ -8,6 +8,21 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.5 development)
 
 ### Added
+- **Releases with audited assets** — every `v*` tag builds the four
+  examples in the release profile on each required host (Linux x86-64,
+  macOS arm64, Windows x86-64), runs `tools/rulisp-audit.sh` over each
+  (Windows: the script prints SKIP, recorded as a gap in BOUNDARY §12),
+  and attaches the twelve blobs, named for `load-blob-crate`, to a
+  GitHub Release whose body is that version's CHANGELOG section.
+  `make check-versions` holds every site that repeats the version to
+  one string; docs/releasing.md is the checklist around it.
+- **MSRV** — `rust-version = "1.78"` in the three crates, checked in CI
+  on exactly that toolchain over the macros, the runtime, `rulisp` and
+  the code the macros generate for `wordbag`.
+- **Linux aarch64** — `SBCL / Linux aarch64 (best-effort)` on GitHub's
+  arm runners: the loader's aarch64 paths (the target check, the blob
+  suffix) execute for the first time. Promotion follows the written
+  procedure; the `linux-arm64` release asset comes with it.
 - **docs.rs front door** — the three macros document the full attribute
   grammar and the closed type vocabulary, every public item in `rulisp`
   has a doc, the crate-level example is a compiled doctest, and CI builds
