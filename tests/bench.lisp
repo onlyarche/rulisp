@@ -67,6 +67,21 @@
   (let ((s (make-string 1024 :initial-element #\한)))
     (timed "string round trip (1 KiB non-ASCII)" 20000 (funcall echo s))))
 
+;; --- rx: a real &str consumer (the quickstart crate) over 1 MiB ----------
+;; Digits occur once, at the end: the regex side is a memchr sweep, so the
+;; row is the :string boundary cost on a 1 MiB argument, not regex work.
+(defvar *rx*
+  (rulisp:use-crate (asdf:system-relative-pathname :rulisp "../examples/rx/")
+                    :profile :release))
+(let* ((make (symbol-function (find-symbol "MAKE-REGEX" "RX")))
+       (count (symbol-function (find-symbol "REGEX-COUNT" "RX")))
+       (re (funcall make "[0-9]+"))
+       (text (with-output-to-string (o)
+               (dotimes (i 131071) (write-string "abc def " o))    ; 8 B x 131071
+               (write-string "abc 123 " o))))                       ; = 1 MiB, one match
+  (timed "rx count over 1 MiB (&str in, 1 match)" 200 (funcall count re text))
+  (rulisp:free re))
+
 ;; --- bytes -----------------------------------------------------------------
 (let ((rev (wb "REV")) (sum (wb "SUM")))
   (dolist (size '(8 1024 65536 1048576))

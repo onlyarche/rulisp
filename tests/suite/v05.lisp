@@ -172,3 +172,45 @@ an absolute threshold measured GC speed, not inhibition."
   (let ((text (with-output-to-string (s) (describe rulisp/test::*crate* s))))
     (dolist (needle '("rulisp crate" "Built with" "make-word-bag" "Dump hook" "word-bag"))
       (is (search needle text) "describe output lacks ~S" needle))))
+
+;;; ---------------------------------------------------------------------------
+;;; v0.5 item 9: the :string ASCII fast path. Both directions take a typed
+;;; loop while the text is ASCII and hand the same bytes to babel at the
+;;; first char/byte >= 128 — so that is the seam, and these are the strings
+;;; that sit on it. Identity through wordbag's echo (Lisp -> Rust -> Lisp),
+;;; plus the two helpers themselves, so the fast path cannot be bypassed
+;;; silently and cannot accept what it must refuse.
+;;; ---------------------------------------------------------------------------
+
+(test v05.utf8-fastpath-boundary
+  (ensure-crate)
+  (let ((cases
+          (list ""
+                "plain ascii"
+                (make-string 65536 :initial-element #\a)
+                (format nil "~Cnon-ascii first" (code-char 233))
+                (format nil "non-ascii last~C" (code-char 233))
+                (coerce (loop for c from 128 to 255 collect (code-char c)) 'string)
+                (format nil "a~Cb" (code-char 127))         ; DEL: the last ASCII code
+                (format nil "a~Cb" (code-char 128))         ; the first non-ASCII code
+                (format nil "nul~Cinside" (code-char 0))    ; interior NUL stays legal
+                (format nil "~C~C" (code-char #x1F600) (code-char #x10FFFF)) ; 4-byte
+                (concatenate 'string (make-string 65535 :initial-element #\a)
+                             (string (code-char #x1F600)))  ; ASCII until the last char
+                (make-array 8 :element-type 'character :fill-pointer 5
+                              :initial-contents "abcdefgh") ; non-simple
+                (coerce "base" 'simple-base-string))))
+    (dolist (s cases)
+      (let ((back (wb-call "ECHO" s)))
+        (is (string= s back) "echo changed ~S" (subseq s 0 (min 16 (length s))))
+        (is (= (length s) (length back))))))
+  ;; the helpers: ASCII goes through, the first code/byte >= 128 refuses
+  (is (equalp (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(104 105))
+              (rulisp::%ascii-octets "hi")))
+  (is (null (rulisp::%ascii-octets (string (code-char 128)))))
+  (is (null (rulisp::%ascii-octets (format nil "ok until~C" (code-char 233)))))
+  (is (null (rulisp::%ascii-octets 42)))
+  (is (string= "hi" (rulisp::%octets-to-ascii-string
+                     (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(104 105)))))
+  (is (null (rulisp::%octets-to-ascii-string
+             (make-array 3 :element-type '(unsigned-byte 8) :initial-contents '(104 195 169))))))

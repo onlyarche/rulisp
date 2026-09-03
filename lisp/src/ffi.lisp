@@ -180,11 +180,35 @@ LEN = 0 never touches PTR (empty-transfer convention)."
             (setf (aref octets i) (cffi:mem-aref ptr :uint8 i)))))
     octets))
 
+(defun %octets-to-ascii-string (octets)
+  "OCTETS as a fresh string if every byte is ASCII, else NIL. v0.5: a typed
+check-and-store loop is a fraction of a UTF-8 decode, and ASCII is the
+common case (docs/benchmarks.md); the result is the same (simple-array
+character) babel would return."
+  (declare (type (simple-array (unsigned-byte 8) (*)) octets)
+           (optimize speed))
+  ;; peek before allocating: text that is non-ASCII from its first byte
+  ;; (CJK, say) must not pay for a string it will not use
+  (when (and (plusp (length octets)) (>= (aref octets 0) 128))
+    (return-from %octets-to-ascii-string nil))
+  (let* ((n (length octets))
+         (s (make-string n :element-type 'character)))
+    (declare (type (simple-array character (*)) s))
+    (dotimes (i n s)
+      (let ((b (aref octets i)))
+        (if (< b 128)
+            (setf (schar s i) (code-char b))
+            (return nil))))))
+
 (defun foreign-utf8 (ptr len)
-  "Copy LEN bytes at PTR into a fresh Lisp string (UTF-8 decode)."
+  "Copy LEN bytes at PTR into a fresh Lisp string (UTF-8 decode). All-ASCII
+input takes the typed loop; the first byte >= 128 hands the same octets
+to babel."
   (if (zerop len)
       ""
-      (babel:octets-to-string (foreign-octets ptr len) :encoding :utf-8)))
+      (let ((octets (foreign-octets ptr len)))
+        (or (%octets-to-ascii-string octets)
+            (babel:octets-to-string octets :encoding :utf-8)))))
 
 (defun call-with-bytes-arg (data fn)
   "Lend DATA — an octet vector, or any sequence coercible to one — to FN as
@@ -213,10 +237,40 @@ pinned and borrowed in place (no copy); anything else is coerced first."
              (setf (cffi:mem-aref buf :uint8 i) (aref octets i)))
            (funcall fn buf len)))))))
 
+(defun %ascii-octets (string)
+  "STRING's characters as a fresh octet vector if every one is ASCII, else
+NIL (the UTF-8 encoding of an ASCII string is its char codes). Typed per
+string representation so the loop compiles tight; a non-string falls
+through to babel and its diagnostics."
+  (declare (optimize speed))
+  (unless (and (stringp string)
+               ;; same peek as the decoder: no octet vector for text that
+               ;; is non-ASCII from its first character
+               (or (zerop (length string)) (< (char-code (char string 0)) 128)))
+    (return-from %ascii-octets nil))
+  (let* ((n (length string))
+         (out (make-array n :element-type '(unsigned-byte 8))))
+    (macrolet ((scan (stype accessor)
+                 `(let ((s string))
+                    (declare (type ,stype s))
+                    (dotimes (i n out)
+                      (let ((c (char-code (,accessor s i))))
+                        (if (< c 128)
+                            (setf (aref out i) c)
+                            (return nil)))))))
+      (typecase string
+        ((simple-array character (*)) (scan (simple-array character (*)) schar))
+        (simple-base-string (scan simple-base-string schar))
+        (string (scan string char))
+        (t nil)))))
+
 (defun call-with-utf8-arg (string fn)
   "Encode STRING as UTF-8 into foreign memory borrowed for the duration of
-FN, called as (FN ptr len). No NUL terminator; interior NULs are legal."
-  (call-with-bytes-arg (babel:string-to-octets string :encoding :utf-8) fn))
+FN, called as (FN ptr len). No NUL terminator; interior NULs are legal.
+All-ASCII strings skip babel (v0.5); the copy contract is unchanged."
+  (call-with-bytes-arg (or (%ascii-octets string)
+                           (babel:string-to-octets string :encoding :utf-8))
+                       fn))
 
 (defun call-with-optional-utf8-arg (s fn)
   "(:option :string) parameter: NIL → (FN 0 null 0), else (FN 1 ptr len)."

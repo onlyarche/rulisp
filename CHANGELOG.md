@@ -8,6 +8,18 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.5 development)
 
 ### Added
+- **`:string` ASCII fast path** — both directions of a `:string` now take
+  a typed check-and-store loop while the text is ASCII and hand the same
+  bytes to babel at the first char/byte ≥ 128, after a peek at the first
+  one so text that is non-ASCII from the start (CJK, say) allocates
+  nothing extra. Host-neutral, no wire change, the copy contract of
+  BOUNDARY §4 untouched — zero-copy `:string` stays refused. A 64 KiB
+  ASCII round trip drops from ~1 ms to ~0.32 ms on the benchmark host
+  (docs/benchmarks.md); non-ASCII text costs what it did. New
+  `v05.utf8-fastpath-boundary` walks the seam (empty, DEL, code 128,
+  interior NUL, Latin-1 range, 4-byte chars first/last, fill-pointer and
+  base strings) through wordbag's echo on all three hosts, and the bench
+  gains an rx "count over 1 MiB" row: a real `&str` consumer.
 - **Releases with audited assets** — every `v*` tag builds the four
   examples in the release profile on each required host (Linux x86-64,
   macOS arm64, Windows x86-64), runs `tools/rulisp-audit.sh` over each
