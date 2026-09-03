@@ -43,10 +43,16 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    attribute grammar and the type table, `missing_docs` clean on `rulisp`
    and `rulisp-macros`, a compiled crate-level doctest, `make doc` and a
    CI step with `RUSTDOCFLAGS=-D warnings`.
-8. **Release engineering + Linux aarch64** — GitHub Releases with audited
-   blobs for every required host and all four examples, `rust-version`
-   with an MSRV job, `make check-versions`, docs/releasing.md; an arm CI
-   job (best-effort first).
+8. ✅ **Release engineering + Linux aarch64** — every `v*` tag now
+   yields a GitHub Release with twelve audited assets (three required
+   hosts × four examples, named for `load-blob-crate`; Windows unaudited,
+   recorded in BOUNDARY §12) and the CHANGELOG section as body; v0.4.0
+   was backfilled the same way and its Linux blob loads. The first macOS
+   run found a real audit bug (an inner `_signal` read as a signal
+   import). `rust-version = "1.78"` with an MSRV job that also checks
+   generated code, `make check-versions` (fails on a skewed site),
+   docs/releasing.md, and `SBCL / Linux aarch64 (best-effort)` — green on
+   its first run.
 9. **`:string` ASCII fast path** — a typed ASCII loop before babel (both
    judges measured ~2.5×); zero-copy `:string` stays refused.
 10. **Miri over the generated shims** — optional; cut first.
