@@ -54,23 +54,34 @@ window would otherwise let a few collections through and mask the pin."
 (test v05.pin-does-not-stop-the-world
   "A failure here means a borrowed buffer stops every other Lisp thread's
 GC for the whole call — invisible to the suite (calls take microseconds)
-and to §12 (the row is a runtime-check), visible to any real workload."
+and to §12 (the row is a runtime-check), visible to any real workload.
+The bar is RELATIVE to a control on the same host: a GitHub macOS runner
+completes ~6 collections per 600 ms where this machine completes ~30, so
+an absolute threshold measured GC speed, not inhibition."
   (ensure-crate)
   (if (null (%gc-stamp))
       (pass "skipped: this host exposes no GC counter to observe (SBCL/CCL/ECL do)")
       (let ((octets (make-array (* 4 1024 1024) :element-type '(unsigned-byte 8)
                                                   :initial-element 1))
-            (ints (make-array 65536 :element-type '(signed-byte 64) :initial-element 3)))
-        (multiple-value-bind (gcs value)
-            (%gcs-during (lambda () (wb-call "SLOW-SUM" octets 600)))
-          (is (= (* 4 1024 1024) value))
-          (is (>= gcs 10) ":bytes borrow held for 600 ms; only ~D collections completed (unpinned: ~~30)" gcs))
-        (multiple-value-bind (gcs value)
-            (%gcs-during (lambda () (wb-call "SLOW-DOT" ints 600)))
-          (is (= (* 3 65536) value))
-          (is (>= gcs 10) ":vec borrow held for 600 ms; only ~D collections completed (unpinned: ~~30)" gcs))
-        ;; control: the same collector loop with no foreign call at all
+            (ints (make-array 65536 :element-type '(signed-byte 64) :initial-element 3))
+            (control 0))
+        ;; control first: the same collector loop with no foreign call
         (multiple-value-bind (gcs value)
             (%gcs-during (lambda () (sleep 0.6) :idle))
           (is (eq :idle value))
-          (is (>= gcs 10) "control: the collector itself made only ~D collections" gcs)))))
+          (setf control gcs))
+        (if (< control 2)
+            (pass "host completes fewer than 2 collections per 600 ms (~D); too slow to observe inhibition" control)
+            (let ((floor (max 1 (floor control 3))))
+              (multiple-value-bind (gcs value)
+                  (%gcs-during (lambda () (wb-call "SLOW-SUM" octets 600)))
+                (is (= (* 4 1024 1024) value))
+                (is (>= gcs floor)
+                    ":bytes borrow held for 600 ms: ~D collections completed vs ~D unpinned"
+                    gcs control))
+              (multiple-value-bind (gcs value)
+                  (%gcs-during (lambda () (wb-call "SLOW-DOT" ints 600)))
+                (is (= (* 3 65536) value))
+                (is (>= gcs floor)
+                    ":vec borrow held for 600 ms: ~D collections completed vs ~D unpinned"
+                    gcs control)))))))
