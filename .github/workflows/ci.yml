@@ -45,11 +45,18 @@ jobs:
         run: make test-m4
       - name: fetch suite (async HTTPS example; the §7/§10 enforcement §12 cites)
         run: make test-fetch
-      # docs/stability.md §9: loading the system must need no toolchain
+      # docs/stability.md §9: loading the system must need no toolchain.
+      # Separate --evals: a form is READ before the previous one runs, so
+      # asdf:/uiop: symbols can only appear after (require :asdf).
       - name: load :rulisp with cargo stripped from PATH
         run: |
-          env -i HOME="$HOME" PATH=/usr/bin:/bin sbcl --non-interactive \
-            --eval '(progn (require :asdf) (load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))) (push (merge-pathnames "lisp/" (uiop:getcwd)) asdf:*central-registry*) (ql:quickload :rulisp :silent t) (assert (null (probe-file "/usr/bin/cargo"))) (format t "LOADED-WITHOUT-CARGO~%"))' \
+          env -i HOME="$HOME" PATH=/bin /usr/bin/sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval '(load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))' \
+            --eval '(push (merge-pathnames "lisp/" (uiop:getcwd)) asdf:*central-registry*)' \
+            --eval '(assert (zerop (length (string-trim (list #\Newline) (uiop:run-program "command -v cargo || true" :output :string)))) () "cargo is still reachable on PATH")' \
+            --eval '(ql:quickload :rulisp :silent t)' \
+            --eval '(format t "LOADED-WITHOUT-CARGO~%")' \
             | tee no-cargo.log
           grep -q LOADED-WITHOUT-CARGO no-cargo.log
 
