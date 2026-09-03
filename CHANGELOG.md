@@ -55,6 +55,10 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   with no cargo on PATH.
 
 ### Fixed
+- **Audit false positive on macOS** — `tools/rulisp-audit.sh` matched an
+  inner `_signal` (`_dispatch_semaphore_signal`, imported by every macOS
+  artifact) as a signal import; only a leading underscore is Mach-O's now,
+  and the self-test checks the pattern both ways.
 - **On CCL, lending a buffer to Rust stopped the world.** CFFI's
   `with-pointer-to-vector-data` is `ccl:with-pointer-to-ivector` there,
   whose body runs under `without-gcing` — so every `:string`, `:bytes`

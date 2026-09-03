@@ -50,6 +50,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
+      # the audit as it is on the workflow's own ref (main, for a dispatch)
+      # rather than the tag's copy, so a re-run for an existing tag gets a
+      # fixed audit; on a tag push the two are the same tree
+      - uses: actions/checkout@v4
+        with:
+          path: .tooling
+          sparse-checkout: tools
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release --locked -p wordbag -p rx -p wasm -p fetch
       - name: audit (BOUNDARY §7) and name for load-blob-crate
@@ -57,7 +64,7 @@ jobs:
           mkdir -p blobs
           for c in wordbag rx wasm fetch; do
             src="target/release/${{ matrix.lib }}${c}.${{ matrix.ext }}"
-            sh tools/rulisp-audit.sh "$src" "examples/$c"
+            sh .tooling/tools/rulisp-audit.sh "$src" "examples/$c"
             cp "$src" "blobs/${{ matrix.lib }}${c}-${{ matrix.suffix }}.${{ matrix.ext }}"
           done
           ls -la blobs/

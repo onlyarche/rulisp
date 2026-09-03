@@ -13,21 +13,29 @@
 # rejects it — so the gate cannot quietly go inert again (an anchored
 # regex once did exactly that: glibc imports read `sigaction@GLIBC_2.2.5`).
 set -e
+SYMS='sigaction|signal|bsd_signal|sigprocmask|pthread_sigmask'
+# `(@|$)` and not `$` alone: versioned glibc imports. `_?` right after the
+# start or the separating space: Mach-O's leading underscore — and ONLY a
+# leading one. The earlier `(^|[ _])` also matched an inner underscore, so
+# `_dispatch_semaphore_signal` (imported by every macOS artifact) read as
+# `_signal` and failed every macOS release build.
+PATTERN="(^| )_?($SYMS)(@|\$)"
+# selftest hook: symbol lines on stdin, exit 0 iff one is a signal import
+[ "$1" = "--match" ] && { grep -Eq "$PATTERN"; exit $?; }
+
 ARTIFACT=$1
 CRATE_DIR=$2
 [ -n "$ARTIFACT" ] || { echo "usage: rulisp-audit.sh ARTIFACT [CRATE_DIR]"; exit 2; }
 [ -f "$ARTIFACT" ] || { echo "FAIL: no such artifact: $ARTIFACT"; exit 1; }
 
-SYMS='sigaction|signal|bsd_signal|sigprocmask|pthread_sigmask'
 case "$(uname -s)" in
   Linux)  UNDEF="nm -D --undefined-only" ;;
   Darwin) UNDEF="nm -u" ;;           # Mach-O: names carry a leading underscore
   *) echo "SKIP: signal-import check is not implemented for $(uname -s) (use dumpbin /imports)"; exit 0 ;;
 esac
-# `(@|$)` and not `$` alone: versioned glibc imports; `(^|[ _])`: Mach-O's `_`
-if $UNDEF "$ARTIFACT" | grep -Eq "(^|[ _])($SYMS)(@|\$)"; then
+if $UNDEF "$ARTIFACT" | grep -Eq "$PATTERN"; then
     echo "FAIL: $ARTIFACT imports a signal-disposition symbol:"
-    $UNDEF "$ARTIFACT" | grep -E "(^|[ _])($SYMS)(@|\$)"
+    $UNDEF "$ARTIFACT" | grep -E "$PATTERN"
     exit 1
 fi
 
