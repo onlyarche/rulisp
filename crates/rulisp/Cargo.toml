@@ -1,6 +1,6 @@
 [package]
 name = "rulisp"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.78"
 description = "Write Rust, call it from Common Lisp: user-facing crate for rulisp glue crates"
@@ -11,8 +11,8 @@ keywords = ["lisp", "common-lisp", "ffi", "bindings"]
 categories = ["development-tools::ffi"]
 
 [dependencies]
-rulisp-macros = { path = "../rulisp-macros", version = "0.4.0" }
-rulisp-runtime = { path = "../rulisp-runtime", version = "0.4.0" }
+rulisp-macros = { path = "../rulisp-macros", version = "0.5.0" }
+rulisp-runtime = { path = "../rulisp-runtime", version = "0.5.0" }
 
 [dev-dependencies]
 trybuild = "1"

@@ -23,7 +23,7 @@ minor.
 ## 2. Versions
 
 - The three crates and the ASDF system **share one version** and are
-  released together (0.4.0 everywhere today). A glue crate built against
+  released together (0.5.0 everywhere today). A glue crate built against
   `rulisp = "0.x"` loads under the `rulisp` ASDF system of the same 0.x.
 - Pre-1.0 semver: a **minor** (0.x → 0.x+1) may break the Rust API or the
   Lisp API, with the change and its migration named in CHANGELOG.md; a
