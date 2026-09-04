@@ -2,6 +2,8 @@
 
 ## v0.5 — a 1.0 candidate a stranger can verify
 
+**Released as 0.5.0 on 2026-09-04** (crates.io, tag `v0.5.0`, GitHub Release with 12 audited assets). Items 1–9 and 11 shipped; 10 cut.
+
 Make every front door true — CI runs what BOUNDARY §12 cites, releases
 exist, docs.rs and the REPL explain themselves — fix the two defects §12
 cannot see, and write down what 1.0 promises. No new boundary feature, no
@@ -52,7 +54,11 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    import). `rust-version = "1.78"` with an MSRV job that also checks
    generated code, `make check-versions` (fails on a skewed site),
    docs/releasing.md, and `SBCL / Linux aarch64 (best-effort)` — green on
-   its first run.
+   its first four runs; its first failure came on the 0.5.0 release
+   commit: `m4.gc-finalization` saw 893 of 1000 handles still live after
+   100 full GCs (all required hosts reach 0). Not understood yet — it
+   blocks promotion until it is (a real arm64 GC/finalizer difference,
+   or a flake to be characterised over more runs).
 9. ✅ **`:string` ASCII fast path** — a typed check-and-store loop in
    both directions, babel from the first char/byte ≥ 128, a peek before
    any allocation so non-ASCII text pays nothing extra: 64 KiB ASCII

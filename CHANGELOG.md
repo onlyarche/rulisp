@@ -5,6 +5,8 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
+## Unreleased (0.6 development)
+
 ## 0.5.0 — 2026-09-04
 
 ### Added
