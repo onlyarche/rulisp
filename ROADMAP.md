@@ -21,9 +21,23 @@ Budget 2 M + 12 S.
    `v06.restore-failure-leaves-no-live-foreign-pointer` restores without
    the artifact and runs the hooks — red on the old loader (three checks,
    the fault in the log), green on SBCL and CCL after.
-2. **`m4.gc-finalization` GC-timing assumption** — the aarch64 "failure"
-   is the pre-GC assertion racing a nursery collection, reproducible on
-   x86-64; fix the test, restart the promotion clock.
+2. ✅ **`m4.gc-finalization` GC-timing assumption** — the aarch64
+   "failure" was the pre-GC assertion racing a nursery collection inside
+   the constructor loop (the handles were dropped as they were made);
+   reproduced on x86-64 with a 256 KiB nursery, 4 of 5 runs. The test now
+   holds all 1000 handles while it counts them, then drops every
+   reference and runs the unchanged bounded GC loop — 0 of 5 under the
+   same mutation. The arm promotion clock restarts at this commit
+   (2026-09-08). Promotion, once the streak is documented (ECL's
+   precedent: 24 runs over 35 days), is ONE commit: drop
+   `continue-on-error`, rename to "(required)", add the
+   `ubuntu-24.04-arm / linux-arm64 / so / lib` leg to blobs.yml and raise
+   its asset count from 12 to 16, docs/releasing.md "twelve" → sixteen,
+   the README §Status table, stability.md §5, usage.md's release blob
+   list, docs/claims.md's two host rows, and a `load-blob-crate` step on
+   the arm job (Case A exercised on arm). A second, *different* arm
+   failure is a real finding: the job stays best-effort and this entry
+   says how many runs it has.
 3. **Cross-version gates pinned to v0.5.0** (M) — old loader/new crate,
    old crate/new loader, old suite/new loader, plus the ABI-2 fixture.
 4. **Close the last §12 GAP** (M) — a PE branch in the audit script
@@ -128,11 +142,11 @@ docs/design/v05-plan.md (three-proposal panel, two verifying judges).
    import). `rust-version = "1.78"` with an MSRV job that also checks
    generated code, `make check-versions` (fails on a skewed site),
    docs/releasing.md, and `SBCL / Linux aarch64 (best-effort)` — green on
-   its first four runs; its first failure came on the 0.5.0 release
-   commit: `m4.gc-finalization` saw 893 of 1000 handles still live after
-   100 full GCs (all required hosts reach 0). Not understood yet — it
-   blocks promotion until it is (a real arm64 GC/finalizer difference,
-   or a flake to be characterised over more runs).
+   its first four runs; its one failure, on the 0.5.0 release commit,
+   was `m4.gc-finalization`'s pre-GC assertion racing a nursery
+   collection inside the constructor loop — a timing assumption in the
+   test, reproduced on x86-64 with a 256 KiB nursery, never an arm
+   difference. Fixed in v0.6 item 2, where the promotion clock restarts.
 9. ✅ **`:string` ASCII fast path** — a typed check-and-store loop in
    both directions, babel from the first char/byte ≥ 128, a peek before
    any allocation so non-ASCII text pays nothing extra: 64 KiB ASCII

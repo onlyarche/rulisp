@@ -7,6 +7,15 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.6 development)
 
+### Changed
+- **`m4.gc-finalization` no longer assumes no collection runs inside its
+  constructor loop.** It dropped each of 1000 handles as it made them and
+  then asserted all 1000 live; a nursery GC inside the loop finalizes
+  some first — the Linux aarch64 job's one failure, reproduced on x86-64
+  with a small nursery. The test now holds the handles while it counts
+  them, then releases every reference and collects. The arm job's
+  promotion streak restarts here.
+
 ### Fixed
 - **A crate whose reload failed on image restore could crash the next
   dump.** `%stub-crate` replaced the generated functions but left the

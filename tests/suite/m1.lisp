@@ -134,14 +134,25 @@
     (is (= 3 (wb-call "ADD" 1 2)))))
 
 (test m4.gc-finalization
+  ;; Two claims, kept apart: 1000 handles made and HELD are 1000 live Rust
+  ;; objects; once nothing holds them, the finalizers release every one.
+  ;; The first version dropped each handle as it was made and asserted
+  ;; 1000 live afterwards — a nursery collection inside the loop may
+  ;; legitimately finalize some first (the aarch64 job's one failure; 4 of
+  ;; 5 runs on x86-64 with a 256 KiB nursery; v0.6 plan item 2).
   (ensure-crate)
-  (let ((before (live-bags)))
-    (funcall (compile nil '(lambda (ctor n)
-                             (dotimes (i n) (funcall ctor))))
-             (symbol-function (wb "MAKE-WORD-BAG")) 1000)
+  (let ((before (live-bags))
+        (holder (make-array 1000 :initial-element nil)))
+    (funcall (compile nil '(lambda (ctor v)
+                             (dotimes (i (length v))
+                               (setf (aref v i) (funcall ctor)))))
+             (symbol-function (wb "MAKE-WORD-BAG")) holder)
     (is (= (+ before 1000) (live-bags)))
-    ;; SBCL reaches exactly zero; hosts with conservative stack scanning
-    ;; (e.g. CCL) may pin a straggler in a dead frame — allow a tiny residue
+    ;; drop every reference, then collect. SBCL reaches exactly zero; hosts
+    ;; with conservative stack scanning (e.g. CCL) may pin a straggler in a
+    ;; dead frame — allow a tiny residue
+    (fill holder nil)
+    (setf holder nil)
     (let ((slack #+sbcl 0 #-sbcl 2))
       (loop repeat 100
             until (<= (live-bags) (+ before slack))
