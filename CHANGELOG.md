@@ -7,6 +7,20 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.6 development)
 
+### Fixed
+- **A crate whose reload failed on image restore could crash the next
+  dump.** `%stub-crate` replaced the generated functions but left the
+  dumped image's library handle and dump-hook pointer on the crate
+  object, so `%run-crate-dump-hooks` — what the next `uiop:dump-image`
+  runs first — called into the dead mapping (SBCL: `CORRUPTION WARNING
+  … Memory fault`; found by the v0.6 panel, docs/design/v06-plan.md item
+  1). Every foreign pointer is dropped with the functions now; the crate
+  is inert until `reload-crate` succeeds (which un-stubs it), `describe`
+  says so with the reason, and BOUNDARY §10 states the rule. The restore
+  hook also catches any `serious-condition` from the reload, not only
+  `error` — on ECL a host fault inside `dlopen` is a storage-condition
+  and used to escape the hook with the crate left half-alive.
+
 ## 0.5.0 — 2026-09-04
 
 ### Added

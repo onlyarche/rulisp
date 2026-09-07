@@ -206,6 +206,10 @@ Differences from the borrowed form:
   recorded artifact path and regenerates all bindings.
 - Freeing a dead-session handle performs no foreign call (the pointer
   belonged to a previous process image).
+- A crate whose reload failed on restore is inert until `reload-crate`
+  succeeds: its exports signal `crate-not-loaded-error`, its declared
+  dump hook is not run, and the crate object keeps no pointer into the
+  dead mapping (v0.6).
 - **There is no guardrail against dumping with live foreign threads.**
   `save-lisp-and-die` refuses to run with multiple *Lisp* threads, but it
   does not see threads a glue crate spawned — the dump succeeds and those
@@ -379,6 +383,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Every pre-dump handle cell is invalid: signals `stale-handle-error`, never dereferences | runtime-check | `lisp/src/handle.lisp:37-52` (session gate in `cell-begin-call`); pinned by `m7.dump-restore` (`tests/suite/m1.lisp:312-316`) |
 | Every captured wrapper closure of a dead session refuses (`crate-not-loaded-error`) | runtime-check | `lisp/src/codegen.lisp:469-474`; pinned by `m7.dump-restore` (`tests/suite/m1.lisp:319-323`) |
 | Then each crate reloads from its recorded artifact path and all bindings regenerate | test | `m7.dump-restore` (`tests/suite/m1.lisp:310-311`: post-restore GREET works); mechanism `lisp/src/crate.lisp:311-319` |
+| A crate whose reload failed on restore keeps no pointer into the dead mapping; its dump hook is not run | test | `v06.restore-failure-leaves-no-live-foreign-pointer` (`tests/suite/v06.lisp`: restore without the artifact, then run the dump hooks; the log must carry no memory fault); mechanism `%stub-crate` (`lisp/src/crate.lisp`) |
 | Freeing a dead-session handle performs no foreign call | runtime-check | `lisp/src/handle.lisp:69-75` (`%maybe-foreign-free` session gate); m7 exercises explicit free + GC-finalizer path (`m1.lisp:317,324-329`) |
 | No guardrail against dumping with live foreign threads; they vanish on restore, their state gone | UB-by-design | `BOUNDARY.md:202-209` |
 | Thread-owning crates quiesce before a dump via the declared `:on-dump` hook (or the manual pattern) | runtime-check | `%run-crate-dump-hooks` + `%validate-on-dump`; tests `v04.on-dump-*` (every suite host), `fetch.dump-hook-quiesces`, `fetch.dump-restore-refuses` (CI: SBCL/Linux and CCL/Linux required jobs, `make test-fetch`) |

@@ -28,7 +28,10 @@
    (dealloc-ptr :initform nil :accessor crate-dealloc-ptr)
    (symbols :initform nil :accessor crate-symbols)
    (handle-frees :initform nil :accessor crate-handle-frees)
-   (on-dump-ptr :initform nil :accessor crate-on-dump-ptr)))
+   (on-dump-ptr :initform nil :accessor crate-on-dump-ptr)
+   ;; set by %stub-crate when a reload failed on image restore; cleared by
+   ;; the next successful generation commit
+   (stub-reason :initform nil :accessor crate-stub-reason)))
 
 (defmethod print-object ((c crate) stream)
   (print-unreadable-object (c stream :type t)
@@ -230,7 +233,8 @@ slots and the package mutated."
                              err-conds))
          (prepared (prepare-bindings crate manifest ctx resolve)))
     ;; Nothing below signals.
-    (setf (crate-generation crate) gen
+    (setf (crate-stub-reason crate) nil   ; a successful commit un-stubs
+          (crate-generation crate) gen
           (crate-lib-handle crate) lib
           (crate-prefix crate) prefix
           (crate-manifest crate) manifest
@@ -339,7 +343,11 @@ from, which generation, what it exports and with which signatures."
     (format stream "  Package:        ~A~%" (package-name pkg))
     (format stream "  Generation:     ~D (session ~D)~%" (crate-generation c) *session*)
     (format stream "  Artifact:       ~A~%" (crate-source-path c))
-    (format stream "  Loaded copy:    ~A~%" (crate-cache-path c))
+    (format stream "  Loaded copy:    ~A~%" (or (crate-cache-path c) "none"))
+    (when (crate-stub-reason c)
+      (format stream "  State:          stubbed (~A); every export signals ~
+                      crate-not-loaded-error until reload-crate succeeds~%"
+              (crate-stub-reason c)))
     (when m
       (format stream "  Crate version:  ~A~%" (or (manifest-crate-version m) "?"))
       (format stream "  Built with:     rulisp ~A (this loader: ~A)~%"
@@ -382,12 +390,27 @@ deleted at all, so the delete simply fails and is ignored."
 ;;; ---------------------------------------------------------------------------
 
 (defun %stub-crate (crate reason)
+  "A crate whose reload failed on image restore is inert until RELOAD-CRATE
+succeeds: every generated function signals CRATE-NOT-LOADED-ERROR, and
+every foreign pointer the crate object still carries from the dumped
+image — the library handle, the dump hook, last-error, dealloc, the free
+shims, the cache copy — is dropped, so nothing on the crate (the dump
+hook runner in particular) can call into the dead mapping. Found by the
+v0.6 panel: the next dump's hook run jumped into unmapped memory.
+The artifact path stays, so a later RELOAD-CRATE knows where to look."
   (dolist (sym (crate-symbols crate))
     (let ((name (crate-name crate)))
       (setf (symbol-function sym)
             (lambda (&rest args)
               (declare (ignore args))
-              (error 'crate-not-loaded-error :name name :message reason))))))
+              (error 'crate-not-loaded-error :name name :message reason)))))
+  (setf (crate-lib-handle crate) nil
+        (crate-on-dump-ptr crate) nil
+        (crate-last-error-ptr crate) nil
+        (crate-dealloc-ptr crate) nil
+        (crate-handle-frees crate) nil
+        (crate-cache-path crate) nil
+        (crate-stub-reason crate) reason))
 
 (defun %restore-all-crates ()
   ;; Session bump comes FIRST: even if reloading fails below, every pre-dump
@@ -400,9 +423,12 @@ deleted at all, so the delete simply fails and is ignored."
   (bt:with-lock-held (*registry-lock*)
     (maphash
      (lambda (name crate)
+       ;; serious-condition, not error: a host fault inside dlopen arrives
+       ;; as a storage-condition on ECL (segmentation-violation), and a
+       ;; crate that failed to reload must be stubbed whatever the class
        (handler-case
            (%load-crate-locked (crate-source-path crate) name nil)
-         (error (e)
+         (serious-condition (e)
            (warn "rulisp: could not reload crate ~A on image restore: ~A" name e)
            (%stub-crate crate (format nil "reload failed on image restore: ~A" e)))))
      *crates*)))

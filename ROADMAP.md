@@ -14,10 +14,13 @@ classified up front. No new boundary feature, no flagship; ABI 1 and
 and cut order: [docs/design/v06-plan.md](docs/design/v06-plan.md).
 Budget 2 M + 12 S.
 
-1. **Restore-failure dead pointers** — a crate whose reload failed on
-   image restore keeps the dead library's pointers; the next dump's hook
-   run jumps into unmapped memory (reproduced: SBCL `CORRUPTION
-   WARNING`). Stub every foreign slot.
+1. ✅ **Restore-failure dead pointers** — a crate whose reload failed on
+   image restore kept the dead library's pointers; the next dump's hook
+   run jumped into unmapped memory (SBCL `CORRUPTION WARNING`). Every
+   foreign slot is stubbed with the functions now; `describe` says so;
+   `v06.restore-failure-leaves-no-live-foreign-pointer` restores without
+   the artifact and runs the hooks — red on the old loader (three checks,
+   the fault in the log), green on SBCL and CCL after.
 2. **`m4.gc-finalization` GC-timing assumption** — the aarch64 "failure"
    is the pre-GC assertion racing a nursery collection, reproducible on
    x86-64; fix the test, restart the promotion clock.
