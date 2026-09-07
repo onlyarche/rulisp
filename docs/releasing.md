@@ -47,7 +47,10 @@ worked; each has a check, so a slip is caught before the next step.
    `(asdf:component-version (asdf:find-system :rulisp))`. Quicklisp is a
    1.0 decision (docs/stability.md §9).
 9. **Open the next cycle.** Add `## Unreleased (X.Y+1 development)` at
-   the top of CHANGELOG.md.
+   the top of CHANGELOG.md, and move the previous-release pins in
+   `.github/workflows/ci.yml` to the release just made: `make compat
+   PREV=vX.Y.Z` and `gh release download vX.Y.Z` — they compare every
+   push against the last release, so they cannot be moved at step 1.
 
 **Yanking.** A release found unsound is yanked from crates.io
 (`cargo yank --vers X.Y.Z -p <crate>`, all three crates) and the GitHub

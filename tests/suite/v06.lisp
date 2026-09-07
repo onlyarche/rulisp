@@ -129,3 +129,21 @@
         (uiop:delete-file-if-exists script)
         (uiop:delete-file-if-exists artifact)
         (uiop:delete-file-if-exists backup)))))
+
+;;; ---------------------------------------------------------------------------
+;;; BOUNDARY §1: abi_version() is checked first, before a byte of manifest is
+;;; read, and must equal 1. Until v0.6 no test simulated a mismatch (§12 said
+;;; so). tests/abi-fixture is a cdylib whose only export answers 2.
+;;; ---------------------------------------------------------------------------
+
+(test v06.abi-mismatch-refused
+  (let ((dir (asdf:system-relative-pathname :rulisp "../tests/abi-fixture/")))
+    (handler-case
+        (progn (rulisp:use-crate dir)
+               (fail "an artifact whose abi_version() answers 2 was loaded"))
+      (rulisp:abi-mismatch-error (e)
+        (is (eql 1 (rulisp::abi-mismatch-expected e)))
+        (is (eql 2 (rulisp::abi-mismatch-actual e)))
+        ;; refused before anything was registered or interned
+        (is (null (gethash "abifix" rulisp::*crates*)) "a refused artifact left a crate object")
+        (is (null (find-package "ABIFIX")) "a refused artifact left a package")))))

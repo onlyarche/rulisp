@@ -16,3 +16,4 @@ examples/*/target-abort-check/
 tests/ecl-program/rulisp-ecl-smoke
 ecl-program-*.log
 tools/audit-fixture/target/
+tests/abi-fixture/target/

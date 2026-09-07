@@ -7,6 +7,17 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.6 development)
 
+### Added
+- **Cross-version gates, pinned to the previous release.** `make compat`
+  loads this tree's `wordbag` with the v0.5.0 loader (any warning but
+  `rulisp-version-skew` is an error) and runs the v0.5.0 test suite
+  against this tree's loader, on every push; the release-asset step is
+  pinned to v0.5.0 so it stays old-crate/new-loader after the next
+  release. `v06.abi-mismatch-refused` loads `tests/abi-fixture`, whose
+  `abi_version()` answers 2, and expects the refusal before a byte of
+  manifest is read — the §12 row that said "no suite test simulates a
+  mismatch" now cites it.
+
 ### Changed
 - **`m4.gc-finalization` no longer assumes no collection runs inside its
   constructor loop.** It dropped each of 1000 handles as it made them and

@@ -1,0 +1,11 @@
+[package]
+name = "abifix"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "abi_version() answers 2: the loader must refuse this before reading a byte of manifest"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]

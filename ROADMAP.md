@@ -38,8 +38,17 @@ Budget 2 M + 12 S.
    the arm job (Case A exercised on arm). A second, *different* arm
    failure is a real finding: the job stays best-effort and this entry
    says how many runs it has.
-3. **Cross-version gates pinned to v0.5.0** (M) — old loader/new crate,
-   old crate/new loader, old suite/new loader, plus the ABI-2 fixture.
+3. ✅ **Cross-version gates pinned to v0.5.0** (M) — `make compat` on
+   every push: the v0.5.0 loader loads this tree's wordbag (any warning
+   but `rulisp-version-skew` is an error) and the v0.5.0 suite runs
+   against this tree's loader (366/366 today); the release-asset step is
+   pinned to v0.5.0. Both directions falsified: a renderer emitting
+   `:schema 2` is refused by the old loader, and a changed `free` return
+   value fails ten old-suite checks. `v06.abi-mismatch-refused` loads a
+   fixture whose `abi_version()` answers 2 and expects the refusal with
+   nothing registered — the §12 row that said "no suite test simulates
+   a mismatch" now cites it. The pins move at each release
+   (docs/releasing.md step 9).
 4. **Close the last §12 GAP** (M) — a PE branch in the audit script
    (`llvm-readobj --coff-imports`), self-tested on Windows, every
    release asset re-audited.

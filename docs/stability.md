@@ -20,6 +20,13 @@ implementation detail of the macros, not a surface: only generated code
 and the hand-written ABI oracle call them, and they may change in any
 minor.
 
+The previous release is the yardstick, on every push: `make compat` in
+the SBCL/Linux CI job loads this tree's crate with the previous release's
+loader and runs the previous release's test suite against this tree's
+loader. When that old suite fails, the rule is: a test that reaches
+`rulisp::` internals is recorded and skipped by name; a failure through
+an exported symbol is a break and does not land in a minor.
+
 ## 2. Versions
 
 - The three crates and the ASDF system **share one version** and are
@@ -106,7 +113,10 @@ change. Exit criteria, all checkable:
 2. The v0.5 plan's items shipped (docs/design/v05-plan.md; item 10 is
    optional).
 3. One full release cycle after v0.5 with **no** break on any surface —
-   the deprecation policy exercised only if something turns out to need it.
+   the deprecation policy exercised only if something turns out to need
+   it. Checked: `make compat` (§1) on every push, the pinned release
+   asset loaded with `load-blob-crate` in the same job, and
+   `v06.abi-mismatch-refused` for the ABI gate.
 4. Every user-facing claim in README and docs/ cites a test, a CI job or a
    benchmark row, or is gone (v0.5 item 11), and BOUNDARY §12 has no gap.
 5. The Quicklisp prerequisites in §9 met.

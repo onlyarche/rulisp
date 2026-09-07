@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat bench clean
 
 build:
 	$(CARGO) build
@@ -57,6 +57,28 @@ audit:
 doc:
 	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --no-deps -p rulisp -p rulisp-macros -p rulisp-runtime
 	$(CARGO) test --doc -p rulisp
+
+# docs/stability.md §8 criterion 3, checked (Linux): the previous release's
+# loader loads the tree's crate (forward), and the previous release's test
+# suite runs against the tree's loader (its calls, our code). PREV is the
+# last release; docs/releasing.md step 9 moves it. When the old suite
+# fails: a test that reaches rulisp:: internals is recorded and skipped by
+# name; a failure through an exported symbol is a break and does not land.
+PREV ?= v0.5.0
+COMPAT := $(CURDIR)/target/compat
+compat:
+	$(CARGO) build -p wordbag
+	rm -rf $(COMPAT) && mkdir -p $(COMPAT)/loader $(COMPAT)/tree
+	git archive $(PREV) lisp | tar -x -C $(COMPAT)/loader
+	RULISP_PREV=$(PREV) RULISP_PREV_LISP=$(COMPAT)/loader/lisp/ \
+	  RULISP_ARTIFACT=$(CURDIR)/target/debug/libwordbag.so \
+	  $(SBCL) --non-interactive --load tests/compat/old-loader.lisp 2>&1 | tee $(COMPAT)/old-loader.log
+	grep -q "OLD-LOADER-OK Hello, $(PREV) loader!" $(COMPAT)/old-loader.log
+	git archive $(PREV) | tar -x -C $(COMPAT)/tree
+	cp lisp/src/*.lisp $(COMPAT)/tree/lisp/src/
+	cd $(COMPAT)/tree && $(SBCL) --non-interactive --load tests/run-m4.lisp > $(COMPAT)/old-suite.log 2>&1; \
+	  tail -4 $(COMPAT)/old-suite.log
+	grep -q "Fail: 0" $(COMPAT)/old-suite.log
 
 # one version string across the crates, the path pins, the ASDF system
 # and the docs (docs/releasing.md step 1); fails on any site that disagrees
