@@ -55,6 +55,19 @@ Budget 2 M + 12 S.
     citation refresh, the stale ROADMAP prose, and the API review's
     negative result recorded.
 
+Found during item 1, not scheduled (a decision for the maintainer):
+a **truncated artifact at restore** — the file is present but cut
+short, as a partial copy leaves it — faults inside glibc's `dlopen`
+(SBCL: `Signal 7 … Continuing with fingers crossed`; ld.so's load lock
+is left held, so a later `reload-crate` from another thread hangs; CCL
+hangs at startup). Reproduced by the item-1 attack agent on SBCL 2.1.11
+and CCL 1.13 (scripts in the session scratchpad). The stub itself works;
+the hazard is the dlopen of a corrupt file, which no check precedes. A
+fix would validate the object file's headers against its size before
+`dlopen` (ELF, Mach-O and PE each need their own ~15 lines) — an S item
+if wanted, with a test that truncates the artifact between dump and
+restore.
+
 Not in v0.6 (causes in the plan): a flagship (no external request),
 hiding `rulisp::runtime` (the 1.0 major), a deprecation round (nothing
 to deprecate), renames, scheduled arm promotion (the streak decides),
