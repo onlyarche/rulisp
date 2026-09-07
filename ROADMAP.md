@@ -1,5 +1,63 @@
 # Roadmap
 
+## v0.6 — the no-break cycle, measured
+
+docs/stability.md §8 criterion 3 asks for one full cycle after v0.5 with
+no break on any surface. v0.6 is that cycle, and it makes the claim a CI
+fact: each of the four surfaces gets a gate keyed to the 0.5.0 release
+(cargo-semver-checks, a golden of the exported Lisp API, three-way
+loader/crate/suite compatibility pinned to v0.5.0, an `abi_version()=2`
+fixture), the last BOUNDARY §12 GAP closes, and the loader defects the
+panel reproduced — the ones only a pre-freeze minor may fix — land
+classified up front. No new boundary feature, no flagship; ABI 1 and
+`:schema` 1 untouched. Full plan with demand cases, acceptance criteria
+and cut order: [docs/design/v06-plan.md](docs/design/v06-plan.md).
+Budget 2 M + 12 S.
+
+1. **Restore-failure dead pointers** — a crate whose reload failed on
+   image restore keeps the dead library's pointers; the next dump's hook
+   run jumps into unmapped memory (reproduced: SBCL `CORRUPTION
+   WARNING`). Stub every foreign slot.
+2. **`m4.gc-finalization` GC-timing assumption** — the aarch64 "failure"
+   is the pre-GC assertion racing a nursery collection, reproducible on
+   x86-64; fix the test, restart the promotion clock.
+3. **Cross-version gates pinned to v0.5.0** (M) — old loader/new crate,
+   old crate/new loader, old suite/new loader, plus the ABI-2 fixture.
+4. **Close the last §12 GAP** (M) — a PE branch in the audit script
+   (`llvm-readobj --coff-imports`), self-tested on Windows, every
+   release asset re-audited.
+5. **"Required" becomes a release gate** — the release job refuses a
+   tag whose required CI jobs are not green; a repository ruleset too.
+6. **Rust API gate** — cargo-semver-checks against crates.io 0.5.0 with
+   `--release-type minor`; `rulisp::runtime` stays public and checked
+   (hiding it is the 1.0 major's first commit).
+7. **Lisp API gate** — `tests/golden/lisp-api.sexp` (symbols, kinds,
+   superclasses, lambda lists), checked on every host.
+8. **Export what the docs already name** — `rulisp-version-skew`, the
+   eleven unexported condition readers (32 → 47), docstrings on every
+   exported class and reader, the stale `Error::msg` doc.
+9. **`crate-generation` becomes a reader** — the exported `setf` lets a
+   stale handle into a new library (reproduced); a §4 soundness fix.
+10. **A cargo that cannot run is `build-error`** with a working
+    `retry-build`, identically on every host.
+11. **`Option<f32>`/`Option<f64>` NIL** is a host TYPE-ERROR on SBCL and
+    CCL (reproduced); typed placeholder in codegen, `opt_scale` fixture.
+12. **Renamed artifacts** — the refusal names `:crate` as the fix, and a
+    failed load no longer leaks an unsweepable cache copy (reproduced).
+13. **Quicklisp dist dry run in CI** — every system in every `.asd` of
+    the tarball loads without cargo; stability §9 rewritten to that.
+14. **Close the cycle** — `tools/check-1.0.sh` (the exit criteria as a
+    script), `tools/check-dist.sh` (Ultralisp serves 0.3.0 today, three
+    days after the tag — releasing.md step 8 becomes a command), the §12
+    citation refresh, the stale ROADMAP prose, and the API review's
+    negative result recorded.
+
+Not in v0.6 (causes in the plan): a flagship (no external request),
+hiding `rulisp::runtime` (the 1.0 major), a deprecation round (nothing
+to deprecate), renames, scheduled arm promotion (the streak decides),
+scalar coercion, structured error payloads, Miri/sanitizers/soak,
+introspection APIs without a consumer, and every v0.4/v0.5 refusal.
+
 ## v0.5 — a 1.0 candidate a stranger can verify
 
 **Released as 0.5.0 on 2026-09-04** (crates.io, tag `v0.5.0`, GitHub Release with 12 audited assets). Items 1–9 and 11 shipped; 10 cut.
