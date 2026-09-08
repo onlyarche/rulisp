@@ -49,9 +49,15 @@ Budget 2 M + 12 S.
    nothing registered — the §12 row that said "no suite test simulates
    a mismatch" now cites it. The pins move at each release
    (docs/releasing.md step 9).
-4. **Close the last §12 GAP** (M) — a PE branch in the audit script
-   (`llvm-readobj --coff-imports`), self-tested on Windows, every
-   release asset re-audited.
+4. ✅ **Close the last §12 GAP** (M) — the audit dispatches on the
+   artifact's magic, not the host: ELF via `nm`, Mach-O via `nm` or
+   rustup's `llvm-nm`, PE via rustup's `llvm-readobj --coff-imports`
+   against Windows' analogues of a signal handler; a format it cannot
+   read fails. The Windows CI job runs `make audit` (its self-test
+   rejects the fixture DLL), and the release job re-audits all twelve
+   downloaded assets on Linux before attaching them — verified with a
+   `publish: false` dispatch for v0.5.0 (12 `audit ok`, assets
+   untouched). `grep -c '^|.*GAP' BOUNDARY.md` is 0.
 5. **"Required" becomes a release gate** — the release job refuses a
    tag whose required CI jobs are not green; a repository ruleset too.
 6. **Rust API gate** — cargo-semver-checks against crates.io 0.5.0 with
