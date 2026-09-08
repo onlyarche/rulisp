@@ -30,6 +30,17 @@ jobs:
         run: cargo test --doc -p rulisp
       - name: BOUNDARY §7 signal audit over every example (with self-test)
         run: make audit
+      # docs/stability.md §1, the Rust surface: this tree against the
+      # latest crates.io release, asked the criterion-3 question — does it
+      # break a consumer of that release? `--release-type minor` is
+      # load-bearing: under Cargo's 0.x rule a 0.5→0.6 bump would license
+      # breaking changes. rulisp::runtime is public and checked too; hiding
+      # it is the 1.0 major's first commit.
+      - name: Rust API gate (cargo-semver-checks vs the crates.io release, as a minor)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: rulisp-runtime,rulisp-macros,rulisp
+          release-type: minor
 
   msrv:
     # docs/stability.md §6: the declared rust-version is checked on exactly

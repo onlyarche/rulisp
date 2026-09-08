@@ -8,6 +8,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.6 development)
 
 ### Added
+- **Rust API gate.** Every push runs `cargo-semver-checks` over
+  `rulisp`, `rulisp-macros` and `rulisp-runtime` against the latest
+  crates.io release with `--release-type minor` — the criterion-3
+  question, "does this tree break a consumer of the release", asked
+  mechanically. `rulisp::runtime` stays public and is checked with the
+  rest; hiding it waits for the 1.0 major.
+### Added
 - **"Required" is a release gate.** The release job refuses to attach
   assets to a tag whose commit's CI run does not have every `(required)`
   job and `MSRV` concluded success — no run, or a run still in progress,

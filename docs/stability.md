@@ -18,7 +18,16 @@ makes is enforced.
 `rulisp-runtime`'s helper functions (`str_arg`, `handle_new`, …) are an
 implementation detail of the macros, not a surface: only generated code
 and the hand-written ABI oracle call them, and they may change in any
-minor.
+minor. Until 1.0 hides the `rulisp::runtime` path, though, the semver
+job checks it like the rest — hiding it is the 1.0 major's first
+commit, where the tool permits it.
+
+The Rust surface's gates: `cargo-semver-checks --release-type minor`
+against the latest crates.io release in the `cargo tests` CI job (the
+tree stays at the released version until a release, so "minor" asks
+whether this tree breaks a consumer of that release); the manifest
+byte gates `fx.golden-manifest` and `manifest_matches_golden`; and
+`make test-m2` against the hand-written ABI oracle.
 
 The previous release is the yardstick, on every push: `make compat` in
 the SBCL/Linux CI job loads this tree's crate with the previous release's
