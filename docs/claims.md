@@ -64,11 +64,11 @@ Dated wording ("since 0.2") is not a claim and is not listed.
 | Measured boundary costs with the method are in docs/benchmarks.md | performance | docs/benchmarks.md "Method" + "Baseline — 2026-09-03" table (make bench, tests/bench.lisp) |
 | docs/stability.md says what is stable, what 1.0 will promise, and how hosts are supported | capability | docs/stability.md §1 (surfaces), §5 (host support = required CI jobs), §8 (1.0 exit criteria) |
 | SECURITY.md covers reporting a vulnerability and the threat model | capability | SECURITY.md sections "Reporting a vulnerability" and "Threat model" |
-| CI-verified: SBCL on Linux x86-64 | host | .github/workflows/ci.yml job "SBCL / Linux x86-64 (required)" (make test-m2, test-m4, test-fetch, no-cargo load) |
-| CI-verified: SBCL on macOS arm64 | host | .github/workflows/ci.yml job "SBCL / macOS arm64 (required)" (macos-latest, make test-m4) |
-| CI-verified: SBCL on Windows x86-64 | host | .github/workflows/ci.yml job "SBCL / Windows x86-64 (required)" (cargo test + make test-m4) |
-| CI-verified: Clozure CL 1.13 on Linux x86-64 | host | .github/workflows/ci.yml job "CCL / Linux x86-64 (required)" downloads ccl-1.13-linuxx86.tar.gz; make test-ccl + test-fetch-ccl |
-| CI-verified: ECL 21+ on Linux | host | .github/workflows/ci.yml job "ECL / Linux (required)" (apt ecl = 21.2.1; run-m4 + make test-ecl-program); docs/stability.md §5 "ECL 21.2.1 on Linux x86-64" |
+| CI-verified: SBCL on Linux x86-64 | host | .github/workflows/ci.yml job "SBCL / Linux x86-64 (required)" — required, and enforced at release by tools/required-ci-green.sh (blobs.yml release job) (make test-m2, test-m4, test-fetch, no-cargo load) |
+| CI-verified: SBCL on macOS arm64 | host | .github/workflows/ci.yml job "SBCL / macOS arm64 (required)" — required, and enforced at release by tools/required-ci-green.sh (blobs.yml release job) (macos-latest, make test-m4) |
+| CI-verified: SBCL on Windows x86-64 | host | .github/workflows/ci.yml job "SBCL / Windows x86-64 (required)" — required, and enforced at release by tools/required-ci-green.sh (blobs.yml release job) (cargo test + make test-m4) |
+| CI-verified: Clozure CL 1.13 on Linux x86-64 | host | .github/workflows/ci.yml job "CCL / Linux x86-64 (required)" — required, and enforced at release by tools/required-ci-green.sh (blobs.yml release job) downloads ccl-1.13-linuxx86.tar.gz; make test-ccl + test-fetch-ccl |
+| CI-verified: ECL 21+ on Linux | host | .github/workflows/ci.yml job "ECL / Linux (required)" — required, and enforced at release by tools/required-ci-green.sh (blobs.yml release job) (apt ecl = 21.2.1; run-m4 + make test-ecl-program); docs/stability.md §5 "ECL 21.2.1 on Linux x86-64" |
 | races — all green | capability | test m4h.thread-race (tests/suite/m4.lisp:63, 8 threads × 10k ops); gh run list: latest main CI run 33741068668 success |
 | nested callbacks — all green | capability | test m4h.nested-callbacks (tests/suite/m4.lisp:106) |
 | reload — all green | capability | tests m6.reload (m1.lisp:234), m4h.reload-under-load (m4.lisp:176) |

@@ -21,7 +21,12 @@ worked; each has a check, so a slip is caught before the next step.
    `tests/suite/m2.lisp` and `examples/wordbag/tests/manifest_golden.rs`
    to match it.
 4. **Gates.** Push and wait for every required CI job plus `MSRV` to be
-   green. Never tag on a red run.
+   green. Never tag on a red run — and the release job checks: before it
+   attaches a single asset, `tools/required-ci-green.sh` looks up the
+   tagged commit's CI run and refuses, naming the job, unless every
+   `(required)` job and `MSRV` concluded success (no run, or a run still
+   in progress, refuses too). The `skip-ci-gate` dispatch input is the
+   documented override; it prints a warning in the release log.
 5. **Publish to crates.io, in dependency order** — each waits for the
    previous one to be indexed:
 

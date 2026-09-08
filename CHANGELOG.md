@@ -8,6 +8,14 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.6 development)
 
 ### Added
+- **"Required" is a release gate.** The release job refuses to attach
+  assets to a tag whose commit's CI run does not have every `(required)`
+  job and `MSRV` concluded success — no run, or a run still in progress,
+  refuses too, naming the job (`tools/required-ci-green.sh`, self-testable
+  with an injected job listing). `skip-ci-gate` is the documented
+  override for a re-run and prints a warning. Until now a tag on a red
+  commit produced a release with twelve audited assets.
+### Added
 - **The audit reads every format from every host — the last BOUNDARY
   §12 gap closes.** `tools/rulisp-audit.sh` dispatches on the artifact's
   magic, not on `uname`: ELF through `nm`, Mach-O through Apple's `nm` or

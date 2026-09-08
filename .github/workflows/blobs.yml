@@ -22,6 +22,10 @@ on:
         description: 'Create or replace the release assets (false: build and audit only)'
         type: boolean
         default: true
+      skip-ci-gate:
+        description: 'Release even if the tagged commit has no green required CI run (documented re-run only)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # create the release and upload assets; nothing else
@@ -98,6 +102,17 @@ jobs:
           pattern: blobs-*
           path: blobs
           merge-multiple: true
+      # docs/stability.md §5 and docs/releasing.md step 4, enforced: a
+      # release is cut only from a commit whose required CI jobs (and the
+      # MSRV job) all succeeded; no run or a run still in progress refuses.
+      - name: the tagged commit's required CI jobs are green
+        if: ${{ !inputs.skip-ci-gate }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh .tooling/tools/required-ci-green.sh "$(git rev-parse HEAD)"
+      - name: CI gate skipped by request
+        if: ${{ inputs.skip-ci-gate }}
+        run: echo "::warning::skip-ci-gate set — releasing $TAG without checking its CI run"
       # BOUNDARY §7 over the exact bytes that get attached: all three
       # formats read from this one host (Mach-O via llvm-nm, PE via
       # llvm-readobj — rustup's llvm-tools)

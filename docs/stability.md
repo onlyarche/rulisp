@@ -65,7 +65,11 @@ from crates.io (0.1.0–0.2.1 were, for issue #1); the ASDF system is not
 
 ## 5. Host support
 
-A host is supported exactly when it is a **required** CI job. The one
+A host is supported exactly when it is a **required** CI job, and
+"required" is checked, not just named: the release job refuses to attach
+assets to a tag whose commit does not have every `(required)` job and
+`MSRV` green (`tools/required-ci-green.sh`, docs/releasing.md step 4).
+The one
 support table lives in [README §Status](../README.md#status) and equals
 the required jobs in `.github/workflows/ci.yml`; a **best-effort** job
 (today: SBCL on Linux aarch64) runs on every push without being required
