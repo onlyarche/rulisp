@@ -66,9 +66,12 @@ Budget 2 M + 12 S.
    was refused before any asset was touched; v0.5.0 passed. The matching
    repository ruleset on `main` is the maintainer's call — it would
    force every change through a pull request — and is not set.
-6. **Rust API gate** — cargo-semver-checks against crates.io 0.5.0 with
-   `--release-type minor`; `rulisp::runtime` stays public and checked
-   (hiding it is the 1.0 major's first commit).
+6. ✅ **Rust API gate** — `cargo-semver-checks` over the three crates
+   against the latest crates.io release with `--release-type minor`, in
+   the cargo-tests job on every push (196 checks per crate, green on
+   HEAD). Falsified: renaming `Error::msg` reports
+   `inherent_method_missing` and fails. `rulisp::runtime` stays public
+   and checked; hiding it is the 1.0 major's first commit.
 7. **Lisp API gate** — `tests/golden/lisp-api.sexp` (symbols, kinds,
    superclasses, lambda lists), checked on every host.
 8. **Export what the docs already name** — `rulisp-version-skew`, the
