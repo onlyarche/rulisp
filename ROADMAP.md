@@ -58,8 +58,14 @@ Budget 2 M + 12 S.
    downloaded assets on Linux before attaching them — verified with a
    `publish: false` dispatch for v0.5.0 (12 `audit ok`, assets
    untouched). `grep -c '^|.*GAP' BOUNDARY.md` is 0.
-5. **"Required" becomes a release gate** — the release job refuses a
-   tag whose required CI jobs are not green; a repository ruleset too.
+5. ✅ **"Required" becomes a release gate** — `tools/required-ci-green.sh`
+   in the release job: the tagged commit's latest CI run must have every
+   `(required)` job and `MSRV` green; no run, in progress, or fewer than
+   six such jobs refuses, naming the job; `skip-ci-gate` is the loud,
+   documented override. Live: a scratch tag on a commit with no CI run
+   was refused before any asset was touched; v0.5.0 passed. The matching
+   repository ruleset on `main` is the maintainer's call — it would
+   force every change through a pull request — and is not set.
 6. **Rust API gate** — cargo-semver-checks against crates.io 0.5.0 with
    `--release-type minor`; `rulisp::runtime` stays public and checked
    (hiding it is the 1.0 major's first commit).
