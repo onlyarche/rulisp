@@ -147,3 +147,109 @@
         ;; refused before anything was registered or interned
         (is (null (gethash "abifix" rulisp::*crates*)) "a refused artifact left a crate object")
         (is (null (find-package "ABIFIX")) "a refused artifact left a package")))))
+
+;;; ---------------------------------------------------------------------------
+;;; docs/stability.md §1: the exported Lisp API is a surface 1.x freezes.
+;;; tests/golden/lisp-api.sexp pins it — one entry per external symbol of
+;;; RULISP: name, kind, the direct superclasses (classes and conditions) or
+;;; the lambda list (plain functions). The symbol set, kinds and
+;;; superclasses are exact on every host; lambda lists are exact on SBCL
+;;; (sb-introspect) and compared by parameter names and &-markers on CCL
+;;; and ECL, whose arglists render keywords and defaults differently. An
+;;; additive change regenerates the golden in the same commit — from SBCL,
+;;; (rulisp/test::write-lisp-api-golden) — with a CHANGELOG line; a removal
+;;; or a changed signature fails here and does not land in a minor.
+;;; ---------------------------------------------------------------------------
+
+#+sbcl (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-introspect))
+
+(defun %api-kind (s)
+  (cond ((macro-function s) :macro)
+        ((and (fboundp s) (typep (fdefinition s) 'generic-function)) :generic-function)
+        ((fboundp s) :function)
+        ((find-class s nil) (if (subtypep s 'condition) :condition :class))
+        (t :symbol)))   ; exported for its name alone — today the restart RETRY-BUILD
+
+(defun %api-supers (s)
+  (mapcar #'class-name
+          (#+sbcl sb-mop:class-direct-superclasses
+           #+ccl ccl:class-direct-superclasses
+           #+ecl clos:class-direct-superclasses
+           (find-class s))))
+
+(defun %api-lambda-list (s)
+  #+sbcl (sb-introspect:function-lambda-list s)
+  #+ccl (values (ccl:arglist s))
+  #+ecl (ext:function-lambda-list s))
+
+(defun %api-entry (s)
+  (let ((k (%api-kind s)))
+    (case k
+      (:function (list s k (%api-lambda-list s)))
+      ((:condition :class) (list s k (%api-supers s)))
+      (t (list s k)))))
+
+(defun current-lisp-api ()
+  (let ((syms (loop for s being the external-symbols of :rulisp collect s)))
+    (mapcar #'%api-entry (sort syms #'string< :key #'symbol-name))))
+
+(defparameter *lisp-api-golden*
+  (asdf:system-relative-pathname :rulisp "../tests/golden/lisp-api.sexp"))
+
+(defun read-lisp-api-golden ()
+  (with-open-file (in *lisp-api-golden*)
+    (let ((*package* (find-package :rulisp)))
+      (read in))))
+
+(defun write-lisp-api-golden ()
+  "Regenerate tests/golden/lisp-api.sexp from the running image — SBCL only,
+whose lambda lists are the exact ones the golden pins."
+  #-sbcl (error "regenerate the Lisp API golden from SBCL")
+  (with-open-file (out *lisp-api-golden* :direction :output :if-exists :supersede)
+    (let ((*package* (find-package :rulisp))
+          (*print-case* :downcase)
+          (*print-pretty* nil))
+      (format out ";;; The exported Lisp API of the RULISP package, pinned (docs/stability.md §1).~%")
+      (format out ";;; One entry per external symbol: name, kind, then the direct superclasses~%")
+      (format out ";;; (classes and conditions) or the lambda list (plain functions), as SBCL~%")
+      (format out ";;; prints them with *package* = RULISP. Regenerate only for an ADDITIVE~%")
+      (format out ";;; change, in the same commit, with a CHANGELOG line:~%")
+      (format out ";;;   (rulisp/test::write-lisp-api-golden)   ; from SBCL~%")
+      (format out ";;; v06.exported-api-golden compares this file on every host.~%(~%")
+      (dolist (e (current-lisp-api))
+        (format out " ~S~%" e))
+      (format out ")~%"))
+    *lisp-api-golden*))
+
+(defun %api-names (lambda-list)
+  "Parameter names and &-markers only — what CCL and ECL can be held to."
+  (mapcar (lambda (x)
+            (cond ((and (consp x) (consp (car x))) (symbol-name (second (car x)))) ; ((:key var) default)
+                  ((consp x) (symbol-name (car x)))
+                  (t (symbol-name x))))
+          lambda-list))
+
+(test v06.exported-api-golden
+  (let* ((golden (read-lisp-api-golden))
+         (current (current-lisp-api))
+         (gnames (mapcar #'first golden))
+         (cnames (mapcar #'first current)))
+    (is (null (set-difference gnames cnames))
+        "exported symbols missing from the package: ~S" (set-difference gnames cnames))
+    (is (null (set-difference cnames gnames))
+        "exported symbols not in the golden — an additive change regenerates it: ~S"
+        (set-difference cnames gnames))
+    (dolist (g golden)
+      (let ((c (find (first g) current :key #'first)))
+        (when c
+          (is (eq (second g) (second c))
+              "~S: kind ~S in the golden, ~S now" (first g) (second g) (second c))
+          (case (second g)
+            ((:condition :class)
+             (is (equal (third g) (third c))
+                 "~S: superclasses ~S in the golden, ~S now" (first g) (third g) (third c)))
+            (:function
+             #+sbcl (is (equal (third g) (third c))
+                        "~S: lambda list ~S in the golden, ~S now" (first g) (third g) (third c))
+             #-sbcl (is (equal (%api-names (third g)) (%api-names (third c)))
+                        "~S: parameters ~S in the golden, ~S now" (first g) (third g) (third c)))))))))

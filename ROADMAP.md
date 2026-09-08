@@ -72,8 +72,12 @@ Budget 2 M + 12 S.
    HEAD). Falsified: renaming `Error::msg` reports
    `inherent_method_missing` and fails. `rulisp::runtime` stays public
    and checked; hiding it is the 1.0 major's first commit.
-7. **Lisp API gate** — `tests/golden/lisp-api.sexp` (symbols, kinds,
-   superclasses, lambda lists), checked on every host.
+7. ✅ **Lisp API gate** — `tests/golden/lisp-api.sexp` pins the 32
+   exports with kind, superclasses and lambda lists;
+   `v06.exported-api-golden` compares it on every host (lambda lists
+   exactly on SBCL, by parameter names on CCL and ECL). Falsified: a
+   golden without `retry-build` fails naming it. From here every
+   package.lisp change co-updates the golden — item 8 is the first.
 8. **Export what the docs already name** — `rulisp-version-skew`, the
    eleven unexported condition readers (32 → 47), docstrings on every
    exported class and reader, the stale `Error::msg` doc.

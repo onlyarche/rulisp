@@ -8,6 +8,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.6 development)
 
 ### Added
+- **Lisp API gate.** `tests/golden/lisp-api.sexp` pins every exported
+  symbol of `rulisp` with its kind, its superclasses (classes and
+  conditions) or its lambda list (functions); `v06.exported-api-golden`
+  compares it on every host — lambda lists exactly on SBCL, by parameter
+  names on CCL and ECL. An additive export regenerates the golden in the
+  same commit; a removal or a changed signature fails.
+### Added
 - **Rust API gate.** Every push runs `cargo-semver-checks` over
   `rulisp`, `rulisp-macros` and `rulisp-runtime` against the latest
   crates.io release with `--release-type minor` — the criterion-3

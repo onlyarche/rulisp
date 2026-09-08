@@ -11,7 +11,7 @@ makes is enforced.
 | Surface | Where it lives | Breaking means |
 |---|---|---|
 | **Rust API** — `#[rulisp::export]`, `#[rulisp::handle]`, `rulisp::module!`, their attribute grammar, `Error`, `Callback`, `StoredCallback`, `HandleType`, the `prelude` | crates.io: `rulisp`, `rulisp-macros`, `rulisp-runtime` | a glue crate that compiled stops compiling, or compiles to a different manifest/shim |
-| **Lisp API** — the 32 symbols `lisp/src/package.lisp` exports (`use-crate`, `load-crate`, `load-blob-crate`, `reload-crate`, `free`, `callback`, the condition classes and their readers, …) | ASDF system `rulisp` | a call that worked signals, returns a different type, or a documented condition class stops being signaled where it was |
+| **Lisp API** — the symbols `lisp/src/package.lisp` exports, pinned in `tests/golden/lisp-api.sexp` (`use-crate`, `load-crate`, `load-blob-crate`, `reload-crate`, `free`, `callback`, the condition classes and their readers, …) | ASDF system `rulisp` | a call that worked signals, returns a different type, or a documented condition class stops being signaled where it was |
 | **Manifest schema** — the s-expression a cdylib embeds (`:schema`, `:functions`, `:handles`, type tokens, `:on-dump`, …) | BOUNDARY.md §11 | a manifest a released macro emitted no longer loads, or a token's meaning changes |
 | **C ABI** — symbol naming, status codes, `last_error`, buffer ownership, handle and callback wire | BOUNDARY.md §1–§10, `abi_version()` | anything §1–§10 says, changed |
 
@@ -21,6 +21,13 @@ and the hand-written ABI oracle call them, and they may change in any
 minor. Until 1.0 hides the `rulisp::runtime` path, though, the semver
 job checks it like the rest — hiding it is the 1.0 major's first
 commit, where the tool permits it.
+
+The Lisp surface's gate: `v06.exported-api-golden` compares the export
+list, each symbol's kind, the classes' superclasses and the functions'
+lambda lists with `tests/golden/lisp-api.sexp` on every host. An
+additive change regenerates the golden in the same commit (from SBCL,
+`(rulisp/test::write-lisp-api-golden)`) with a CHANGELOG line; a removal
+or a changed signature fails the test and does not land in a minor.
 
 The Rust surface's gates: `cargo-semver-checks --release-type minor`
 against the latest crates.io release in the `cargo tests` CI job (the
