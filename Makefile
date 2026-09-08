@@ -51,7 +51,8 @@ audit:
 	sh tools/rulisp-audit-selftest.sh
 	$(CARGO) build --workspace
 	for c in wordbag rx wasm fetch; do \
-	  sh tools/rulisp-audit.sh target/debug/lib$$c.so examples/$$c || exit 1; done
+	  f=$$(ls target/debug/lib$$c.so target/debug/lib$$c.dylib target/debug/$$c.dll 2>/dev/null | head -1); \
+	  sh tools/rulisp-audit.sh "$$f" examples/$$c || exit 1; done
 
 # what docs.rs will show: no missing docs, no broken links, doctest compiles
 doc:

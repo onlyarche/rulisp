@@ -174,7 +174,10 @@ Differences from the borrowed form:
   wasmtime, crash-handler crates are the usual offenders) — SBCL's GC is
   signal-driven and foreign handlers are a stability hazard. The Lisp side
   owns SIGINT/SIGTERM; expose an explicit Rust shutdown function instead of
-  trapping signals.
+  trapping signals. On Windows the analogues are ucrt's `signal`/`raise`,
+  `SetConsoleCtrlHandler` (the console's Ctrl-C ownership) and the
+  unhandled-exception-filter and vectored-handler installers; the audit
+  sweeps PE imports for those.
 
 ## 8. Panics and non-local exits
 
@@ -364,7 +367,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Blocking export must refuse re-entry from its own runtime's worker thread, reported as an error | runtime-check | `examples/fetch/src/lib.rs:52-59` (`refuse_reentry`; call sites 322,338,603,641) — reference crate only; no test can trigger it from Lisp |
 | ECL: callback trampolines natively compiled at load time; missing C toolchain fails via named `manifest-error` | runtime-check | `lisp/src/codegen.lisp:87-103` (`#+ecl` compile-file branch); test `v04.ecl-toolchain-failure-is-named` (`tests/suite/v04.lisp:156-166`, non-vacuous on ECL only) |
 | ECL: foreign-thread invocation of stored callbacks UNSUPPORTED (cannot adopt foreign threads) | UB-by-design | `BOUNDARY.md:158-164`; `docs/upstream/ecl-dynamic-callback-gc.md`; `#+ecl` skip `tests/suite/v02.lisp:118-124` |
-| Plain Rust cdylib installs no signal handlers; audit glue-crate deps for sigaction | test · **GAP on Windows** | `tools/rulisp-audit.sh` (signal-symbol sweep on the artifact, tokio signal/process features, `block_on`), run over all examples by `make audit` in CI; self-tested against `tools/audit-fixture`. The sweep is implemented for ELF and Mach-O only: on Windows the script prints SKIP and exits 0, so the four `.dll` assets a release attaches are not swept (`dumpbin /imports` is the manual equivalent) |
+| Plain Rust cdylib installs no signal handlers; audit glue-crate deps for sigaction | test | `tools/rulisp-audit.sh` (signal-symbol sweep on the artifact by format — ELF via nm, Mach-O via nm/llvm-nm, PE via llvm-readobj; tokio signal/process features; `block_on`), run over all examples by `make audit` in the `cargo tests` job and the `SBCL / Windows x86-64` job; every release asset re-audited as downloaded by blobs.yml's release job; self-tested against `tools/audit-fixture` on Linux, macOS and Windows (v0.6 closed the last of this table's gaps here) |
 | Lisp side owns SIGINT/SIGTERM; a glue crate's artifact imports no signal-disposition symbol | test | `tools/rulisp-audit.sh` over every example (`make audit`, CI), with `tools/rulisp-audit-selftest.sh` proving the gate rejects a signal-importing fixture | fetch demonstrates the pattern (`Client::shutdown` `examples/fetch/src/lib.rs:337`; audit.sh bans signal symbols) but nothing enforces the norm generally |
 | **§8 — Panics and non-local exits** | | |
 | Every shim body runs under `catch_unwind`; a panic maps to status 2 | runtime-check | `crates/rulisp-runtime/src/lib.rs:105-120` (`rt::shim`); every generated shim wrapped `crates/rulisp-macros/src/lib.rs:719-729`; test `m1.panic` |
@@ -407,6 +410,6 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 ## Verification notes
 
 - Every `file:line` above was read and confirmed against the working tree. Two citations in the input were corrected: the oracle manifest static (`tests/m1-handwritten/src/lib.rs:17,37-42`, was 18,40-43) and the stored-callback dead-id branch (`codegen.lisp:179-185`, was 179-186).
-- All five GAP rows were re-hunted: no enforcement found for any (grep for `on_dump`, cross-library tests, general signal audit, loader-side option-bool validation all came up empty).
+- The five GAP rows of the first sweep (`on_dump`, cross-library tests, the general signal audit, loader-side option-bool validation, the Windows audit) have all since become tests; the last, the Windows half of the signal audit, in v0.6. `grep -c '^|.*GAP' BOUNDARY.md` is 0.
 - Test spot-checks (fail-if-broken confirmed): `fx.unknown-keys-ignored`, `m5.callback-condition-identity` (eq-identity assertion), `m4.free-vs-in-flight` (live-count timing assertions), `v02.bytes-alloc-pairing` (LIVE_ALLOCATIONS drift), `m7.dump-restore` (subprocess exit-code + RESTORE-OK), plus all seven new v0.4 tests.
 

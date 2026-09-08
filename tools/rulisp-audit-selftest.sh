@@ -5,7 +5,6 @@
 set -e
 CARGO=${CARGO:-cargo}
 command -v "$CARGO" >/dev/null 2>&1 || CARGO="$HOME/.cargo/bin/cargo"
-case "$(uname -s)" in Linux|Darwin) ;; *) echo "SKIP: selftest needs nm"; exit 0 ;; esac
 
 # The pattern itself, both ways, on the three symbol shapes nm prints: a
 # versioned glibc import, a Mach-O name with its leading underscore, and a
@@ -20,8 +19,21 @@ if printf '_dispatch_semaphore_signal\n' | sh tools/rulisp-audit.sh --match; the
 fi
 echo "selftest: pattern matches signal imports and only those"
 
+# The PE pattern on llvm-readobj's `Symbol:` lines: the console handler
+# and ucrt's signal match; an unrelated import and a longer name that
+# merely starts like one do not.
+printf '  Symbol: SetConsoleCtrlHandler (123)\n' | sh tools/rulisp-audit.sh --match-pe \
+    || { echo "FAIL: PE SetConsoleCtrlHandler import not matched"; exit 1; }
+printf '  Symbol: signal (57)\n' | sh tools/rulisp-audit.sh --match-pe \
+    || { echo "FAIL: PE ucrt signal import not matched"; exit 1; }
+if printf '  Symbol: GetLastError (1)\n  Symbol: RaiseExceptionEx (2)\n' | sh tools/rulisp-audit.sh --match-pe; then
+    echo "FAIL: PE false positive (GetLastError / RaiseExceptionEx)"; exit 1
+fi
+echo "selftest: PE pattern matches handler installers and only those"
+
 "$CARGO" build --quiet --manifest-path tools/audit-fixture/Cargo.toml --target-dir target/audit-fixture
-FIX=$(ls target/audit-fixture/debug/libaudit_fixture.so target/audit-fixture/debug/libaudit_fixture.dylib 2>/dev/null | head -1)
+FIX=$(ls target/audit-fixture/debug/libaudit_fixture.so target/audit-fixture/debug/libaudit_fixture.dylib \
+         target/audit-fixture/debug/audit_fixture.dll 2>/dev/null | head -1)
 [ -n "$FIX" ] || { echo "FAIL: fixture did not build"; exit 1; }
 
 if sh tools/rulisp-audit.sh "$FIX" >/dev/null 2>&1; then
@@ -30,6 +42,6 @@ fi
 echo "selftest: audit rejects the signal-importing fixture"
 
 "$CARGO" build --quiet -p wordbag
-OK=$(ls target/debug/libwordbag.so target/debug/libwordbag.dylib 2>/dev/null | head -1)
+OK=$(ls target/debug/libwordbag.so target/debug/libwordbag.dylib target/debug/wordbag.dll 2>/dev/null | head -1)
 sh tools/rulisp-audit.sh "$OK" examples/wordbag
 echo "selftest ok"

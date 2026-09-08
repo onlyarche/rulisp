@@ -8,6 +8,19 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.6 development)
 
 ### Added
+- **The audit reads every format from every host — the last BOUNDARY
+  §12 gap closes.** `tools/rulisp-audit.sh` dispatches on the artifact's
+  magic, not on `uname`: ELF through `nm`, Mach-O through Apple's `nm` or
+  rustup's `llvm-nm`, PE through rustup's `llvm-readobj --coff-imports`
+  (`rustup component add llvm-tools`), sweeping Windows' analogues of a
+  signal handler (ucrt `signal`/`raise`, `SetConsoleCtrlHandler`, the
+  exception-filter and vectored-handler installers). A format it cannot
+  read fails instead of printing SKIP. The Windows CI job runs `make
+  audit` with the self-test (the fixture DLL must be rejected), and the
+  release job re-audits all twelve assets as downloaded, on Linux, before
+  attaching them; `workflow_dispatch` gained `publish: false` for a
+  build-and-audit-only run.
+### Added
 - **Cross-version gates, pinned to the previous release.** `make compat`
   loads this tree's `wordbag` with the v0.5.0 loader (any warning but
   `rulisp-version-skew` is an error) and runs the v0.5.0 test suite

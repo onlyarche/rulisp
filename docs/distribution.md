@@ -225,8 +225,12 @@ symbol (`sigaction`, `signal`, `sigprocmask`, …), if tokio's `signal` or
 `make audit` runs it over every example in CI, after a self-test that
 builds a library which deliberately imports `signal()` and requires the
 audit to reject it — the check that keeps the gate from going inert (an
-anchored regex once made it so). Linux and macOS; on Windows it prints a
-SKIP line (`dumpbin /imports` is the manual equivalent).
+anchored regex once made it so). The artifact's format picks the reader,
+not the host: ELF through `nm`, Mach-O through Apple's `nm` or rustup's
+`llvm-nm`, PE through rustup's `llvm-readobj` (`rustup component add
+llvm-tools`), so a Linux machine audits a `.dll` and the release job
+re-audits all twelve assets it attaches; a format it cannot read fails
+rather than passes.
 
 ## Pattern C — build on the user's machine (developers)
 

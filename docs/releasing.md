@@ -34,7 +34,8 @@ worked; each has a check, so a slip is caught before the next step.
 6. **Tag, and push the tag.** `git tag vX.Y.Z && git push origin vX.Y.Z`.
    The tag push runs `.github/workflows/blobs.yml`: release-profile builds
    of the four examples on every required host, each run through
-   `tools/rulisp-audit.sh` (Windows: SKIP — BOUNDARY §12), attached to a
+   `tools/rulisp-audit.sh` on its own host and again, all twelve
+   together, in the release job on Linux (BOUNDARY §7), attached to a
    GitHub Release for the tag with the CHANGELOG section as its body.
 7. **Check the assets.** `gh release view vX.Y.Z` lists twelve:
    `lib<crate>-linux-x86_64.so`, `lib<crate>-darwin-arm64.dylib` and
