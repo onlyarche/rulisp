@@ -69,6 +69,18 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   mismatch" now cites it.
 
 ### Changed
+- **`crate-generation` is a reader.** The slot was declared with an
+  accessor, so `(setf (rulisp:crate-generation crate) 0)` was an exported
+  function that no doc, test or example used — and it defeated the
+  generation gate: reset the counter and reload, and a handle from the
+  old library passed into the new one (a Box from one library copy
+  dereferenced by another's shim). The writer is gone; the reader is
+  unchanged, and `v06.crate-generation-is-read-only` checks that no
+  exported symbol names a setf function. Classified under stability.md
+  §4 (a soundness fix, forward), not §3: a style-warning stage would keep
+  the hole open one more minor. The v0.5.0 suite, run against this
+  loader by `make compat`, only ever read the generation.
+### Changed
 - **`m4.gc-finalization` no longer assumes no collection runs inside its
   constructor loop.** It dropped each of 1000 handles as it made them and
   then asserted all 1000 live; a nursery GC inside the loop finalizes

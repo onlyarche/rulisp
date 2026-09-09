@@ -86,8 +86,13 @@ Budget 2 M + 12 S.
    docstring on every exported reader; `v06.exports-are-documented` keeps
    it so (red today: 13 classes and 10 readers). `Error::msg`'s Rust doc
    no longer names `<crate>:rust-error`.
-9. **`crate-generation` becomes a reader** — the exported `setf` lets a
-   stale handle into a new library (reproduced); a §4 soundness fix.
+9. ✅ **`crate-generation` is a reader** — the exported `setf` let a stale
+   handle into a new library (reset the counter, reload); the writer is
+   gone, `v06.crate-generation-is-read-only` checks no exported symbol
+   names a setf function, and the panel's probe now stops at the `setf`
+   with an undefined-function error. A §4 soundness fix, the cycle's one
+   non-additive Lisp change; the v0.5.0 suite under `make compat` only
+   ever read the counter and stays green.
 10. **A cargo that cannot run is `build-error`** with a working
     `retry-build`, identically on every host.
 11. **`Option<f32>`/`Option<f64>` NIL** is a host TYPE-ERROR on SBCL and

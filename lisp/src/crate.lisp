@@ -17,7 +17,10 @@
 (defclass crate ()
   ((name :initarg :name :reader crate-name)
    (package :initarg :package :reader crate-package)
-   (generation :initform 0 :accessor crate-generation)
+   ;; a READER in the exported API: the counter is what the generation
+   ;; gate compares handles against, and an exported setf let a stale
+   ;; handle into a new library (v0.6 item 9, a §4 soundness fix)
+   (generation :initform 0 :reader crate-generation :accessor %crate-generation)
    (lib-handle :initform nil :accessor crate-lib-handle)
    (prefix :initform nil :accessor crate-prefix)
    (manifest :initform nil :accessor crate-manifest)
@@ -239,7 +242,7 @@ slots and the package mutated."
          (prepared (prepare-bindings crate manifest ctx resolve)))
     ;; Nothing below signals.
     (setf (crate-stub-reason crate) nil   ; a successful commit un-stubs
-          (crate-generation crate) gen
+          (%crate-generation crate) gen
           (crate-lib-handle crate) lib
           (crate-prefix crate) prefix
           (crate-manifest crate) manifest

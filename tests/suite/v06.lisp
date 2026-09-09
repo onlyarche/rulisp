@@ -271,3 +271,22 @@ whose lambda lists are the exact ones the golden pins."
           (push (list s :class) undocumented))))
     (is (null undocumented) "exports without documentation: ~S"
         (sort undocumented #'string< :key #'first))))
+
+;;; ---------------------------------------------------------------------------
+;;; BOUNDARY §5: a handle is accepted only by wrappers of its birth
+;;; generation. The counter that gate compares against must not be writable
+;;; through the exported API — an exported (setf crate-generation) let a
+;;; stale handle into a NEW library (reset the counter to 0, reload: the
+;;; gen-1 handle passed into generation 1 again; the v0.6 panel reproduced
+;;; it). No exported symbol names a writer.
+;;; ---------------------------------------------------------------------------
+
+(test v06.crate-generation-is-read-only
+  (is (null (fboundp '(setf rulisp:crate-generation))))
+  (let ((writers '()))
+    (do-external-symbols (s :rulisp)
+      (when (fboundp `(setf ,s)) (push s writers)))
+    (is (null writers) "exported symbols with a setf function: ~S" writers))
+  ;; and the reader still answers
+  (ensure-crate)
+  (is (integerp (rulisp:crate-generation *crate*))))
