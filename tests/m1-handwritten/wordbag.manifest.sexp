@@ -112,4 +112,13 @@ every other Lisp thread stalls for the whole call.")
   (:fn :rust-name "slow_dot" :lisp-name "slow-dot" :symbol "slow_dot"
    :params ((:name "xs" :type (:vec :i64)) (:name "millis" :type :u64))
    :result :i64 :error nil
-   :doc "The (:vec ...) twin of slow_sum.")))
+   :doc "The (:vec ...) twin of slow_sum.")
+  (:fn :rust-name "opt_scale" :lisp-name "opt-scale" :symbol "opt_scale"
+   :params ((:name "k" :type (:option :f64)))
+   :result :f64 :error nil
+   :doc "An optional float parameter: NIL must cross as None (v0.6 — the value
+slot carried a fixnum 0 that SBCL and CCL refuse for :double).")
+  (:fn :rust-name "opt_scale32" :lisp-name "opt-scale32" :symbol "opt_scale32"
+   :params ((:name "k" :type (:option :f32)))
+   :result :f32 :error nil
+   :doc "The f32 twin of opt_scale.")))

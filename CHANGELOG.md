@@ -90,6 +90,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   promotion streak restarts here.
 
 ### Fixed
+- **`Option<f32>` / `Option<f64>` NIL is None, not a host type error.**
+  For an optional float parameter the wrapper put the integer 0 in the
+  value slot when the argument was NIL, and SBCL's and CCL's foreign-call
+  checks refused a fixnum for `:double`/`:float`; README and quickstart
+  promised NIL ↔ None. The placeholder is typed now; `wordbag` gained
+  `opt_scale`/`opt_scale32` (manifest golden co-updated) and
+  `v06.option-float-nil-is-none` pins it on every host.
 - **A cargo that cannot be run is a `build-error`, on every host, with a
   `retry-build` that looks cargo up again.** `use-crate` promised
   `build-error` with a `retry-build` restart, but a cargo that could not

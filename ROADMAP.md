@@ -101,8 +101,13 @@ Budget 2 M + 12 S.
     asserts the class, a non-empty stderr, the restart, and a retry that
     recovers; `rulisp::*cargo*` (internal) names the missing program
     without touching the environment.
-11. **`Option<f32>`/`Option<f64>` NIL** is a host TYPE-ERROR on SBCL and
-    CCL (reproduced); typed placeholder in codegen, `opt_scale` fixture.
+11. ✅ **`Option<f32>`/`Option<f64>` NIL** was a host TYPE-ERROR on SBCL
+    and CCL — the wrapper passed a fixnum 0 in the value slot; the
+    placeholder is typed now. `opt_scale`/`opt_scale32` joined wordbag
+    (oracle shims and the manifest golden co-updated);
+    `v06.option-float-nil-is-none` was red on the old codegen and is
+    green on every host. quickstart states the plain-scalar policy as it
+    is: host-checked.
 12. **Renamed artifacts** — the refusal names `:crate` as the fix, and a
     failed load no longer leaks an unsweepable cache copy (reproduced).
 13. **Quicklisp dist dry run in CI** — every system in every `.asd` of

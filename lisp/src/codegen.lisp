@@ -46,6 +46,13 @@ every-other-status discipline.")
 (defun stored-callback-type-p (ty) (and (consp ty) (eq (car ty) :stored-callback)))
 (defun option-type-p (ty) (and (consp ty) (eq (car ty) :option)))
 
+(defun scalar-placeholder (ty)
+  "What the value slot of an (:option scalar) argument carries when the
+argument is NIL: None is the present flag, but the slot still needs a
+value of the C type — SBCL's and CCL's foreign-call checks refuse a fixnum
+for :double and :float (v0.6 item 11)."
+  (case ty (:f64 0d0) (:f32 0f0) (t 0)))
+
 (defun option-inner (ty)
   "Inner type of (:option X), rejecting :bool: Lisp nil cannot distinguish
 None from Some(false). The macro refuses to emit it; a hand-written
@@ -465,7 +472,8 @@ FSPEC against one immutable generation context."
                      (setf call-args
                            (append call-args
                                    (list :uint8 `(if (null ,sym) 0 1)
-                                         (scalar-cffi inner-ty) `(if (null ,sym) 0 ,sym))))))))
+                                         (scalar-cffi inner-ty)
+                                         `(if (null ,sym) ,(scalar-placeholder inner-ty) ,sym))))))))
                ((vec-type-p ty)
                 (multiple-value-bind (cty size lisp-ty coercer) (vec-elt-info (second ty))
                   (declare (ignore size))

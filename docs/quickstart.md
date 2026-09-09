@@ -178,7 +178,11 @@ The vocabulary is closed (BOUNDARY.md §11): integers, floats, `bool`,
 the match or NIL; `Option<bool>` is refused, since NIL cannot tell None
 from `Some(false)`), `&[scalar]`/`Vec<scalar>`, opaque handles (`&self`
 methods + constructors), synchronous same-thread callbacks and stored
-any-thread callbacks. Patterns for what it does not have:
+any-thread callbacks. A plain scalar of the wrong type — an integer
+where an `f64` is declared, a float where an integer is — is refused by
+the host's own foreign-call check on SBCL and CCL (ECL coerces), while
+`:bytes` and `:vec` arguments signal `rulisp:invalid-argument`. Patterns
+for what it does not have:
 
 - **Iterators/collections** — either a callback (as `for_each_match`
   above) or a handle wrapping the collection with accessor methods.

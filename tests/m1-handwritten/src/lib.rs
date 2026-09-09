@@ -71,6 +71,29 @@ pub unsafe extern "C" fn wordbag_rulisp_add(a: i64, b: i64, out: *mut i64) -> i3
     })
 }
 
+/// pub fn opt_scale(k: Option<f64>) -> f64   (v0.6: an optional float
+/// parameter — the value slot must carry a double even when absent)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_opt_scale(k_present: u8, k: f64, out: *mut f64) -> i32 {
+    rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
+        let k = if k_present != 0 { Some(k) } else { None };
+        unsafe { *out = k.unwrap_or(-1.0) };
+        rt::STATUS_OK
+    })
+}
+
+/// pub fn opt_scale32(k: Option<f32>) -> f32   (the f32 twin)
+#[no_mangle]
+pub unsafe extern "C" fn wordbag_rulisp_opt_scale32(k_present: u8, k: f32, out: *mut f32) -> i32 {
+    rt::shim(|| {
+        let _frame = rt::ShimFrame::new();
+        let k = if k_present != 0 { Some(k) } else { None };
+        unsafe { *out = k.unwrap_or(-1.0) };
+        rt::STATUS_OK
+    })
+}
+
 /// pub fn always_panic() — M1 item 1: panic must surface as rulisp:rust-panic.
 #[no_mangle]
 pub extern "C" fn wordbag_rulisp_always_panic() -> i32 {

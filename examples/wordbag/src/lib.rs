@@ -117,6 +117,19 @@ pub fn scale(xs: &[f64], k: f64) -> Vec<f64> {
     xs.iter().map(|x| x * k).collect()
 }
 
+/// An optional float parameter: NIL must cross as None (v0.6 — the value
+/// slot carried a fixnum 0 that SBCL and CCL refuse for :double).
+#[rulisp::export]
+pub fn opt_scale(k: Option<f64>) -> f64 {
+    k.unwrap_or(-1.0)
+}
+
+/// The f32 twin of opt_scale.
+#[rulisp::export]
+pub fn opt_scale32(k: Option<f32>) -> f32 {
+    k.unwrap_or(-1.0)
+}
+
 // ---------------------------------------------------------------------------
 // Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).
@@ -355,6 +368,7 @@ rulisp::module! {
         dump_prep, set_dump_prep_fail, test_dump_preps,
         WordBag::from_csv,
         slow_sum, slow_dot,
+        opt_scale, opt_scale32,
     ],
     on_dump: dump_prep,
 }

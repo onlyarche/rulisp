@@ -333,3 +333,19 @@ whose lambda lists are the exact ones the golden pins."
                    (rulisp:build-error (e) e))))
       (is (typep crate 'rulisp:crate)
           "retry-build did not look cargo up again: ~A" crate))))
+
+;;; ---------------------------------------------------------------------------
+;;; README and quickstart promise NIL <-> None for Option<T>. For an optional
+;;; FLOAT parameter the wrapper passed the literal integer 0 in the value
+;;; slot when the argument was NIL, and SBCL's and CCL's foreign-call type
+;;; check refused a fixnum for :double/:float — a host TYPE-ERROR where None
+;;; was promised (ECL coerced). Invisible until v0.6 because no example took
+;;; an Option<float>: opt_scale and opt_scale32 do now.
+;;; ---------------------------------------------------------------------------
+
+(test v06.option-float-nil-is-none
+  (ensure-crate)
+  (is (= -1d0 (wb-call "OPT-SCALE" nil)))
+  (is (= 2.5d0 (wb-call "OPT-SCALE" 2.5d0)))
+  (is (= -1f0 (wb-call "OPT-SCALE32" nil)))
+  (is (= 2.5f0 (wb-call "OPT-SCALE32" 2.5f0))))
