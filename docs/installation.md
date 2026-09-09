@@ -146,9 +146,10 @@ cargo test --workspace                # manifest golden + compile-fail tests
 
 - **cargo discovery**: `use-crate` looks at `$RULISP_CARGO`, then
   `~/.cargo/bin/cargo`, then `cargo` on PATH. A build failure signals
-  `rulisp:build-error` carrying cargo's stderr, with a `retry-build`
-  restart; a cargo that cannot be executed at all surfaces as the host's
-  own `run-program` error instead (see Troubleshooting).
+  `rulisp:build-error` carrying cargo's stderr — a cargo that cannot be
+  run at all is a `build-error` too, carrying the host's message — with a
+  `retry-build` restart that looks cargo up again: install it, or set
+  `RULISP_CARGO` from the debugger, and retry.
 - **Release builds**: `(rulisp:use-crate dir :profile :release)`.
 - **Library cache**: every load dlopens a unique copy under UIOP's
   cache directory — `~/.cache/rulisp/` on Linux and macOS,
@@ -161,7 +162,7 @@ cargo test --workspace                # manifest golden + compile-fail tests
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `Couldn't execute "…/cargo": No such file or directory` (the host's `run-program` error, not a rulisp condition) | Rust not installed / not on PATH | install rustup, or set `RULISP_CARGO=/path/to/cargo` |
+| `rulisp:build-error` whose stderr says cargo could not be run | Rust not installed / not on PATH | install rustup, or set `RULISP_CARGO=/path/to/cargo`, then invoke `retry-build` |
 | `rulisp:crate-not-loaded-error` with a dlopen message | artifact for the wrong platform, or missing system libs | rebuild on this machine (`use-crate`), check the message |
 | `rulisp:abi-mismatch-error` "not a rulisp crate" | the cdylib wasn't built with `rulisp::module!` | add the `module!` block; check the crate name matches |
 | `rulisp:abi-mismatch-error` "different target" | artifact built for another arch/OS | rebuild locally |

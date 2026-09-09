@@ -4,8 +4,14 @@
 ;;; the primitive; this shells out to cargo, finds the artifact, loads it.
 ;;; No mtime heuristics — cargo's own no-op check decides.
 
+(defvar *cargo* nil
+  "When non-NIL, the cargo executable USE-CRATE runs, ahead of RULISP_CARGO
+and the usual search. Internal: the suite points it at a nonexistent
+program to exercise the failure path without touching the environment.")
+
 (defun find-cargo ()
-  (or (uiop:getenv "RULISP_CARGO")
+  (or *cargo*
+      (uiop:getenv "RULISP_CARGO")
       (let ((home-cargo (merge-pathnames ".cargo/bin/cargo" (user-homedir-pathname))))
         (and (probe-file home-cargo) (uiop:native-namestring home-cargo)))
       "cargo"))
@@ -47,13 +53,23 @@
                      (when features
                        (list "--features" (format nil "~{~A~^,~}" features))))))
     (multiple-value-bind (out err code)
-        (uiop:run-program cmd :output :string :error-output :string
-                              :ignore-error-status t)
+        (handler-case
+            (uiop:run-program cmd :output :string :error-output :string
+                                  :ignore-error-status t)
+          ;; a cargo that cannot be executed at all: SBCL signals the
+          ;; host's own error from run-program, where CCL and ECL report a
+          ;; non-zero exit with little or nothing on stderr — a build-error
+          ;; either way (v0.6 item 10)
+          (error (e)
+            (values "" (format nil "could not run ~A: ~A" cargo e) -1)))
       (declare (ignore out))
       (unless (and (numberp code) (zerop code))
         (error 'build-error
                :command (format nil "~{~A~^ ~}" cmd)
-               :stderr err)))))
+               :stderr (if (plusp (length err))
+                           err
+                           (format nil "exit status ~A and no output — is ~A executable?"
+                                   code cargo)))))))
 
 (defun host-blob-suffix ()
   "Platform tag for prebuilt artifacts: \"<os>-<arch>\", e.g.
@@ -90,19 +106,22 @@ docs/distribution.md). The end user needs no Rust toolchain."
 (defun use-crate (crate-dir &key (profile :dev) package features)
   "cargo build CRATE-DIR (a rulisp glue crate), then LOAD-CRATE the artifact.
 PROFILE: :dev (default) or :release. FEATURES: list of cargo feature name
-strings. Signals BUILD-ERROR with cargo's stderr on failure, offering a
-RETRY-BUILD restart."
+strings. Signals BUILD-ERROR with cargo's stderr on failure — or, for a
+cargo that cannot be run at all, with the host's message — offering a
+RETRY-BUILD restart that looks cargo up again (set RULISP_CARGO from the
+debugger, then retry)."
   (let* ((crate-dir (uiop:ensure-directory-pathname crate-dir))
          (name (scrape-cargo-name crate-dir))
-         (target-dir (merge-pathnames "target/" crate-dir))
-         (cargo (find-cargo)))
+         (target-dir (merge-pathnames "target/" crate-dir)))
     (loop
       (restart-case
           (progn
-            (%run-cargo-build cargo crate-dir target-dir profile features)
+            ;; looked up inside the loop, so a retry sees a cargo that was
+            ;; installed or pointed at (RULISP_CARGO) since the failure
+            (%run-cargo-build (find-cargo) crate-dir target-dir profile features)
             (return))
         (retry-build ()
-          :report "Run cargo build again.")))
+          :report "Look cargo up again and run cargo build again.")))
     (let* ((lib-file (artifact-file-name name))
            (artifact (merge-pathnames
                       (format nil "~A/~A"

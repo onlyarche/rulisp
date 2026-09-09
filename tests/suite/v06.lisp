@@ -290,3 +290,46 @@ whose lambda lists are the exact ones the golden pins."
   ;; and the reader still answers
   (ensure-crate)
   (is (integerp (rulisp:crate-generation *crate*))))
+
+;;; ---------------------------------------------------------------------------
+;;; use-crate's contract (its docstring, docs/installation.md): a build
+;;; failure is a BUILD-ERROR with a RETRY-BUILD restart. A cargo that cannot
+;;; be RUN at all was the exception on every host in a different way —
+;;; SBCL let the host's own error escape, CCL signaled build-error with an
+;;; empty stderr, ECL with "exec: No such file" — and the restart was inert
+;;; for it, since cargo was looked up once outside the restart loop. The
+;;; internal rulisp::*cargo* override names a nonexistent program without
+;;; touching the environment, so this runs on Windows too.
+;;; ---------------------------------------------------------------------------
+
+(test v06.missing-cargo-is-a-build-error
+  ;; the class, a non-empty stderr, the restart — never the text
+  (let ((rulisp::*cargo* "/nonexistent/rulisp-no-such-cargo")
+        (seen nil))
+    (handler-case
+        (handler-bind ((rulisp:build-error
+                         (lambda (e)
+                           (setf seen (list (plusp (length (rulisp:build-error-stderr e)))
+                                            (not (null (find-restart 'rulisp:retry-build e))))))))
+          (rulisp:use-crate *crate-dir*))
+      (rulisp:build-error () nil))
+    (is (equal '(t t) seen)
+        "expected build-error with a non-empty stderr and a retry-build restart, got ~S" seen))
+  ;; retry-build looks cargo up again: point it back at the real one from
+  ;; the handler and the same use-crate returns a crate
+  (let ((rulisp::*cargo* "/nonexistent/rulisp-no-such-cargo")
+        (retried nil))
+    (let ((crate (handler-case
+                     (handler-bind ((rulisp:build-error
+                                      (lambda (e)
+                                        (declare (ignore e))
+                                        ;; once: a retry that does not look
+                                        ;; cargo up again would loop forever
+                                        (unless retried
+                                          (setf retried t
+                                                rulisp::*cargo* nil)
+                                          (invoke-restart 'rulisp:retry-build)))))
+                       (rulisp:use-crate *crate-dir*))
+                   (rulisp:build-error (e) e))))
+      (is (typep crate 'rulisp:crate)
+          "retry-build did not look cargo up again: ~A" crate))))

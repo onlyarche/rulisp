@@ -93,8 +93,14 @@ Budget 2 M + 12 S.
    with an undefined-function error. A §4 soundness fix, the cycle's one
    non-additive Lisp change; the v0.5.0 suite under `make compat` only
    ever read the counter and stays green.
-10. **A cargo that cannot run is `build-error`** with a working
-    `retry-build`, identically on every host.
+10. ✅ **A cargo that cannot run is `build-error`** with a `retry-build`
+    that looks cargo up again, identically on every host. Before: SBCL
+    let the host's error escape, CCL signaled with an empty stderr, and
+    the restart re-ran the old lookup — the test's one-shot retry showed
+    the old code looping forever on CCL. `v06.missing-cargo-is-a-build-error`
+    asserts the class, a non-empty stderr, the restart, and a retry that
+    recovers; `rulisp::*cargo*` (internal) names the missing program
+    without touching the environment.
 11. **`Option<f32>`/`Option<f64>` NIL** is a host TYPE-ERROR on SBCL and
     CCL (reproduced); typed placeholder in codegen, `opt_scale` fixture.
 12. **Renamed artifacts** — the refusal names `:crate` as the fix, and a

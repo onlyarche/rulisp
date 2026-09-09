@@ -90,6 +90,19 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   promotion streak restarts here.
 
 ### Fixed
+- **A cargo that cannot be run is a `build-error`, on every host, with a
+  `retry-build` that looks cargo up again.** `use-crate` promised
+  `build-error` with a `retry-build` restart, but a cargo that could not
+  be executed at all escaped as the host's own error on SBCL, arrived as
+  a `build-error` with an empty stderr on CCL, and the restart was inert
+  everywhere: cargo was looked up once, outside the restart loop, so
+  setting `RULISP_CARGO` from the debugger and retrying re-ran the old
+  path. Now the exec failure is a `build-error` carrying the host's
+  message, an empty stderr is replaced by the exit status and the
+  program name, and each retry looks cargo up again. Migration: code
+  that handled the host's error class around `use-crate` handles
+  `rulisp:build-error`.
+### Fixed
 - **A crate whose reload failed on image restore could crash the next
   dump.** `%stub-crate` replaced the generated functions but left the
   dumped image's library handle and dump-hook pointer on the crate
