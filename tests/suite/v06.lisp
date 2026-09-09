@@ -349,3 +349,48 @@ whose lambda lists are the exact ones the golden pins."
   (is (= 2.5d0 (wb-call "OPT-SCALE" 2.5d0)))
   (is (= -1f0 (wb-call "OPT-SCALE32" nil)))
   (is (= 2.5f0 (wb-call "OPT-SCALE32" 2.5f0))))
+
+;;; ---------------------------------------------------------------------------
+;;; docs/distribution.md Pattern A tells library authors to commit artifacts
+;;; under names like libmycrate-lin-amd64.so. load-crate guesses the export
+;;; prefix from the file name, so a renamed artifact was refused as "not a
+;;; rulisp crate" with no hint that :crate is the fix — and, because the
+;;; artifact is copied into the cache BEFORE it is verified, every failed
+;;; load left an artifact-sized copy the sweep can never match (its name
+;;; carries the guessed prefix). Both reproduced by the v0.6 panel.
+;;; ---------------------------------------------------------------------------
+
+(defun %renamed-wordbag ()
+  "A copy of the wordbag artifact under a Pattern-A style name, in the
+temporary directory (per-process, so parallel suites do not collide)."
+  (ensure-crate)
+  (let* ((src (rulisp::crate-source-path *crate*))
+         (renamed (merge-pathnames
+                   (format nil "libwordbag-lin-amd64-~A.~A"
+                           rulisp::*process-tag* (pathname-type src))
+                   (uiop:temporary-directory))))
+    (uiop:copy-file src renamed)
+    renamed))
+
+(test v06.renamed-artifact-names-the-fix
+  (let ((renamed (%renamed-wordbag)))
+    (unwind-protect
+         (handler-case
+             (progn (rulisp:load-crate renamed)
+                    (fail "a renamed artifact loaded without :crate"))
+           (rulisp:abi-mismatch-error (e)
+             (is (search ":crate" (rulisp:abi-mismatch-message e))
+                 "the refusal does not name the fix: ~A" e)))
+      (uiop:delete-file-if-exists renamed))))
+
+(test v06.failed-load-leaves-no-cache-copy
+  (if (uiop:os-windows-p)
+      (pass "skipped: a mapped DLL cannot be unlinked on Windows; the sweep handles it later")
+      (let ((renamed (%renamed-wordbag)))
+        (unwind-protect
+             (let ((before (length (uiop:directory-files (rulisp::cache-directory)))))
+               (handler-case (rulisp:load-crate renamed)
+                 (rulisp:abi-mismatch-error () nil))
+               (is (= before (length (uiop:directory-files (rulisp::cache-directory))))
+                   "a failed load left a cache copy behind"))
+          (uiop:delete-file-if-exists renamed)))))

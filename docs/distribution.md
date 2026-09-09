@@ -29,7 +29,9 @@ static/libmycrate-mac-arm64.dylib
 ```
 
 and load with `rulisp:load-crate` picking the file by
-`(uiop:architecture)`/`(uiop:operating-system)` — or name them rulisp's
+`(uiop:architecture)`/`(uiop:operating-system)`, telling the loader the
+crate's name since the file no longer carries it —
+`(rulisp:load-crate path :crate "mycrate")` — or name them rulisp's
 way (`lib<name>-<os>-<arch>.<ext>`, Pattern B below) and let
 `rulisp:load-blob-crate` pick. This ships through any source dist as
 plain data. Caveats:

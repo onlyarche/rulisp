@@ -160,33 +160,45 @@ use but can still be freed."
          ;; processes sharing a cache from rewriting each other's mapping
          (copy (merge-pathnames (%cache-copy-name provisional) (cache-directory))))
     (uiop:copy-file path copy)
-    (multiple-value-bind (lib manifest raw)
-        (%open-and-verify provisional copy prefix-guess path)
-      (let ((canonical (manifest-crate manifest)))
-        (when (and crate-arg
-                   (string/= (substitute #\_ #\- canonical)
-                             (substitute #\_ #\- crate-arg)))
-          (error 'manifest-error
-                 :message (format nil "manifest says crate ~S, expected ~S"
-                                  canonical crate-arg)))
-        (let ((crate (or (gethash canonical *crates*)
-                         (progn
-                           (setf *crate-load-order*
-                                 (append *crate-load-order* (list canonical)))
-                           (setf (gethash canonical *crates*)
-                                 (make-instance 'crate
-                                                :name canonical
-                                                :package (ensure-crate-package
-                                                          (or package (string-upcase canonical)))))))))
-          (%commit-generation crate path lib manifest raw copy)
-          crate)))))
+    ;; the copy is made before the artifact is verified; a load that does
+    ;; not commit must not leave it behind — its name carries the guessed
+    ;; prefix, so the sweep could never match it (v0.6 item 12). POSIX:
+    ;; unlinking a mapped copy is safe (the mapping keeps the inode);
+    ;; Windows: a mapped DLL cannot be unlinked, so best-effort and ignored
+    (let ((committed nil))
+      (unwind-protect
+           (multiple-value-bind (lib manifest raw)
+               (%open-and-verify provisional copy prefix-guess path)
+             (let ((canonical (manifest-crate manifest)))
+               (when (and crate-arg
+                          (string/= (substitute #\_ #\- canonical)
+                                    (substitute #\_ #\- crate-arg)))
+                 (error 'manifest-error
+                        :message (format nil "manifest says crate ~S, expected ~S"
+                                         canonical crate-arg)))
+               (let ((crate (or (gethash canonical *crates*)
+                                (progn
+                                  (setf *crate-load-order*
+                                        (append *crate-load-order* (list canonical)))
+                                  (setf (gethash canonical *crates*)
+                                        (make-instance 'crate
+                                                       :name canonical
+                                                       :package (ensure-crate-package
+                                                                 (or package (string-upcase canonical)))))))))
+                 (%commit-generation crate path lib manifest raw copy)
+                 (setf committed t)
+                 crate)))
+        (unless committed
+          (ignore-errors (delete-file copy)))))))
 
 (defun %open-and-verify (display-name copy prefix &optional origin)
   (let* ((lib (dlopen* copy :origin origin))
          (abi-ptr (or (dlsym-ptr lib (concatenate 'string prefix "abi_version"))
                       (error 'abi-mismatch-error
                              :expected +abi-version+ :actual nil
-                             :message (format nil "~A is not a rulisp crate (no ~Aabi_version)"
+                             :message (format nil "~A is not a rulisp crate (no ~Aabi_version) ~
+                                                   — if the artifact was renamed, pass ~
+                                                   :crate with the crate's name"
                                               display-name prefix))))
          (abi (cffi:foreign-funcall-pointer abi-ptr () :uint32)))
     (unless (= abi +abi-version+)

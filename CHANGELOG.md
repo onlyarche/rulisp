@@ -90,6 +90,18 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   promotion streak restarts here.
 
 ### Fixed
+- **A renamed artifact is refused with the fix in the message, and a
+  failed load leaves no cache copy.** `load-crate` guesses the export
+  prefix from the file name, so an artifact committed under a
+  Pattern-A name (`libmycrate-lin-amd64.so`, as docs/distribution.md
+  suggests) was refused as "not a rulisp crate" with no hint that
+  `:crate "mycrate"` is the answer; the message says so now, and the
+  page shows the call. And the artifact was copied into the cache before
+  it was verified, so every failed load left an artifact-sized copy the
+  sweep could never match (its name carries the guessed prefix); a load
+  that does not commit now deletes its copy (best-effort on Windows,
+  where a mapped DLL cannot be unlinked).
+### Fixed
 - **`Option<f32>` / `Option<f64>` NIL is None, not a host type error.**
   For an optional float parameter the wrapper put the integer 0 in the
   value slot when the argument was NIL, and SBCL's and CCL's foreign-call

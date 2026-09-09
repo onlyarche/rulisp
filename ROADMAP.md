@@ -108,8 +108,11 @@ Budget 2 M + 12 S.
     `v06.option-float-nil-is-none` was red on the old codegen and is
     green on every host. quickstart states the plain-scalar policy as it
     is: host-checked.
-12. **Renamed artifacts** — the refusal names `:crate` as the fix, and a
-    failed load no longer leaks an unsweepable cache copy (reproduced).
+12. ✅ **Renamed artifacts** — the "not a rulisp crate" refusal now says
+    to pass `:crate` (distribution.md shows the call), and a load that
+    does not commit deletes the cache copy it made before verifying
+    (best-effort on Windows). `v06.renamed-artifact-names-the-fix` and
+    `v06.failed-load-leaves-no-cache-copy` were red on the old loader.
 13. **Quicklisp dist dry run in CI** — every system in every `.asd` of
     the tarball loads without cargo; stability §9 rewritten to that.
 14. **Close the cycle** — `tools/check-1.0.sh` (the exit criteria as a
