@@ -67,7 +67,7 @@ pub struct Error(String);
 
 impl Error {
     /// An error carrying just a message; on the Lisp side it signals
-    /// `<crate>:rust-error` with that message.
+    /// `rulisp:rust-error` with that message.
     pub fn msg(m: impl Into<String>) -> Self {
         Error(m.into())
     }

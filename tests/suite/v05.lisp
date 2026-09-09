@@ -100,7 +100,7 @@ an absolute threshold measured GC speed, not inhibition."
 (test v05.newer-rulisp-warns
   (is (rulisp::%version-major-minor rulisp::*rulisp-version*)
       "the loader's own version ~S does not parse" rulisp::*rulisp-version*)
-  (signals rulisp::rulisp-version-skew
+  (signals rulisp:rulisp-version-skew
     (rulisp::parse-manifest (%manifest-with-rulisp-version "99.0.0")))
   ;; the warning is informational: parsing still succeeds and records it
   (let ((m (handler-bind ((style-warning #'muffle-warning))

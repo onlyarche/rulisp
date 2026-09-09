@@ -78,9 +78,14 @@ Budget 2 M + 12 S.
    exactly on SBCL, by parameter names on CCL and ECL). Falsified: a
    golden without `retry-build` fails naming it. From here every
    package.lisp change co-updates the golden — item 8 is the first.
-8. **Export what the docs already name** — `rulisp-version-skew`, the
-   eleven unexported condition readers (32 → 47), docstrings on every
-   exported class and reader, the stale `Error::msg` doc.
+8. ✅ **Export what the docs already name** — `rulisp-version-skew` with
+   its three readers and the eleven condition readers that were internal
+   while their siblings were exported (32 → 47, the golden regenerated in
+   the same commit); a class documentation on every exported condition,
+   `crate` and `callback-token` (when it is signaled, which restart) and a
+   docstring on every exported reader; `v06.exports-are-documented` keeps
+   it so (red today: 13 classes and 10 readers). `Error::msg`'s Rust doc
+   no longer names `<crate>:rust-error`.
 9. **`crate-generation` becomes a reader** — the exported `setf` lets a
    stale handle into a new library (reproduced); a §4 soundness fix.
 10. **A cargo that cannot run is `build-error`** with a working

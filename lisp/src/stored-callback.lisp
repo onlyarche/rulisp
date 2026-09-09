@@ -27,7 +27,12 @@ arrive on foreign threads (adopted by the Lisp on entry).")
 
 (defclass callback-token ()
   ((id :initarg :id :reader callback-token-id)
-   (registered :initform t :accessor %token-registered)))
+   (registered :initform t :accessor %token-registered))
+  (:documentation "The registration of a stored callback: returned by
+rulisp:callback, passed to an export that takes a stored callback, and
+released by unregister-callback or by the GC. Once unregistered or
+collected, Rust's next invocation fails safely — it never reaches a dead
+closure."))
 
 (defmethod print-object ((token callback-token) stream)
   (print-unreadable-object (token stream :type t :identity t)

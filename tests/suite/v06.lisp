@@ -142,8 +142,8 @@
         (progn (rulisp:use-crate dir)
                (fail "an artifact whose abi_version() answers 2 was loaded"))
       (rulisp:abi-mismatch-error (e)
-        (is (eql 1 (rulisp::abi-mismatch-expected e)))
-        (is (eql 2 (rulisp::abi-mismatch-actual e)))
+        (is (eql 1 (rulisp:abi-mismatch-expected e)))
+        (is (eql 2 (rulisp:abi-mismatch-actual e)))
         ;; refused before anything was registered or interned
         (is (null (gethash "abifix" rulisp::*crates*)) "a refused artifact left a crate object")
         (is (null (find-package "ABIFIX")) "a refused artifact left a package")))))
@@ -253,3 +253,21 @@ whose lambda lists are the exact ones the golden pins."
                         "~S: lambda list ~S in the golden, ~S now" (first g) (third g) (third c))
              #-sbcl (is (equal (%api-names (third g)) (%api-names (third c)))
                         "~S: parameters ~S in the golden, ~S now" (first g) (third g) (third c)))))))))
+
+;;; ---------------------------------------------------------------------------
+;;; The loader's own API describes itself, as every generated function and
+;;; class has since 0.5: each exported function has a docstring, each
+;;; exported class and condition a class documentation.
+;;; ---------------------------------------------------------------------------
+
+(test v06.exports-are-documented
+  (let ((undocumented '()))
+    (do-external-symbols (s :rulisp)
+      (when (and (fboundp s)
+                 (zerop (length (or (documentation s 'function) ""))))
+        (push (list s :function) undocumented))
+      (let ((c (find-class s nil)))
+        (when (and c (zerop (length (or (documentation c t) ""))))
+          (push (list s :class) undocumented))))
+    (is (null undocumented) "exports without documentation: ~S"
+        (sort undocumented #'string< :key #'first))))

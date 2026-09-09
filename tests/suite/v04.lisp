@@ -163,7 +163,7 @@
                (fail "no condition despite a broken C compiler"))
       (rulisp:manifest-error (e)
         (is (search "native compiler"
-                    (rulisp::manifest-error-message e)))))))
+                    (rulisp:manifest-error-message e)))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; §11: (:option :bool) is outside the vocabulary. The macro refuses to

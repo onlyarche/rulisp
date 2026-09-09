@@ -31,7 +31,12 @@
    (on-dump-ptr :initform nil :accessor crate-on-dump-ptr)
    ;; set by %stub-crate when a reload failed on image restore; cleared by
    ;; the next successful generation commit
-   (stub-reason :initform nil :accessor crate-stub-reason)))
+   (stub-reason :initform nil :accessor crate-stub-reason))
+  (:documentation "A loaded glue crate: its name, the package its exports were
+interned into, its generation (bumped by every reload) and the artifact it
+came from. Returned by load-crate, use-crate, load-blob-crate and
+reload-crate, which also accepts the name; (describe crate) prints where
+it came from and every export's call shape."))
 
 (defmethod print-object ((c crate) stream)
   (print-unreadable-object (c stream :type t)
@@ -333,6 +338,35 @@ fmakunbound."
 the symbol, written only by si::set-documentation."
   #+ecl (si::set-documentation sym 'function doc)
   #-ecl (setf (documentation sym 'function) doc))
+
+;;; v0.6: the loader's own exported readers describe themselves, as every
+;;; generated function has since 0.5 (the classes carry :documentation).
+(dolist (entry
+         '((crate-name . "The crate's name: the manifest's :crate, also its package's name downcased.")
+           (crate-generation . "The crate's current generation: 1 at first load, +1 per reload. A handle carries the generation it was made in.")
+           (crate-package . "The package the crate's exports are interned into.")
+           (rust-error-message . "The Rust error's Display text.")
+           (rust-error-type . "The Rust error type's name, as the manifest declares it (\"Error\" for the generic one).")
+           (rust-error-function-name . "The Lisp function whose call returned the Err.")
+           (rust-panic-message . "The panic payload as text (a non-string payload reads as its type).")
+           (rust-panic-function-name . "The Lisp function whose call panicked.")
+           (invalid-argument-message . "Which argument was refused, and why.")
+           (invalid-argument-function-name . "The Lisp function whose argument was refused.")
+           (invalid-handle-function-name . "The Lisp function that was given the freed or stale handle.")
+           (stale-handle-generation . "The generation the stale handle was made in.")
+           (stale-crate-generation . "The crate's generation at the time of the refused call.")
+           (crate-not-loaded-name . "The crate name or artifact path that could not be resolved or loaded.")
+           (crate-not-loaded-message . "Why: the loader's message, or the reason the crate was stubbed.")
+           (build-error-command . "The cargo command line that failed, as one string.")
+           (build-error-stderr . "cargo's standard error output, verbatim.")
+           (manifest-error-message . "Which rule of the manifest grammar was broken.")
+           (abi-mismatch-expected . "What this loader requires: its ABI version, or the host's target.")
+           (abi-mismatch-actual . "What the artifact answered: its abi_version(), or NIL when it exports none.")
+           (abi-mismatch-message . "The detail, when there is one beyond the two values.")
+           (rulisp-version-skew-crate . "The crate whose manifest declares the newer rulisp.")
+           (rulisp-version-skew-built-with . "The rulisp version the crate was built with.")
+           (rulisp-version-skew-loader . "This loader's rulisp version.")))
+  (%set-function-doc (car entry) (cdr entry)))
 
 (defmethod describe-object ((c crate) stream)
   "(describe crate): everything the REPL user asks first — where it came

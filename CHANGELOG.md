@@ -8,6 +8,21 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.6 development)
 
 ### Added
+- **The loader's API describes itself, and exports what the docs already
+  name.** Fifteen additive exports: `rulisp-version-skew` — the
+  style-warning stability.md §7 tells users they may muffle — with its
+  three readers, and the eleven condition readers that were internal
+  while their siblings were exported (`rust-panic-function-name`,
+  `invalid-argument-message`/`-function-name`,
+  `invalid-handle-function-name`, `crate-not-loaded-name`/`-message`,
+  `build-error-command`, `manifest-error-message`,
+  `abi-mismatch-expected`/`-actual`/`-message`): 32 → 47. Every exported
+  condition class, `crate` and `callback-token` carry a class
+  documentation saying when they are signaled and which restart is
+  offered; every exported reader has a docstring;
+  `v06.exports-are-documented` keeps it so. `Error::msg`'s Rust doc no
+  longer names the nonexistent `<crate>:rust-error`.
+### Added
 - **Lisp API gate.** `tests/golden/lisp-api.sexp` pins every exported
   symbol of `rulisp` with its kind, its superclasses (classes and
   conditions) or its lambda list (functions); `v06.exported-api-golden`

@@ -29,13 +29,28 @@
    #:build-error
    #:manifest-error
    #:abi-mismatch-error
-   ;; condition readers
+   #:rulisp-version-skew                ; a style-warning (docs/stability.md §7)
+   ;; condition readers — every slot a handler can read (v0.6: all of them)
    #:rust-error-message
    #:rust-error-type
    #:rust-error-function-name
    #:rust-panic-message
+   #:rust-panic-function-name
+   #:invalid-argument-message
+   #:invalid-argument-function-name
+   #:invalid-handle-function-name
    #:stale-handle-generation
    #:stale-crate-generation
+   #:crate-not-loaded-name
+   #:crate-not-loaded-message
+   #:build-error-command
    #:build-error-stderr
+   #:manifest-error-message
+   #:abi-mismatch-expected
+   #:abi-mismatch-actual
+   #:abi-mismatch-message
+   #:rulisp-version-skew-crate
+   #:rulisp-version-skew-built-with
+   #:rulisp-version-skew-loader
    ;; restart names
    #:retry-build))
