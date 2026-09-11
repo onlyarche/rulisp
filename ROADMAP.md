@@ -12,7 +12,9 @@ panel reproduced — the ones only a pre-freeze minor may fix — land
 classified up front. No new boundary feature, no flagship; ABI 1 and
 `:schema` 1 untouched. Full plan with demand cases, acceptance criteria
 and cut order: [docs/design/v06-plan.md](docs/design/v06-plan.md).
-Budget 2 M + 12 S.
+Budget 2 M + 12 S. **All fourteen items shipped by 2026-09-11**; the
+0.6.0 release follows docs/releasing.md, and 1.0's remaining criterion
+is the release cycle itself completing without a break.
 
 1. ✅ **Restore-failure dead pointers** — a crate whose reload failed on
    image restore kept the dead library's pointers; the next dump's hook
@@ -121,11 +123,16 @@ Budget 2 M + 12 S.
     top-level `use-crate` in an exported suite file turns it red, and so
     does a reachable cargo. stability §9 no longer claims `rulisp/test`
     is excluded from the dist — it loads; only running it needs cargo.
-14. **Close the cycle** — `tools/check-1.0.sh` (the exit criteria as a
-    script), `tools/check-dist.sh` (Ultralisp serves 0.3.0 today, three
-    days after the tag — releasing.md step 8 becomes a command), the §12
-    citation refresh, the stale ROADMAP prose, and the API review's
-    negative result recorded.
+14. ✅ **Close the cycle** — `tools/check-1.0.sh` holds the mechanical
+    part of the exit criteria (run by the MSRV job); `tools/check-dist.sh`
+    says which rulisp the Ultralisp dist serves (0.3.0, a week after the
+    v0.5.0 tag — releasing.md step 8 is a command now, and the source
+    cleanup on ultralisp.org is the maintainer's); §12's 110 drifted
+    `file:line` ranges re-anchored by a four-way verification and a
+    checker, its three false "no test" cells cite the tests that exist,
+    and `v06.invalid-utf8-is-invalid-argument` drives status 3 end to
+    end; the stale ROADMAP sentences, the claims count, CHANGELOG's
+    surfaces paragraph and stability §3's review result are in place.
 
 Found during item 1, not scheduled (a decision for the maintainer):
 a **truncated artifact at restore** — the file is present but cut
