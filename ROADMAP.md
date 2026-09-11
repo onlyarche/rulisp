@@ -113,8 +113,14 @@ Budget 2 M + 12 S.
     does not commit deletes the cache copy it made before verifying
     (best-effort on Windows). `v06.renamed-artifact-names-the-fix` and
     `v06.failed-load-leaves-no-cache-copy` were red on the old loader.
-13. **Quicklisp dist dry run in CI** — every system in every `.asd` of
-    the tarball loads without cargo; stability §9 rewritten to that.
+13. ✅ **Quicklisp dist dry run in CI** — `make dist-dryrun` exports HEAD
+    with `git archive`, finds every `.asd`, and `quickload`s every system
+    each defines with no cargo reachable (off PATH, `RULISP_CARGO` pointed
+    at nothing — rulisp's lookup would otherwise find `~/.cargo/bin`):
+    `rulisp`, `rulisp/test`, `rulisp-ecl-smoke` load. Falsified: a
+    top-level `use-crate` in an exported suite file turns it red, and so
+    does a reachable cargo. stability §9 no longer claims `rulisp/test`
+    is excluded from the dist — it loads; only running it needs cargo.
 14. **Close the cycle** — `tools/check-1.0.sh` (the exit criteria as a
     script), `tools/check-dist.sh` (Ultralisp serves 0.3.0 today, three
     days after the tag — releasing.md step 8 becomes a command), the §12

@@ -151,8 +151,12 @@ the last minute:
 - `(ql:quickload :rulisp)` succeeds **without cargo on PATH** — loading the
   system opens no library and runs no toolchain; cargo is needed only by
   `use-crate`. The SBCL/Linux CI job proves this on every push.
-- `rulisp/test` is documented as requiring cargo (it builds the examples)
-  and is excluded from what a dist user loads.
+- Every system in every `.asd` of the tarball — `rulisp`, `rulisp/test`,
+  `rulisp-ecl-smoke` — loads with no cargo reachable (`make dist-dryrun`,
+  run by the SBCL/Linux CI job on a `git archive` of every push; a
+  top-level `use-crate` anywhere in the tree would turn it red); only *running*
+  `rulisp/test` needs cargo, because its tests build the examples
+  (docs/installation.md).
 - The examples are not part of the ASDF system and stay out of the dist.
 - The manifest key-class rule (§7) in force, so a dist user on an older
   loader is refused rather than mis-run by a newer crate.

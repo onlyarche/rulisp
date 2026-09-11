@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat dist-dryrun bench clean
 
 build:
 	$(CARGO) build
@@ -80,6 +80,19 @@ compat:
 	cd $(COMPAT)/tree && $(SBCL) --non-interactive --load tests/run-m4.lisp > $(COMPAT)/old-suite.log 2>&1; \
 	  tail -4 $(COMPAT)/old-suite.log
 	grep -q "Fail: 0" $(COMPAT)/old-suite.log
+
+# docs/stability.md §9: what the Quicklisp dist builder would do with a
+# source tarball of HEAD — every system of every .asd loads with no cargo
+# reachable: off PATH, and RULISP_CARGO pointed at nothing, since rulisp's
+# lookup would otherwise find ~/.cargo/bin/cargo (tests/dist-dryrun.lisp
+# prints DRYRUN-OK per system; three today).
+DIST := $(CURDIR)/target/dist
+dist-dryrun:
+	rm -rf $(DIST) && mkdir -p $(DIST)
+	git archive HEAD | tar -x -C $(DIST)
+	env -i HOME="$$HOME" PATH=/bin:/usr/bin RULISP_CARGO=/nonexistent/cargo RULISP_DIST_ROOT=$(DIST) \
+	  sbcl --non-interactive --load $(CURDIR)/tests/dist-dryrun.lisp 2>&1 | tee $(DIST).log
+	test "$$(grep -c '^DRYRUN-OK' $(DIST).log)" -eq 3
 
 # one version string across the crates, the path pins, the ASDF system
 # and the docs (docs/releasing.md step 1); fails on any site that disagrees

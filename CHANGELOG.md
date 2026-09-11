@@ -8,6 +8,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.6 development)
 
 ### Added
+- **Quicklisp dist dry run in CI.** A dist builder loads every system of
+  every `.asd` in the tarball; `make dist-dryrun` exports HEAD with
+  `git archive` and does exactly that with cargo off PATH — `rulisp`,
+  `rulisp/test` and `rulisp-ecl-smoke` all load. stability.md §9 said
+  `rulisp/test` was "excluded from what a dist user loads"; it is not,
+  and need not be: only running it needs cargo.
+### Added
 - **The loader's API describes itself, and exports what the docs already
   name.** Fifteen additive exports: `rulisp-version-skew` — the
   style-warning stability.md §7 tells users they may muffle — with its

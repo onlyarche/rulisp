@@ -108,6 +108,11 @@ jobs:
             --eval '(ql:quickload :rulisp :silent t)' \
             --eval '(format t "LOCAL-PROJECTS-OK~%")' | tee lp.log
           grep -q LOCAL-PROJECTS-OK lp.log
+      # docs/stability.md §9: the Quicklisp dist builder loads every system
+      # of every .asd in the tarball — rulisp, rulisp/test, rulisp-ecl-smoke —
+      # and none of them may need cargo
+      - name: Quicklisp dist dry run (every system in every .asd, no cargo)
+        run: make dist-dryrun
       # docs/usage.md Case A, as written: the previous release's asset —
       # pinned, so this is old crate / new loader every day and not a
       # same-version test the day after a release — downloaded and loaded
