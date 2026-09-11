@@ -306,7 +306,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | OK (0): out-params valid; CL converts and returns | test | `m3.strings` (`tests/suite/m1.lisp:102`); dispatch `lisp/src/codegen.lisp:448-451` |
 | ERR (1): Rust `Err` → typed condition ⊂ `rulisp:rust-error` | test | `m3.typed-conditions` (`tests/suite/m3.lisp:11`); `m2.fallible` (`tests/suite/m1.lisp:87`) |
 | PANIC (2): panic caught in shim → `rulisp:rust-panic`, image survives | test | `m1.panic` (`tests/suite/m1.lisp:57-63`) |
-| INVALID (3): boundary rejects a bad argument (e.g. bad UTF-8) as status 3 | runtime-check | `crates/rulisp-runtime/src/lib.rs:148-162` (`str_arg`); no e2e test drives Rust-side status 3 |
+| INVALID (3): boundary rejects a bad argument (e.g. bad UTF-8) as status 3 | test | `v06.invalid-utf8-is-invalid-argument` (`tests/suite/v06.lisp`: a lone surrogate, encoded as ED A0 80, comes back as `invalid-argument` "InvalidUtf8"); mechanism `crates/rulisp-runtime/src/lib.rs` (`str_arg`) |
 | Status 3 → CL signals `rulisp:invalid-argument` | runtime-check | `lisp/src/codegen.lisp:492-496` |
 | CB_ERR (4): CL re-signals the original stashed condition object | test | `m5.callback-condition-identity` (`tests/suite/m1.lisp:191-204`) |
 | Exception: `*_free` returns void; a panic inside free is caught, logged to stderr, swallowed | test | `v04.free-shim-swallows-drop-panic` (`tests/suite/v04.lisp:53-67`); shim `crates/rulisp-macros/src/lib.rs:864-872` |
@@ -321,7 +321,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | UTF-8 rejection records type `"InvalidUtf8"` | runtime-check | `crates/rulisp-runtime/src/lib.rs:159` |
 | **§4 — Strings and buffers** | | |
 | Wire format both directions: `(ptr,len)` UTF-8 | test | `m3.strings` (`tests/suite/m1.lisp:102-108`) |
-| No NUL terminator; interior NULs legal | runtime-check | `lisp/src/ffi.lisp:178-181` (length-delimited encode); `crates/rulisp-runtime/src/lib.rs:148-162`; no interior-NUL test |
+| No NUL terminator; interior NULs legal | test | `v05.utf8-fastpath-boundary` (`tests/suite/v05.lisp`: "nul~Cinside" round-trips); mechanism `lisp/src/ffi.lisp` (length-delimited encode), `crates/rulisp-runtime/src/lib.rs` (`str_arg`) |
 | Lisp→Rust: borrowed for the duration of the call (dynamic-extent pin/copy) | runtime-check | `lisp/src/ffi.lisp:152-181` (`call-with-bytes-arg` / `call-with-utf8-arg`) |
 | Lending a buffer never stops the world (CCL's pin is `without-gcing`, so it copies) | test | `v05.pin-does-not-stop-the-world` (`tests/suite/v05.lisp`) on SBCL, CCL and ECL; `%call-with-copied-buffer` (`lisp/src/ffi.lisp`, `#+ccl`) |
 | Rust validates UTF-8; failure → status 3 | runtime-check | `crates/rulisp-runtime/src/lib.rs:148-162` (`str_arg`) |
@@ -380,7 +380,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | One leaked mapping per reload (zero in production) — a deliberate, accepted leak | UB-by-design | `BOUNDARY.md:185-188`; `lisp/src/crate.lisp:3-6` |
 | Persisting mappings make TLS destructors, `std::thread`, and stale-generation frees safe | test | `m6.reload` (`tests/suite/m1.lisp:243`: stale handle freed via birth-gen shim); TLS-destructor half rides on no-dlclose, untested directly |
 | Every load dlopens a unique copy of the artifact, defeating dlopen path caching | runtime-check | `lisp/src/crate.lisp:110-121` (counter+timestamp copy name, `uiop:copy-file`), `:140-141` (dlopen the copy) |
-| Older cache copies are unlinked; live mappings keep the inodes alive | runtime-check | `lisp/src/crate.lisp:282-292` (`%sweep-crate-cache`), invoked at `:209` — no test exercises the sweep |
+| Older cache copies are unlinked; live mappings keep the inodes alive | test | `v04.cache-sweep-spares-other-processes-fresh-copies` (`tests/suite/v04.lisp`); mechanism `lisp/src/crate.lisp` (`%sweep-crate-cache`, invoked from `%commit-generation`); a load that does not commit deletes its own copy (`v06.failed-load-leaves-no-cache-copy`) |
 | **§10 — Image dump / restore** | | |
 | On restore the loader bumps the global session counter FIRST, before any reload | runtime-check | `lisp/src/crate.lisp:306-311` (`incf *session*` precedes the reload loop; hook registered `:321`) |
 | Every pre-dump handle cell is invalid: signals `stale-handle-error`, never dereferences | runtime-check | `lisp/src/handle.lisp:37-52` (session gate in `cell-begin-call`); pinned by `m7.dump-restore` (`tests/suite/m1.lisp:312-316`) |

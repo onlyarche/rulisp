@@ -394,3 +394,22 @@ temporary directory (per-process, so parallel suites do not collide)."
                (is (= before (length (uiop:directory-files (rulisp::cache-directory))))
                    "a failed load left a cache copy behind"))
           (uiop:delete-file-if-exists renamed)))))
+
+;;; ---------------------------------------------------------------------------
+;;; BOUNDARY §3: Rust validates UTF-8 and answers status 3 (INVALID), which
+;;; the wrapper turns into rulisp:invalid-argument. §12 said no end-to-end
+;;; test drove the Rust side of that: babel encodes a lone surrogate as the
+;;; bytes ED A0 80, which Rust's from_utf8 rejects.
+;;; ---------------------------------------------------------------------------
+
+(test v06.invalid-utf8-is-invalid-argument
+  (ensure-crate)
+  (let ((lone (code-char #xD800)))
+    (if (null lone)
+        (pass "skipped: this host has no lone-surrogate character (CCL)")
+        (handler-case
+            (progn (wb-call "ECHO" (string lone))
+                   (fail "a lone surrogate crossed the boundary as valid UTF-8"))
+          (rulisp:invalid-argument (e)
+            (is (search "InvalidUtf8" (rulisp:invalid-argument-message e))
+                "status 3 arrived, but not as InvalidUtf8: ~A" e))))))

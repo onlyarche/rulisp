@@ -47,11 +47,12 @@ worked; each has a check, so a slip is caught before the next step.
    `<crate>-windows-x86_64.dll` for `wordbag`, `rx`, `wasm`, `fetch`. A
    host that flaked is re-run for the same tag from the Actions tab
    (`blobs` → Run workflow → the tag); existing assets are replaced.
-8. **Ultralisp.** The dist polls GitHub; after about an hour
-   `(ql:update-dist "ultralisp")` followed by `(ql:quickload :rulisp)`
-   loads the tagged version — check with
-   `(asdf:component-version (asdf:find-system :rulisp))`. Quicklisp is a
-   1.0 decision (docs/stability.md §9).
+8. **Ultralisp.** The dist polls GitHub on its own schedule and has
+   lagged a tag by days. Run `sh tools/check-dist.sh` until it prints
+   the new version; if it has not within a day, the place to look is the
+   Ultralisp project page — its sources and its check queue — not the
+   tree. Users then get it with `(ql:update-dist "ultralisp")`. Quicklisp
+   is a 1.0 decision (docs/stability.md §9).
 9. **Open the next cycle.** Add `## Unreleased (X.Y+1 development)` at
    the top of CHANGELOG.md, and move the previous-release pins in
    `.github/workflows/ci.yml` to the release just made: `make compat

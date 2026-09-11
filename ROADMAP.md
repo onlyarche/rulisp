@@ -421,8 +421,9 @@ constructor demand case appears, and then as an OPT-IN attribute
 - ✅ `rulisp:load-blob-crate` + the `lib<name>-<os>-<arch>.<ext>` naming
   convention, and `.github/workflows/blobs.yml` building release blobs for
   Linux x86-64 and macOS arm64 (dispatch + release tags).
-- Still open: a worked Deploy integration example; official Quicklisp
-  submission (rulisp builds without cargo — eligible).
+- Since closed: the worked Deploy recipe shipped in v0.3
+  (docs/distribution.md Pattern B); Quicklisp submission is a 1.0
+  decision (docs/stability.md §9), with the dist dry run in CI since v0.6.
 
 ### 5. Portability
 
@@ -434,8 +435,9 @@ constructor demand case appears, and then as an OPT-IN attribute
   ECL 21.2.1 (139/139), with one documented platform limitation:
   foreign-thread stored-callback invocation (ECL cannot adopt foreign
   threads).
-- Image dump/restore on non-SBCL hosts (`ccl:save-application`, ECL);
-  the m7 test currently passes vacuously off SBCL.
+- Image dump/restore on non-SBCL hosts: the m7 test runs for real on CCL
+  and on Windows since v0.4; ECL has no image dump and ships
+  `program-op` executables instead (docs/distribution.md Pattern B′).
 - Windows: excluded from v1; needs LLP64 `uintptr` handling, DLL
   file-locking discipline for reload, and CI.
 
@@ -451,8 +453,8 @@ constructor demand case appears, and then as an OPT-IN attribute
 - Opt-in `Display`-driven `print-object` for handles (DESIGN.md §6.4).
 - ✅ Wasm linear-memory access via `:bytes` — shipped alongside `:bytes`
   (bounds-checked `memory-read`/`memory-write` + a guest function summing
-  a host-written buffer). Still pending: host functions via stored
-  callbacks, possibly WASI.
+  a host-written buffer). Host functions via stored callbacks shipped
+  with 0.2 (§2 above); WASI stays unplanned.
 
 ## Later / exploratory
 

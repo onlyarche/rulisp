@@ -61,7 +61,13 @@ an exported symbol is a break and does not land in a minor.
 
 ## 3. Deprecation
 
-Policy only — nothing is deprecated today.
+Policy only — nothing is deprecated today. Reviewed for 0.6, the last
+minor before 1.0: no rename or removal found necessary — every export is
+used by README, BOUNDARY §2, the quickstart, the suite or the fetch
+veneer; argument conventions are consistent (paths positional, `:package`
+keyword throughout); and a class name in a `handler-case` cannot be
+staged by a style-warning anyway. The one tightening of the cycle, the
+undocumented `(setf crate-generation)`, was a §4 soundness fix.
 
 - Rust: `#[deprecated]` for at least one minor before removal, with the
   replacement in the note.
@@ -129,7 +135,8 @@ the whole 1.x line — a glue crate written against 1.0, and a Lisp
 application written against 1.0, keep working on every 1.x without
 change. Exit criteria, all checkable:
 
-1. `abi_version()` still 1, unchanged since 0.1.0.
+1. `abi_version()` still 1, unchanged since 0.1.0. Checked:
+   `tools/check-1.0.sh` greps the constant on both sides.
 2. The v0.5 plan's items shipped (docs/design/v05-plan.md; item 10 is
    optional).
 3. One full release cycle after v0.5 with **no** break on any surface —
@@ -139,7 +146,17 @@ change. Exit criteria, all checkable:
    `v06.abi-mismatch-refused` for the ABI gate.
 4. Every user-facing claim in README and docs/ cites a test, a CI job or a
    benchmark row, or is gone (v0.5 item 11), and BOUNDARY §12 has no gap.
-5. The Quicklisp prerequisites in §9 met.
+   Checked: `grep -c '^|.*GAP' BOUNDARY.md` is 0 and docs/claims.md's
+   footer says 0 unverified.
+5. The Quicklisp prerequisites in §9 met. Checked: the dist dry run in
+   CI; the submission itself is the 1.0 decision.
+
+`make check-1.0` (`tools/check-1.0.sh`, run by the MSRV CI job) holds
+the mechanical part of criteria 1, 3, 4 and 5 — the ABI constants, the
+gates by name, the export count against the golden, the GAP count, the
+register's footer, the dry-run step — so a criterion cannot lapse
+quietly. Status as of 0.6.0: 1 holds; 2 shipped; 3 in progress (this
+cycle, gated); 4 holds; 5 mechanical part holds, submission pending.
 
 ## 9. Quicklisp prerequisites (listed, not scheduled)
 

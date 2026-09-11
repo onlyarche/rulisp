@@ -7,6 +7,16 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.6 development)
 
+**Surfaces this cycle** (docs/stability.md §8 criterion 3, the no-break
+cycle). *Lisp API*: fifteen additive exports (`rulisp-version-skew`, its
+readers, the eleven condition readers), documentation on every export,
+`build-error` where a host error was, `Option<float>` NIL as None — and
+one tightening, the undocumented `(setf crate-generation)` removed as a
+§4 soundness fix; no rename, no removal of a documented call. *Rust
+API*: doc text only; `cargo-semver-checks` green against 0.5.0 as a
+minor. *Manifest*: no new key; the golden regenerated for two new
+wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
+
 ### Added
 - **Quicklisp dist dry run in CI.** A dist builder loads every system of
   every `.asd` in the tarball; `make dist-dryrun` exports HEAD with

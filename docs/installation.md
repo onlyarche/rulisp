@@ -101,6 +101,12 @@ rulisp is on Ultralisp (Quicklisp itself is planned for 1.0):
 (ql:quickload :rulisp)
 ```
 
+The dist polls GitHub on its own schedule and can lag a release by days
+(`sh tools/check-dist.sh` in a checkout says which version it serves);
+to be sure of the version you loaded, ask
+`(asdf:component-version (asdf:find-system :rulisp))`, or track the
+repository directly as below.
+
 To track the repository instead, clone into Quicklisp's `local-projects`
 (ASDF finds `lisp/rulisp.asd` there automatically):
 

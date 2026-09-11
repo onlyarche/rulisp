@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat dist-dryrun bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat dist-dryrun check-1.0 check-dist bench clean
 
 build:
 	$(CARGO) build
@@ -93,6 +93,15 @@ dist-dryrun:
 	env -i HOME="$$HOME" PATH=/bin:/usr/bin RULISP_CARGO=/nonexistent/cargo RULISP_DIST_ROOT=$(DIST) \
 	  sbcl --non-interactive --load $(CURDIR)/tests/dist-dryrun.lisp 2>&1 | tee $(DIST).log
 	test "$$(grep -c '^DRYRUN-OK' $(DIST).log)" -eq 3
+
+# docs/stability.md §8: the 1.0 exit criteria as commands (constants,
+# gate names, counts); run by the MSRV CI job next to check-versions
+check-1.0:
+	sh tools/check-1.0.sh
+
+# docs/releasing.md step 8: which rulisp the Ultralisp dist serves today
+check-dist:
+	sh tools/check-dist.sh
 
 # one version string across the crates, the path pins, the ASDF system
 # and the docs (docs/releasing.md step 1); fails on any site that disagrees

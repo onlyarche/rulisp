@@ -57,6 +57,8 @@ jobs:
           rustup toolchain install "$RV" --profile minimal
           cargo "+$RV" check -p rulisp -p rulisp-macros -p rulisp-runtime -p wordbag --locked
       - run: make check-versions
+      - name: 1.0 exit criteria, the mechanical part (docs/stability.md §8)
+        run: make check-1.0
 
   sbcl-linux:
     name: SBCL / Linux x86-64 (required)

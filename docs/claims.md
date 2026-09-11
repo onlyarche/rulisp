@@ -9,7 +9,9 @@ they were before the audit's corrections; a **resolved** row says what
 the audit changed. The next audit is a diff of this file against the
 pages. A row marked **unverified** has no test, CI step or bench row
 behind it and says what would verify it; its page is worded as such.
-Dated wording ("since 0.2") is not a claim and is not listed.
+Dated wording ("since 0.2") is not a claim and is not listed: the audit
+extracted 371 entries, 24 of which were dated wording found true, so
+347 are rows here.
 
 ## README.md
 
