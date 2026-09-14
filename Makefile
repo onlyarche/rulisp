@@ -65,7 +65,7 @@ doc:
 # last release; docs/releasing.md step 9 moves it. When the old suite
 # fails: a test that reaches rulisp:: internals is recorded and skipped by
 # name; a failure through an exported symbol is a break and does not land.
-PREV ?= v0.5.0
+PREV ?= v0.6.0
 COMPAT := $(CURDIR)/target/compat
 compat:
 	$(CARGO) build -p wordbag

@@ -12,9 +12,13 @@ panel reproduced — the ones only a pre-freeze minor may fix — land
 classified up front. No new boundary feature, no flagship; ABI 1 and
 `:schema` 1 untouched. Full plan with demand cases, acceptance criteria
 and cut order: [docs/design/v06-plan.md](docs/design/v06-plan.md).
-Budget 2 M + 12 S. **All fourteen items shipped by 2026-09-11**; the
-0.6.0 release follows docs/releasing.md, and 1.0's remaining criterion
-is the release cycle itself completing without a break.
+Budget 2 M + 12 S. **All fourteen items shipped by 2026-09-11; released
+as 0.6.0 on 2026-09-14** (crates.io, tag `v0.6.0`, a GitHub Release with
+12 re-audited assets cut through the new CI gate). stability.md §8
+criterion 3 — one cycle after v0.5 with no break on any surface — is
+met by this release: every gate item 3, 6 and 7 built stayed green from
+0.5.0 to 0.6.0, and the one non-additive change (item 9) is a §4
+soundness fix on record.
 
 1. ✅ **Restore-failure dead pointers** — a crate whose reload failed on
    image restore kept the dead library's pointers; the next dump's hook
