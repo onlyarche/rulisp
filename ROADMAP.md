@@ -1,5 +1,70 @@
 # Roadmap
 
+## v0.7 — the freeze rehearsal, and the flagship the ask named
+
+The last minor before 1.0, and the first cycle with a flagship on
+demand — the maintainer's own ask ("the very first reason I made this
+project was wasm; what about the AI-agent programs built in Rust?").
+No surface moves: ABI 1, `:schema` 1, the Lisp API golden and the Rust
+API (checked as a minor against 0.6.0) all unchanged. The cycle fixes
+the two gates that go red on *allowed* changes before 1.0 freezes
+them, lands the corrupt-artifact hazard found in v0.6, stops the dist
+indexing a test program, promotes what the written procedures have
+earned, gives `examples/wasm` the suite it never had and grows it into
+a WASI plugin sandbox, makes `make clean` clean, and writes the 1.0.0
+plan from a measured rehearsal. Full plan with demand cases, acceptance
+criteria and cut order: [docs/design/v07-plan.md](docs/design/v07-plan.md).
+Budget 1 L + 1 M + 7 S.
+
+1. **`make compat` tells additive from breaking** — the previous
+   release's suite accepts a new export and a new loader file (today one
+   documented export turns it red — reproduced) and still refuses a
+   removed or changed one, via a golden-subset check.
+2. **A truncated or corrupt artifact is refused before `dlopen`** —
+   header-vs-size checks per format (ELF/Mach-O/PE); today a 60 % cut
+   *loads and runs* and a 4 KiB head faults inside glibc and wedges every
+   later load from another thread.
+3. **One `.asd` in the tarball** — the ECL smoke's system file becomes a
+   template copied at build time; Ultralisp indexes `rulisp-ecl-smoke`
+   today.
+4. **Version-agnostic manifest-golden comparison** — the `"0.4.0"`
+   placeholder and releasing.md step 3's hand edit go away.
+5. **Every attached asset has a job that runs its suite on its host** —
+   promote the macOS fetch step (37 consecutive green); fetch on Windows
+   starts best-effort.
+6. **aarch64** — the deployment path rehearsed from a branch
+   (`publish: false`, 16 assets re-audited), then the one-commit promotion
+   when the streak reaches ECL's 24.
+7. **The flagship (L)** — `examples/wasm` gets the suite it never had
+   (six README claims, SECURITY.md's "supported approach", three blobs
+   per release, zero tests), then grows a WASI plugin sandbox: a second
+   `Wasi` handle on wasmi 0.50 + wasmi_wasi 0.50 + cap-std (117 packages,
+   no C, 43 s cold build, audit-clean — probed), fuel and one memory cap
+   that also bounds captured stdio, explicit args/env/preopens, exit code
+   as a value; hand-written `.wat` guests; an adversarial pass over the
+   sandbox claims before the tag. Boundary features it would want are
+   recorded as 1.x findings, not 0.7 wire changes.
+8. **`make clean` removes every regenerable artifact** the suite leaves in
+   the tree; `clean-cache` sweeps the loader's cache on request.
+9. **Close the cycle (M)** — the release gate also counts the
+   semver/audit/golden job; `docs/design/v10-plan.md` written from the
+   measured rehearsal (the re-export hide is invisible to
+   cargo-semver-checks; hiding the runtime's items fires five lints and
+   needs the major; exact pins; the release-day sequence and the
+   Quicklisp issue text); stability §3/§8 as of 0.7.
+
+Not in v0.7 (causes in the plan): an MCP example on rmcp as the
+flagship (feasible — probed over a duplex — but its standard transports
+are what §7 refuses or duplicates, and it is fetch's whole pattern again
+as a fifth crate: the 1.1 candidate), tokenizers (ready for 1.x, one
+flagship per cycle), llama.cpp (cmake/libclang/C++ on every job,
+`abort()` on fault, no hermetic model), candle (fails the audit: a
+transitive `lscpu` spawn), rig/async-openai (a second TLS stack for
+what fetch already gives), a new `examples/wasi` crate, wasmi 2.0,
+compiling real `.wasm` in CI, preview2/the component model, hiding
+`rulisp::runtime` early, a docs/api.md generator, a benchmark refresh,
+the Quicklisp submission, and every earlier refusal.
+
 ## v0.6 — the no-break cycle, measured
 
 docs/stability.md §8 criterion 3 asks for one full cycle after v0.5 with
