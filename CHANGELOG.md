@@ -7,6 +7,18 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.7 development)
 
+### Changed
+- **`make compat` tells an additive change from a break.** The previous
+  release's suite carried its own Lisp API golden, so one documented new
+  export turned the cross-version gate red — and its `rulisp.asd` named
+  the loader's files by hand, so a loader file this tree added never
+  loaded there. The gate now assembles the old tree's `rulisp.asd` from
+  this tree's `rulisp` defsystem and the previous release's `rulisp/test`,
+  compares the two Lisp API goldens with `tests/compat/api-subset.lisp`
+  (every previous entry present and unchanged; additions pass), and runs
+  the old suite against this tree's golden. Every 1.x minor will add
+  exports; the gate permits what stability §1 permits.
+
 ## 0.6.0 — 2026-09-14
 
 **Surfaces this cycle** (docs/stability.md §8 criterion 3, the no-break

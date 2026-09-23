@@ -16,10 +16,15 @@ plan from a measured rehearsal. Full plan with demand cases, acceptance
 criteria and cut order: [docs/design/v07-plan.md](docs/design/v07-plan.md).
 Budget 1 L + 1 M + 7 S.
 
-1. **`make compat` tells additive from breaking** — the previous
-   release's suite accepts a new export and a new loader file (today one
-   documented export turns it red — reproduced) and still refuses a
-   removed or changed one, via a golden-subset check.
+1. ✅ **`make compat` tells additive from breaking** — the old tree's
+   `rulisp.asd` is assembled from this tree's `rulisp` defsystem and the
+   previous release's `rulisp/test`, this tree's golden replaces the
+   archived one, and `tests/compat/api-subset.lisp` requires every
+   previous entry present and unchanged. Falsified both ways: a
+   documented new export turned the old gate red and passes now; a new
+   loader file the old `.asd` never loaded fails the old gate and loads
+   now; a golden missing `retry-build`, or with `use-crate`'s lambda
+   list changed, fails api-subset by name.
 2. **A truncated or corrupt artifact is refused before `dlopen`** —
    header-vs-size checks per format (ELF/Mach-O/PE); today a 60 % cut
    *loads and runs* and a 4 KiB head faults inside glibc and wedges every

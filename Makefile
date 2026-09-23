@@ -60,11 +60,17 @@ doc:
 	$(CARGO) test --doc -p rulisp
 
 # docs/stability.md §8 criterion 3, checked (Linux): the previous release's
-# loader loads the tree's crate (forward), and the previous release's test
-# suite runs against the tree's loader (its calls, our code). PREV is the
-# last release; docs/releasing.md step 9 moves it. When the old suite
-# fails: a test that reaches rulisp:: internals is recorded and skipped by
-# name; a failure through an exported symbol is a break and does not land.
+# loader loads the tree's crate (forward); every export the previous
+# release had is still in this tree's Lisp API golden with the same kind,
+# superclasses and lambda list (tests/compat/api-subset.lisp — additions
+# pass, a removal or a changed signature fails by name); and the previous
+# release's test suite runs against the tree's loader (its calls, our
+# code) — through an assembled rulisp.asd: this tree's `rulisp` defsystem
+# (so a loader file this tree added loads) plus the previous release's
+# `rulisp/test`. PREV is the last release; docs/releasing.md step 9 moves
+# it. When the old suite fails: a test that reaches rulisp:: internals is
+# recorded and skipped by name; a failure through an exported symbol is a
+# break and does not land.
 PREV ?= v0.6.0
 COMPAT := $(CURDIR)/target/compat
 compat:
@@ -77,6 +83,15 @@ compat:
 	grep -q "OLD-LOADER-OK Hello, $(PREV) loader!" $(COMPAT)/old-loader.log
 	git archive $(PREV) | tar -x -C $(COMPAT)/tree
 	cp lisp/src/*.lisp $(COMPAT)/tree/lisp/src/
+	mv $(COMPAT)/tree/lisp/rulisp.asd $(COMPAT)/tree/lisp/rulisp.asd.orig
+	awk '/^\(asdf:defsystem #:rulisp\/test/{exit} {print}' lisp/rulisp.asd > $(COMPAT)/tree/lisp/rulisp.asd
+	awk '/^\(asdf:defsystem #:rulisp\/test/,0' $(COMPAT)/tree/lisp/rulisp.asd.orig >> $(COMPAT)/tree/lisp/rulisp.asd
+	test "$$(grep -c '^(asdf:defsystem #:rulisp' $(COMPAT)/tree/lisp/rulisp.asd)" -eq 2
+	cp $(COMPAT)/tree/tests/golden/lisp-api.sexp $(COMPAT)/prev-lisp-api.sexp
+	cp tests/golden/lisp-api.sexp $(COMPAT)/tree/tests/golden/lisp-api.sexp
+	RULISP_PREV_API=$(COMPAT)/prev-lisp-api.sexp RULISP_API=$(CURDIR)/tests/golden/lisp-api.sexp \
+	  $(SBCL) --non-interactive --load tests/compat/api-subset.lisp 2>&1 | tee $(COMPAT)/api-subset.log
+	grep -q API-SUBSET-OK $(COMPAT)/api-subset.log
 	cd $(COMPAT)/tree && $(SBCL) --non-interactive --load tests/run-m4.lisp > $(COMPAT)/old-suite.log 2>&1; \
 	  tail -4 $(COMPAT)/old-suite.log
 	grep -q "Fail: 0" $(COMPAT)/old-suite.log

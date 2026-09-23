@@ -38,10 +38,15 @@ byte gates `fx.golden-manifest` and `manifest_matches_golden`; and
 
 The previous release is the yardstick, on every push: `make compat` in
 the SBCL/Linux CI job loads this tree's crate with the previous release's
-loader and runs the previous release's test suite against this tree's
-loader. When that old suite fails, the rule is: a test that reaches
-`rulisp::` internals is recorded and skipped by name; a failure through
-an exported symbol is a break and does not land in a minor.
+loader, checks that every export the previous release had is still in
+this tree's Lisp API golden with the same kind, superclasses and lambda
+list (`tests/compat/api-subset.lisp` — an addition passes, a removal or
+a changed signature fails by name), and runs the previous release's test
+suite against this tree's loader through an assembled `rulisp.asd` (this
+tree's loader files, the previous release's tests). When that old suite
+fails, the rule is: a test that reaches `rulisp::` internals is recorded
+and skipped by name; a failure through an exported symbol is a break and
+does not land in a minor.
 
 ## 2. Versions
 
