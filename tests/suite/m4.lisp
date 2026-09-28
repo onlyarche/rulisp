@@ -97,7 +97,7 @@ FREED-HANDLE-ERROR; nothing else may escape)."
             (loop for tid below 8
                   collect (bt:make-thread (worker tid)
                                           :name (format nil "m4-race-~D" tid)))))
-    (is (null unexpected) "unexpected conditions (seed ~D): ~S" seed unexpected)
+    (is (null unexpected) "unexpected conditions (seed ~D): ~{~A~^ | ~}" seed unexpected)
     ;; the image is alive and the crate still works
     (is (= 3 (wb-call "ADD" 1 2)))
     (loop for bag across pool do (rulisp:free bag))
@@ -167,7 +167,7 @@ conditions appear."
         (rulisp:freed-handle-error () nil)
         (rulisp:stale-handle-error () nil)
         (error (e) (push e unexpected))))
-    (is (null unexpected) "unexpected conditions (seed ~D): ~S" seed unexpected)
+    (is (null unexpected) "unexpected conditions (seed ~D): ~{~A~^ | ~}" seed unexpected)
     (is (= 3 (wb-call "ADD" 1 2)))
     ;; stale bags are still freed — through their birth generation's shim
     (mapc #'rulisp:free live)
@@ -212,7 +212,7 @@ generation's allocation counter must return to zero."
     (sleep 0.15)
     (setf stop t)
     (mapc #'bt:join-thread threads)
-    (is (null unexpected) "unexpected conditions (seed ~D): ~S" seed unexpected)
+    (is (null unexpected) "unexpected conditions (seed ~D): ~{~A~^ | ~}" seed unexpected)
     (is (> calls 100) "only ~D calls completed during the reloads" calls)
     (is (= 4 (length gens)))
     (reconcile-generations (reverse gens) seed)))

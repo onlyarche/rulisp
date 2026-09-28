@@ -240,6 +240,18 @@ fix would validate the object file's headers against its size before
 if wanted, with a test that truncates the artifact between dump and
 restore.
 
+Found during v0.7 item 2, not scheduled: `m4h.reload-under-load` failed
+ONCE on CCL in CI (run 36404431479 attempt 1, job 108869644728; green on
+the rerun and in every other CCL run since the test landed 2026-09-03) —
+one `UNDEFINED-FUNCTION` caught by a thread round-tripping strings while
+the crate reloaded. Not reproduced locally on CCL 1.13 in 40 iterations
+(120 reloads, 4.3 M calls) with the same loader. The GREET/ECHO wrapper
+calls only loader functions a reload never rebinds; `commit-bindings`
+unbinds nothing when the export set is unchanged; CCL's `export` leaves
+an already-external symbol alone and its documentation store is locked.
+The fuzzers now print each unexpected condition's report text instead of
+the object, so the next occurrence names the function and its arguments.
+
 Not in v0.6 (causes in the plan): a flagship (no external request),
 hiding `rulisp::runtime` (the 1.0 major), a deprecation round (nothing
 to deprecate), renames, scheduled arm promotion (the streak decides),
