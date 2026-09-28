@@ -167,10 +167,12 @@ jobs:
           sbcl --non-interactive --load quicklisp.lisp \
                --eval '(quicklisp-quickstart:install)'
       - run: make test-m4
-      # first time the fetch suite runs on macOS; promoted by the written
-      # procedure in the ECL job once it has a streak
-      - name: fetch suite (best-effort on macOS)
-        continue-on-error: true
+      # Promoted 2026-09-28 after 37 consecutive green runs since 2026-09-03
+      # (the step never failed itself). DEMOTION, should it flake: restore
+      # `continue-on-error: true` and the "(best-effort …)" name in ONE
+      # commit that links the failing run, records the cause in ROADMAP,
+      # and downgrades README/CHANGELOG wording — never silently.
+      - name: fetch suite (async HTTPS example)
         run: make test-fetch
 
   sbcl-windows:
@@ -207,6 +209,11 @@ jobs:
                --eval '(quicklisp-quickstart:install)'
       - name: full gate
         run: make test-m4
+      # first time the fetch suite runs on Windows (fetch.dll ships in every
+      # release); promoted by the written procedure once it has a streak
+      - name: fetch suite (best-effort on Windows)
+        continue-on-error: true
+        run: make test-fetch
 
   ecl-linux:
     # Promoted to required 2026-09-02 after 24 consecutive green runs since

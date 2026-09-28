@@ -2,7 +2,8 @@
 
 ## v0.7 — the freeze rehearsal, and the flagship the ask named
 
-The last minor before 1.0, and the first cycle with a flagship on
+The freeze rehearsal before 1.0 (0.8, the axum flagship, comes first —
+the maintainer's call, 2026-09-28), and the first cycle with a flagship on
 demand — the maintainer's own ask ("the very first reason I made this
 project was wasm; what about the AI-agent programs built in Rust?").
 No surface moves: ABI 1, `:schema` 1, the Lisp API golden and the Rust
@@ -58,10 +59,13 @@ Budget 1 L + 1 M + 7 S.
    needs the major; exact pins; the release-day sequence and the
    Quicklisp issue text); stability §3/§8 as of 0.7.
 
-Not in v0.7 (causes in the plan): an MCP example on rmcp as the
-flagship (feasible — probed over a duplex — but its standard transports
-are what §7 refuses or duplicates, and it is fetch's whole pattern again
-as a fifth crate: the 1.1 candidate), tokenizers (ready for 1.x, one
+Not in v0.7 (causes in the plan): an axum HTTP server with Lisp
+handlers — probed clean (47 packages, 38 s, §7 sweep ok) and decided as
+**the 0.8 flagship**, pull-based like fetch's mirror; an MCP example on
+rmcp as the flagship (feasible — probed over a duplex — but its standard
+transports are what §7 refuses or duplicates, and it is fetch's whole
+pattern again as a fifth crate: the candidate after axum, whose HTTP
+transport it builds on), tokenizers (ready for 1.x, one
 flagship per cycle), llama.cpp (cmake/libclang/C++ on every job,
 `abort()` on fault, no hermetic model), candle (fails the audit: a
 transitive `lscpu` spawn), rig/async-openai (a second TLS stack for

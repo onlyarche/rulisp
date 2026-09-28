@@ -8,6 +8,12 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 ## Unreleased (0.7 development)
 
 ### Changed
+- **The macOS fetch step is required** — 37 consecutive green runs since
+  it was added, never a failure of its own; promoted by the written
+  procedure. **fetch runs on Windows**, best-effort to start: the
+  example's audit wrapper now finds `fetch.dll`, which every release
+  attaches and no job had ever loaded.
+### Changed
 - **`make compat` tells an additive change from a break.** The previous
   release's suite carried its own Lisp API golden, so one documented new
   export turned the cross-version gate red — and its `rulisp.asd` named

@@ -123,8 +123,9 @@ claimed:
 | ECL 21.2.1 | required | — | — | — |
 
 Every required job runs the full gate (races, nested callbacks, reload,
-the 10k-op fuzzers, and dump/restore where the host dumps images); SBCL
-and CCL on Linux also run the async HTTPS example, and the ECL job
+the 10k-op fuzzers, and dump/restore where the host dumps images); SBCL on
+Linux and macOS, and CCL on Linux, also run the async HTTPS example
+(Windows best-effort), and the ECL job
 builds and runs a `program-op` executable. ECL notes: a C toolchain is required for callbacks (rulisp
 natively compiles trampolines to dodge an upstream GC bug we root-caused
 — docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread stored

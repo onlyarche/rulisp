@@ -7,8 +7,8 @@ cd "$(dirname "$0")"
 CARGO=${CARGO:-cargo}
 command -v "$CARGO" >/dev/null 2>&1 || CARGO="$HOME/.cargo/bin/cargo"
 "$CARGO" build --quiet
-SO=$(ls ../../target/debug/libfetch.so ../../target/debug/libfetch.dylib \
-        ../../target/release/libfetch.so ../../target/release/libfetch.dylib 2>/dev/null | head -1)
+SO=$(ls ../../target/debug/libfetch.so ../../target/debug/libfetch.dylib ../../target/debug/fetch.dll \
+        ../../target/release/libfetch.so ../../target/release/libfetch.dylib ../../target/release/fetch.dll 2>/dev/null | head -1)
 [ -n "$SO" ] || { echo "FAIL: libfetch not built"; exit 1; }
 sh ../../tools/rulisp-audit.sh "$SO" .
 if "$CARGO" tree 2>/dev/null | grep -Eq '(^| )(openssl|native-tls)'; then
