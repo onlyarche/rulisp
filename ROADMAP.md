@@ -35,12 +35,19 @@ Budget 1 L + 1 M + 7 S.
    today.
 4. **Version-agnostic manifest-golden comparison** — the `"0.4.0"`
    placeholder and releasing.md step 3's hand edit go away.
-5. **Every attached asset has a job that runs its suite on its host** —
-   promote the macOS fetch step (37 consecutive green); fetch on Windows
-   starts best-effort.
-6. **aarch64** — the deployment path rehearsed from a branch
-   (`publish: false`, 16 assets re-audited), then the one-commit promotion
-   when the streak reaches ECL's 24.
+5. ✅ **Every attached asset has a job that runs its suite on its host** —
+   the macOS fetch step is required (promoted 2026-09-28 after 37
+   consecutive green runs; demotion procedure beside it); fetch runs on
+   Windows as a best-effort step, `fetch.dll` found by the example's
+   audit wrapper — its first run: `audit ok`, 117/117. Streak from
+   2026-09-28 (run 36388353221).
+6. **aarch64** — A ✅: the deployment path rehearsed from branch
+   `arm-deploy-rehearsal` (blobs.yml + the `ubuntu-24.04-arm /
+   linux-arm64 / so / lib` leg and the 16-asset count, not merged):
+   `publish: false` dispatch for v0.6.0, run 36388354650 — the arm leg
+   built and audited the four examples in 1m1s, the release job
+   re-audited 16 downloaded assets on Linux, nothing published. B: the
+   one-commit promotion when the streak from 2026-09-08 reaches ECL's 24.
 7. **The flagship (L)** — `examples/wasm` gets the suite it never had
    (six README claims, SECURITY.md's "supported approach", three blobs
    per release, zero tests), then grows a WASI plugin sandbox: a second
