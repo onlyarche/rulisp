@@ -51,6 +51,10 @@ jobs:
             suffix: windows-x86_64
             ext: dll
             lib: ''      # cargo drops the prefix on Windows; so does load-blob-crate
+          - os: ubuntu-24.04-arm
+            suffix: linux-arm64
+            ext: so
+            lib: lib
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -135,7 +139,7 @@ jobs:
         run: |
           ls -la blobs/
           n=$(ls blobs | wc -l)
-          [ "$n" -eq 12 ] || { echo "expected 12 assets (3 hosts × 4 crates), got $n"; exit 1; }
+          [ "$n" -eq 16 ] || { echo "expected 16 assets (4 hosts × 4 crates), got $n"; exit 1; }
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
           gh release upload "$TAG" blobs/* --clobber
