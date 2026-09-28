@@ -20,8 +20,10 @@ for needle in 'cargo-semver-checks-action' 'make compat PREV=v[0-9]' 'gh release
     if grep -qE -- "$needle" .github/workflows/ci.yml; then ok "criterion 3: ci.yml runs $needle"
     else bad "criterion 3: ci.yml lost $needle"; fi
 done
-if grep -q ':rulisp-v06' tests/run-m4.lisp; then ok "criterion 3: run-m4 runs :rulisp-v06"
-else bad "criterion 3: tests/run-m4.lisp does not run :rulisp-v06"; fi
+for suite in ':rulisp-v06' ':rulisp-v07'; do
+    if grep -q "$suite" tests/run-m4.lisp; then ok "criterion 3: run-m4 runs $suite"
+    else bad "criterion 3: tests/run-m4.lisp does not run $suite"; fi
+done
 if grep -q '^compat:' Makefile && grep -q '^dist-dryrun:' Makefile; then ok "criterion 3: make compat / dist-dryrun exist"
 else bad "criterion 3: a Makefile gate target is missing"; fi
 # the Lisp surface: every export is a row of the golden, and vice versa

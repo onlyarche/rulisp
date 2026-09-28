@@ -13,7 +13,6 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   procedure. **fetch runs on Windows**, best-effort to start: the
   example's audit wrapper now finds `fetch.dll`, which every release
   attaches and no job had ever loaded.
-### Changed
 - **`make compat` tells an additive change from a break.** The previous
   release's suite carried its own Lisp API golden, so one documented new
   export turned the cross-version gate red — and its `rulisp.asd` named
@@ -24,6 +23,20 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   (every previous entry present and unchanged; additions pass), and runs
   the old suite against this tree's golden. Every 1.x minor will add
   exports; the gate permits what stability §1 permits.
+
+### Fixed
+- **A truncated or corrupt artifact is refused before `dlopen`.** A
+  partial download or copy used to reach the host loader: a cut that
+  kept every loadable segment *loaded and ran* until the first call into
+  the missing bytes, and a header-only file faulted inside `dlopen`
+  (SBCL `Signal 7 … Continuing with fingers crossed`, with ld.so's load
+  lock left held so the next load from another thread hung). The loader
+  now checks each format's headers against the file size — ELF section
+  table and `PT_LOAD`s, Mach-O `LC_SEGMENT_64`s, PE section raw data —
+  before the cache copy is made, on the load and the image-restore path,
+  and signals `crate-not-loaded-error` "artifact is truncated or corrupt:
+  segment __TEXT ends at byte N (M bytes)". Formats it does not recognize
+  pass through as before.
 
 ## 0.6.0 — 2026-09-14
 

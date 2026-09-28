@@ -49,7 +49,11 @@ built by `.github/workflows/blobs.yml` and audited (docs/distribution.md,
 directory and Case A needs no Rust toolchain at all — the SBCL/Linux CI
 job does exactly that with the latest release's `wordbag` on every push.
 (macOS: a dylib downloaded by a browser is quarantined by Gatekeeper —
-see distribution.md, Pattern A.)
+see distribution.md, Pattern A.) A download or copy that stopped short is
+refused, not loaded: before `dlopen` the loader checks the file's own
+headers against its size and signals `crate-not-loaded-error` "artifact
+is truncated or corrupt" naming the segment or section that overruns
+(BOUNDARY.md §9).
 
 Two things to know:
 

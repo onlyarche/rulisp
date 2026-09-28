@@ -69,11 +69,22 @@ jobs:
           fetch-depth: 0   # the previous release's tag, for make compat
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y sbcl
-      - name: install quicklisp
+      # beta.quicklisp.org hiccups mid-install now and then (run 36388353221
+      # lost a required job to it); a required job must not flake on the
+      # installer's network — retry from a clean slate, since the installer
+      # refuses a half-written ~/quicklisp
+      - name: install quicklisp (with retry)
         run: |
-          curl -sO https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)'
+          for i in 1 2 3 4 5; do
+            rm -rf "$HOME/quicklisp" quicklisp.lisp
+            curl -fsSLO https://beta.quicklisp.org/quicklisp.lisp \
+              && sbcl --non-interactive --load quicklisp.lisp \
+                      --eval '(quicklisp-quickstart:install)' \
+              && exit 0
+            echo "quicklisp install attempt $i failed; retrying in 15 s" >&2
+            sleep 15
+          done
+          exit 1
       - name: oracle gate (hand-written shims)
         run: make test-m2
       - name: full gate (macro pipeline + hardening)
@@ -145,11 +156,22 @@ jobs:
           curl -sL -o ccl.tar.gz https://github.com/Clozure/ccl/releases/download/v1.13/ccl-1.13-linuxx86.tar.gz
           tar xzf ccl.tar.gz -C "$HOME"
       - run: sudo apt-get update && sudo apt-get install -y sbcl # quicklisp installer convenience
-      - name: install quicklisp
+      # beta.quicklisp.org hiccups mid-install now and then (run 36388353221
+      # lost a required job to it); a required job must not flake on the
+      # installer's network — retry from a clean slate, since the installer
+      # refuses a half-written ~/quicklisp
+      - name: install quicklisp (with retry)
         run: |
-          curl -sO https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)'
+          for i in 1 2 3 4 5; do
+            rm -rf "$HOME/quicklisp" quicklisp.lisp
+            curl -fsSLO https://beta.quicklisp.org/quicklisp.lisp \
+              && sbcl --non-interactive --load quicklisp.lisp \
+                      --eval '(quicklisp-quickstart:install)' \
+              && exit 0
+            echo "quicklisp install attempt $i failed; retrying in 15 s" >&2
+            sleep 15
+          done
+          exit 1
       - run: make test-ccl CCL="$HOME/ccl/lx86cl64"
       - name: fetch suite on CCL
         run: make test-fetch-ccl CCL="$HOME/ccl/lx86cl64"
@@ -161,11 +183,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: brew install sbcl
-      - name: install quicklisp
+      # beta.quicklisp.org hiccups mid-install now and then (run 36388353221
+      # lost a required job to it); a required job must not flake on the
+      # installer's network — retry from a clean slate, since the installer
+      # refuses a half-written ~/quicklisp
+      - name: install quicklisp (with retry)
         run: |
-          curl -sO https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)'
+          for i in 1 2 3 4 5; do
+            rm -rf "$HOME/quicklisp" quicklisp.lisp
+            curl -fsSLO https://beta.quicklisp.org/quicklisp.lisp \
+              && sbcl --non-interactive --load quicklisp.lisp \
+                      --eval '(quicklisp-quickstart:install)' \
+              && exit 0
+            echo "quicklisp install attempt $i failed; retrying in 15 s" >&2
+            sleep 15
+          done
+          exit 1
       - run: make test-m4
       # Promoted 2026-09-28 after 37 consecutive green runs since 2026-09-03
       # (the step never failed itself). DEMOTION, should it flake: restore
@@ -202,11 +235,22 @@ jobs:
             sleep $((i*30))
           done
           exit 1
-      - name: install quicklisp
+      # beta.quicklisp.org hiccups mid-install now and then (run 36388353221
+      # lost a required job to it); a required job must not flake on the
+      # installer's network — retry from a clean slate, since the installer
+      # refuses a half-written ~/quicklisp
+      - name: install quicklisp (with retry)
         run: |
-          curl -sO https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)'
+          for i in 1 2 3 4 5; do
+            rm -rf "$HOME/quicklisp" quicklisp.lisp
+            curl -fsSLO https://beta.quicklisp.org/quicklisp.lisp \
+              && sbcl --non-interactive --load quicklisp.lisp \
+                      --eval '(quicklisp-quickstart:install)' \
+              && exit 0
+            echo "quicklisp install attempt $i failed; retrying in 15 s" >&2
+            sleep 15
+          done
+          exit 1
       - name: full gate
         run: make test-m4
       # first time the fetch suite runs on Windows (fetch.dll ships in every
@@ -230,11 +274,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y ecl sbcl
-      - name: install quicklisp
+      # beta.quicklisp.org hiccups mid-install now and then (run 36388353221
+      # lost a required job to it); a required job must not flake on the
+      # installer's network — retry from a clean slate, since the installer
+      # refuses a half-written ~/quicklisp
+      - name: install quicklisp (with retry)
         run: |
-          curl -sO https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)'
+          for i in 1 2 3 4 5; do
+            rm -rf "$HOME/quicklisp" quicklisp.lisp
+            curl -fsSLO https://beta.quicklisp.org/quicklisp.lisp \
+              && sbcl --non-interactive --load quicklisp.lisp \
+                      --eval '(quicklisp-quickstart:install)' \
+              && exit 0
+            echo "quicklisp install attempt $i failed; retrying in 15 s" >&2
+            sleep 15
+          done
+          exit 1
       # ecl exits 0 even after landing in the debugger on EOF — require the
       # suite's own summary line so a crashed run cannot show green
       - run: |
@@ -257,11 +312,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y sbcl
-      - name: install quicklisp
+      # beta.quicklisp.org hiccups mid-install now and then (run 36388353221
+      # lost a required job to it); a required job must not flake on the
+      # installer's network — retry from a clean slate, since the installer
+      # refuses a half-written ~/quicklisp
+      - name: install quicklisp (with retry)
         run: |
-          curl -sO https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)'
+          for i in 1 2 3 4 5; do
+            rm -rf "$HOME/quicklisp" quicklisp.lisp
+            curl -fsSLO https://beta.quicklisp.org/quicklisp.lisp \
+              && sbcl --non-interactive --load quicklisp.lisp \
+                      --eval '(quicklisp-quickstart:install)' \
+              && exit 0
+            echo "quicklisp install attempt $i failed; retrying in 15 s" >&2
+            sleep 15
+          done
+          exit 1
       - run: make test-m4
       - name: fetch suite on aarch64
         run: make test-fetch

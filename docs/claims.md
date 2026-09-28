@@ -247,6 +247,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | describe prints `Exports (5):` for examples/rx | capability | **resolved** — transcript regenerated in the audit (Exports (7)) |
 | describe lists each export as its signature, first `(rx:make-regex pattern)` | capability | **resolved** — loader fixed in the audit: describe prints the call shape (%call-shape) for every export — test v05.describe-crate |
 | A `///` comment on an exported fn or a #[rulisp::handle] struct leads its docstring; the macros carry it in the manifest as `:doc` | capability | tests v05.docstrings-present (tests/suite/v05.lisp:141-147: SLOW-SUM and GRENADE `///` text found) and v05.doc-escaping (v05.lisp:149); crates/rulisp-macros/src/lib.rs:53 (doc_of), 761, 877, 1059, 1179; tests/golden/wordbag.manifest.sexp carries 9 :doc keys; rx manifest read live shows :doc on three fns |
+| A download or copy that stopped short is refused before dlopen as crate-not-loaded-error "artifact is truncated or corrupt", naming the segment or section that overruns | capability | lisp/src/crate.lisp (%check-artifact-shape, called by %load-crate-locked before uiop:copy-file); tests v07.truncated-artifact-is-refused and v07.header-only-artifact-is-refused-without-a-fault (tests/suite/v07.lisp); BOUNDARY.md §9 and its §12 row |
 
 ## docs/distribution.md
 
@@ -392,4 +393,4 @@ extracted 371 entries, 24 of which were dated wording found true, so
 
 ---
 
-347 rows: 299 cited as they stand, 48 resolved by the audit, 0 unverified.
+348 rows: 300 cited as they stand, 48 resolved by the audit, 0 unverified.

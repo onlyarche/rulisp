@@ -29,4 +29,5 @@
                (:file "v04")
                (:file "v05")
                (:file "v06")
+               (:file "v07")
                (:file "fetch")))

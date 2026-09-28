@@ -200,6 +200,14 @@ Differences from the borrowed form:
   path caching (macOS dyld would otherwise silently return the old
   mapping). Older cache copies are unlinked (mappings keep the inodes
   alive).
+- Before the copy, the artifact's own headers are checked against its
+  size — ELF: the section header table and every `PT_LOAD`; Mach-O:
+  every `LC_SEGMENT_64`; PE: every section's raw data — and a file they
+  place beyond its end is refused with `crate-not-loaded-error`
+  ("truncated or corrupt"), never handed to `dlopen`, which faults on
+  one instead of failing. A section-stripped ELF is refused by this
+  rule; no cargo profile emits one (`strip = true` keeps section
+  headers). Formats not recognized pass through to `dlopen` as before.
 
 ## 10. Image dump / restore
 
@@ -381,6 +389,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Persisting mappings make TLS destructors, `std::thread`, and stale-generation frees safe | test | `m6.reload` (`tests/suite/m1.lisp:254`: stale handle freed via birth-gen shim); TLS-destructor half rides on no-dlclose, untested directly |
 | Every load dlopens a unique copy of the artifact, defeating dlopen path caching | runtime-check | `lisp/src/crate.lisp:91-100,157-162` (counter+timestamp copy name, `uiop:copy-file`), `:194-195` (dlopen the copy) |
 | Older cache copies are unlinked; live mappings keep the inodes alive | test | `v04.cache-sweep-spares-other-processes-fresh-copies` (`tests/suite/v04.lisp`); mechanism `lisp/src/crate.lisp` (`%sweep-crate-cache`, invoked from `%commit-generation`); a load that does not commit deletes its own copy (`v06.failed-load-leaves-no-cache-copy`) |
+| A truncated or corrupt artifact is refused before `dlopen`, on the load and the restore path | test | `v07.truncated-artifact-is-refused` (`tests/suite/v07.lisp`: a 60 % cut — every `PT_LOAD` present, the section table missing — is refused as "truncated", the registered crate and the cache untouched, the real artifact loads afterwards), `v07.header-only-artifact-is-refused-without-a-fault` (a 4,096-byte head in a subprocess; the log carries no `Signal 7`, `CORRUPTION WARNING` or bus error); mechanism `%check-artifact-shape` (`lisp/src/crate.lisp`), called by `%load-crate-locked` before `uiop:copy-file`, which `%restore-all-crates` also goes through; all twelve v0.6.0 release assets accepted, 36 cuts of them refused (v0.7 item 2) |
 | **§10 — Image dump / restore** | | |
 | On restore the loader bumps the global session counter FIRST, before any reload | runtime-check | `lisp/src/crate.lisp:464-471` (`incf *session*` precedes the reload loop; hook registered `:507`) |
 | Every pre-dump handle cell is invalid: signals `stale-handle-error`, never dereferences | runtime-check | `lisp/src/handle.lisp:37-52` (session gate in `cell-begin-call`); pinned by `m7.dump-restore` (`tests/suite/m1.lisp:328-332`) |

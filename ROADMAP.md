@@ -26,10 +26,17 @@ Budget 1 L + 1 M + 7 S.
    loader file the old `.asd` never loaded fails the old gate and loads
    now; a golden missing `retry-build`, or with `use-crate`'s lambda
    list changed, fails api-subset by name.
-2. **A truncated or corrupt artifact is refused before `dlopen`** —
-   header-vs-size checks per format (ELF/Mach-O/PE); today a 60 % cut
-   *loads and runs* and a 4 KiB head faults inside glibc and wedges every
-   later load from another thread.
+2. ✅ **A truncated or corrupt artifact is refused before `dlopen`** —
+   `%check-artifact-shape` reads the headers before the cache copy is
+   made: ELF section table and every `PT_LOAD`, Mach-O `LC_SEGMENT_64`s,
+   PE section raw data, each must end within the file; a violation is
+   `crate-not-loaded-error` "truncated or corrupt". Falsified: against
+   the unmodified loader `v07.truncated-artifact-is-refused` fails
+   because the 60 % cut *loads* (generation bumped, artifact replaced)
+   and the 4 KiB head's subprocess log carries `Signal 7`, `CORRUPTION
+   WARNING` and `bus error`; after, 13/13 and none of the three; all
+   twelve v0.6.0 assets accepted and 36 cuts of them (60 %, 4 KiB,
+   −1 KiB) refused naming the segment, section or table that overruns.
 3. **One `.asd` in the tarball** — the ECL smoke's system file becomes a
    template copied at build time; Ultralisp indexes `rulisp-ecl-smoke`
    today.
@@ -219,8 +226,9 @@ soundness fix on record.
     end; the stale ROADMAP sentences, the claims count, CHANGELOG's
     surfaces paragraph and stability §3's review result are in place.
 
-Found during item 1, not scheduled (a decision for the maintainer):
-a **truncated artifact at restore** — the file is present but cut
+Found during item 1 (closed by v0.7 item 2 — the check runs before the
+copy on the load path, which the restore path shares): a **truncated
+artifact at restore** — the file is present but cut
 short, as a partial copy leaves it — faults inside glibc's `dlopen`
 (SBCL: `Signal 7 … Continuing with fingers crossed`; ld.so's load lock
 is left held, so a later `reload-crate` from another thread hangs; CCL

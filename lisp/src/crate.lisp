@@ -147,6 +147,105 @@ use but can still be freed."
            (error 'crate-not-loaded-error :name name
                                           :message "no such crate loaded"))))))
 
+;;; v0.7 item 2: a truncated or corrupt artifact is refused BEFORE dlopen.
+;;; The host loader faults on one rather than failing (SIGBUS inside glibc's
+;;; dlopen, ld.so's load lock left held — the next load from another thread
+;;; hangs), and a cut that keeps every PT_LOAD loads and runs until the first
+;;; call into the missing bytes. Only the headers are read: every region the
+;;; file's own headers place must end within the file. Formats not recognized
+;;; here (and FAT Mach-O, which no cargo target emits) pass through to
+;;; dlopen as before.
+
+(defun %octets-at (stream start count)
+  "COUNT octets of STREAM from START, or NIL when the file ends first."
+  (let ((v (make-array count :element-type '(unsigned-byte 8))))
+    (file-position stream start)
+    (and (= (read-sequence v stream) count) v)))
+
+(defun %le (octets offset width)
+  "The little-endian unsigned integer of WIDTH bytes at OFFSET."
+  (loop for i below width sum (ash (aref octets (+ offset i)) (* 8 i))))
+
+(defun %c-name (octets start count)
+  "A NUL-padded ASCII name field, as a string."
+  (map 'string #'code-char (remove 0 (subseq octets start (+ start count)))))
+
+(defun %check-artifact-shape (path)
+  "Signal crate-not-loaded-error if the object file at PATH is truncated or
+corrupt by its own headers: ELF (64-bit LE) — the section header table and
+every PT_LOAD end within the file; Mach-O 64 — every LC_SEGMENT_64 does;
+PE — every section's raw data does."
+  (with-open-file (in path :element-type '(unsigned-byte 8))
+    (let ((size (file-length in)))
+      (labels ((refuse (detail)
+                 (error 'crate-not-loaded-error
+                        :name (namestring path)
+                        :message (format nil "artifact is truncated or corrupt: ~A (~D bytes)"
+                                         detail size)))
+               (fits (end what)
+                 (when (> end size)
+                   (refuse (format nil "~A ends at byte ~D" what end))))
+               (octets (start count what)
+                 ;; bounds first: a corrupt count must not become a huge array
+                 (fits (+ start count) what)
+                 (or (%octets-at in start count)
+                     (refuse (format nil "~A could not be read" what))))
+               (elf ()
+                 (let ((h (octets 0 64 "the ELF header")))
+                   ;; class 2, little-endian: every supported target; anything
+                   ;; else is dlopen's to refuse
+                   (when (and (= (aref h 4) 2) (= (aref h 5) 1))
+                     (let ((phoff (%le h 32 8)) (shoff (%le h 40 8))
+                           (phentsize (%le h 54 2)) (phnum (%le h 56 2))
+                           (shentsize (%le h 58 2)) (shnum (%le h 60 2)))
+                       (when (plusp shnum)
+                         (fits (+ shoff (* shnum shentsize)) "the section header table"))
+                       (when (and (plusp phnum) (< phentsize 56))
+                         (refuse (format nil "e_phentsize is ~D, below a 64-bit entry" phentsize)))
+                       (let ((ph (octets phoff (* phnum phentsize) "the program header table")))
+                         (dotimes (i phnum)
+                           (let ((p (* i phentsize)))
+                             (when (= (%le ph p 4) 1) ; PT_LOAD
+                               (fits (+ (%le ph (+ p 8) 8) (%le ph (+ p 32) 8))
+                                     (format nil "PT_LOAD segment ~D" i))))))))))
+               (macho ()
+                 (let* ((h (octets 0 32 "the Mach-O header"))
+                        (ncmds (%le h 16 4))
+                        (cmds (octets 32 (%le h 20 4) "the load command table")))
+                   (loop with pos = 0
+                         repeat ncmds
+                         do (when (> (+ pos 8) (length cmds))
+                              (refuse "a load command lies past sizeofcmds"))
+                            (let ((cmd (%le cmds pos 4)) (cmdsize (%le cmds (+ pos 4) 4)))
+                              (when (< cmdsize 8)
+                                (refuse "a load command has cmdsize below 8"))
+                              (when (= cmd #x19) ; LC_SEGMENT_64
+                                (when (> (+ pos 56) (length cmds))
+                                  (refuse "an LC_SEGMENT_64 lies past sizeofcmds"))
+                                (fits (+ (%le cmds (+ pos 40) 8) (%le cmds (+ pos 48) 8))
+                                      (format nil "segment ~A" (%c-name cmds (+ pos 8) 16))))
+                              (incf pos cmdsize)))))
+               (pe ()
+                 (let* ((dos (octets 0 64 "the DOS header"))
+                        (lfanew (%le dos 60 4))
+                        (coff (octets lfanew 24 "the PE header")))
+                   (unless (equalp (subseq coff 0 4) #(80 69 0 0))
+                     (refuse "no PE signature where e_lfanew points"))
+                   (let* ((nsections (%le coff 6 2))
+                          (table (octets (+ lfanew 24 (%le coff 20 2)) (* nsections 40)
+                                         "the section table")))
+                     (dotimes (i nsections)
+                       (let* ((s (* i 40)) (raw (%le table (+ s 16) 4)))
+                         (when (plusp raw)
+                           (fits (+ (%le table (+ s 20) 4) raw)
+                                 (format nil "section ~A" (%c-name table s 8))))))))))
+        (let ((magic (%octets-at in 0 4)))
+          (when magic
+            (cond ((equalp magic #(#x7f #x45 #x4c #x46)) (elf))
+                  ((equalp magic #(#xcf #xfa #xed #xfe)) (macho))
+                  ((and (= (aref magic 0) #x4d) (= (aref magic 1) #x5a)) (pe))))))))
+  path)
+
 (defun %load-crate-locked (path crate-arg package)
   (let* ((path (or (probe-file path)
                    (error 'crate-not-loaded-error
@@ -159,6 +258,9 @@ use but can still be freed."
          ;; sidesteps the Windows lock on a loaded DLL, and keeps two
          ;; processes sharing a cache from rewriting each other's mapping
          (copy (merge-pathnames (%cache-copy-name provisional) (cache-directory))))
+    ;; before the copy: the check reads a few KB, the copy moves megabytes,
+    ;; and a refused file must leave nothing behind (v0.7 item 2)
+    (%check-artifact-shape path)
     (uiop:copy-file path copy)
     ;; the copy is made before the artifact is verified; a load that does
     ;; not commit must not leave it behind — its name carries the guessed
