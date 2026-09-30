@@ -69,8 +69,9 @@ doc:
 # (so a loader file this tree added loads) plus the previous release's
 # `rulisp/test`. PREV is the last release; docs/releasing.md step 9 moves
 # it. When the old suite fails: a test that reaches rulisp:: internals is
-# recorded and skipped by name; a failure through an exported symbol is a
-# break and does not land.
+# recorded in tests/compat/skipped-internal.txt, with its reason, and not
+# counted; a failure through an exported symbol is a break and does not
+# land (tests/compat/old-suite-verdict.sh decides, by name).
 PREV ?= v0.6.0
 COMPAT := $(CURDIR)/target/compat
 compat:
@@ -94,7 +95,7 @@ compat:
 	grep -q API-SUBSET-OK $(COMPAT)/api-subset.log
 	cd $(COMPAT)/tree && $(SBCL) --non-interactive --load tests/run-m4.lisp > $(COMPAT)/old-suite.log 2>&1; \
 	  tail -4 $(COMPAT)/old-suite.log
-	grep -q "Fail: 0" $(COMPAT)/old-suite.log
+	sh tests/compat/old-suite-verdict.sh $(COMPAT)/old-suite.log tests/compat/skipped-internal.txt
 
 # docs/stability.md §9: what the Quicklisp dist builder would do with a
 # source tarball of HEAD — every system of every .asd loads with no cargo
