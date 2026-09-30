@@ -130,7 +130,7 @@ claimed:
 
 | Host | Linux x86-64 | macOS arm64 | Windows x86-64 | Linux aarch64 |
 |---|---|---|---|---|
-| SBCL 2.1.11+ | required | required | required | best-effort |
+| SBCL 2.1.11+ | required | required | required | required |
 | Clozure CL 1.13 | required | — | — | — |
 | ECL 21.2.1 | required | — | — | — |
 

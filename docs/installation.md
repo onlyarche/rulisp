@@ -8,7 +8,7 @@ dependencies, and how to verify the install.
 | Dependency | Why | Verified with |
 |---|---|---|
 | Rust toolchain (`cargo`, `rustc`) | builds glue crates; invoked by `rulisp:use-crate` at development time only — loading the `rulisp` system itself needs no Rust | 1.78 or newer (the MSRV, checked in CI on exactly that toolchain); tested with 1.97 |
-| A Common Lisp | the host | the support table in [README §Status](../README.md#status) — the CI-required matrix: SBCL 2.1.11+ on Linux, macOS and Windows; Clozure CL 1.13 and ECL 21.2.1 on Linux; Linux aarch64 best-effort |
+| A Common Lisp | the host | the support table in [README §Status](../README.md#status) — the CI-required matrix: SBCL 2.1.11+ on Linux (x86-64 and aarch64), macOS and Windows; Clozure CL 1.13 and ECL 21.2.1 on Linux |
 | Quicklisp | pulls the CL dependencies | current dist |
 | CL libraries: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads` (+ `fiveam` for the test suites) | FFI, UTF-8, finalizers, locks | Quicklisp dist versions |
 | C toolchain (linker) | Rust needs a system linker | gcc / Xcode CLT / MSVC build tools |

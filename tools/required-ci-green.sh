@@ -17,7 +17,7 @@ set -e
 SHA=$1
 [ -n "$SHA" ] || { echo "usage: required-ci-green.sh SHA"; exit 2; }
 REPO=${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)}
-MIN_REQUIRED=${MIN_REQUIRED:-6}   # five "(required)" hosts + MSRV today
+MIN_REQUIRED=${MIN_REQUIRED:-7}   # six "(required)" hosts + MSRV today
 
 TSV=${JOBS_TSV:-}
 if [ -z "$TSV" ]; then

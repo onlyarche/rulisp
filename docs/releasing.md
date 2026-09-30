@@ -36,12 +36,13 @@ worked; each has a check, so a slip is caught before the next step.
 6. **Tag, and push the tag.** `git tag vX.Y.Z && git push origin vX.Y.Z`.
    The tag push runs `.github/workflows/blobs.yml`: release-profile builds
    of the four examples on every required host, each run through
-   `tools/rulisp-audit.sh` on its own host and again, all twelve
+   `tools/rulisp-audit.sh` on its own host and again, all sixteen
    together, in the release job on Linux (BOUNDARY §7), attached to a
    GitHub Release for the tag with the CHANGELOG section as its body.
-7. **Check the assets.** `gh release view vX.Y.Z` lists twelve:
-   `lib<crate>-linux-x86_64.so`, `lib<crate>-darwin-arm64.dylib` and
-   `<crate>-windows-x86_64.dll` for `wordbag`, `rx`, `wasm`, `fetch`. A
+7. **Check the assets.** `gh release view vX.Y.Z` lists sixteen:
+   `lib<crate>-linux-x86_64.so`, `lib<crate>-linux-arm64.so`,
+   `lib<crate>-darwin-arm64.dylib` and `<crate>-windows-x86_64.dll` for
+   `wordbag`, `rx`, `wasm`, `fetch`. A
    host that flaked is re-run for the same tag from the Actions tab
    (`blobs` → Run workflow → the tag); existing assets are replaced.
 8. **Ultralisp.** The dist polls GitHub on its own schedule and has

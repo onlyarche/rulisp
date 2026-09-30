@@ -43,7 +43,8 @@ the host, with a clear condition when the platform isn't covered:
 
 The four examples ship this way: every release at
 <https://github.com/onlyarche/rulisp/releases> carries `wordbag`, `rx`,
-`wasm` and `fetch` for Linux x86-64, macOS arm64 and Windows x86-64,
+`wasm` and `fetch` for Linux x86-64 and aarch64, macOS arm64 and Windows
+x86-64 (aarch64 from the first release after 0.6.0),
 built by `.github/workflows/blobs.yml` and audited (docs/distribution.md,
 "Audit your glue crate"). Download the ones for your host into a
 directory and Case A needs no Rust toolchain at all — the SBCL/Linux CI

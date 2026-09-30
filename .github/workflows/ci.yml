@@ -302,12 +302,19 @@ jobs:
     # First arm host. meta.rs's aarch64-unknown-linux-gnu target and the
     # loader's arm64 paths (target-compatible-p in manifest.lisp,
     # host-blob-suffix in build.lisp) had never executed before this job.
-    # Promotion follows the ECL job's procedure: a documented green streak,
-    # then in one commit drop continue-on-error, rename "(required)", add
-    # the linux-arm64 leg to blobs.yml and the host to stability.md §5.
-    name: SBCL / Linux aarch64 (best-effort)
+    # Promoted to required 2026-09-30 after 26 consecutive green runs on
+    # main since the clock restarted on 2026-09-08 (runs 34173012968 …
+    # 36669486379; the restart followed the one real finding this host
+    # produced, a GC-timing assumption in m4.gc-finalization), with the
+    # deployment path exercised first: blobs run 36388354650 built and
+    # audited the four examples on this host and the release job
+    # re-audited sixteen assets. DEMOTION, should it turn unreliable:
+    # restore `continue-on-error: true` and the "(best-effort)" name in ONE
+    # commit that links the failing run, records the cause in ROADMAP,
+    # takes the linux-arm64 leg out of blobs.yml and downgrades
+    # README/CHANGELOG wording — never silently (docs/stability.md §5).
+    name: SBCL / Linux aarch64 (required)
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

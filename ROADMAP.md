@@ -61,8 +61,15 @@ Budget 1 L + 1 M + 7 S.
    linux-arm64 / so / lib` leg and the 16-asset count, not merged):
    `publish: false` dispatch for v0.6.0, run 36388354650 — the arm leg
    built and audited the four examples in 1m1s, the release job
-   re-audited 16 downloaded assets on Linux, nothing published. B: the
-   one-commit promotion when the streak from 2026-09-08 reaches ECL's 24.
+   re-audited 16 downloaded assets on Linux, nothing published. B ✅
+   (2026-09-30): promoted in one commit at 26 consecutive green runs on
+   main since 2026-09-08 (34173012968 … 36669486379) — the job is
+   `(required)` with the promotion/demotion record beside it, blobs.yml
+   has the `linux-arm64` leg and expects 16 assets, the release gate
+   counts seven jobs, and README, stability §5, releasing, usage,
+   installation and the claims register say so. The arm job's own
+   `load-blob-crate` step waits for the first release with an arm asset
+   (the "open the next cycle" commit after 0.7.0).
 7. **The flagship (L)** — *commit 1 done:* `tests/suite/wasm.lisp`
    pins the existing API (15 tests, 46 checks, SBCL/CCL/ECL; four
    mutations — `boom` that no longer traps, `host.notify` swallowing the

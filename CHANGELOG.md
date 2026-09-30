@@ -53,6 +53,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   existing `wasm:make-wasm` API is unchanged.
 
 ### Changed
+- **Linux aarch64 is a supported host.** The SBCL job on
+  `ubuntu-24.04-arm` is required: 26 consecutive green runs on main
+  since its clock restarted on 2026-09-08, and the deployment path
+  rehearsed first (the four examples built and audited on the arm host,
+  sixteen assets re-audited, nothing published). From this release every
+  GitHub Release carries `lib<crate>-linux-arm64.so` too — sixteen
+  assets, four hosts — and the release gate counts the arm job.
 - **The repository ships one `.asd`.** `rulisp-ecl-smoke`, the ECL
   `program-op` test consumer, was a committed system file, so a dist
   that indexes every `.asd` it finds published it: Ultralisp lists

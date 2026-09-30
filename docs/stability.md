@@ -99,8 +99,9 @@ assets to a tag whose commit does not have every `(required)` job and
 The one
 support table lives in [README §Status](../README.md#status) and equals
 the required jobs in `.github/workflows/ci.yml`; a **best-effort** job
-(today: SBCL on Linux aarch64) runs on every push without being required
-and is not a supported host until promoted. Everything else (LispWorks,
+(none today — SBCL on Linux aarch64 was the last, promoted 2026-09-30)
+runs on every push without being required and is not a supported host
+until promoted. Everything else (LispWorks,
 Allegro, ABCL, other architectures) is untested and unclaimed.
 
 Promotion and demotion follow the procedure written into
