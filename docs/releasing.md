@@ -17,11 +17,13 @@ worked; each has a check, so a slip is caught before the next step.
    replace the value of the golden's `:rulisp-version` key, whatever it
    is, with the running version before comparing byte for byte.
    Regenerate the goldens only when the renderer's output changed.
-4. **Gates.** Push and wait for every required CI job plus `MSRV` to be
-   green. Never tag on a red run — and the release job checks: before it
-   attaches a single asset, `tools/required-ci-green.sh` looks up the
-   tagged commit's CI run and refuses, naming the job, unless every
-   `(required)` job and `MSRV` concluded success (no run, or a run still
+4. **Gates.** Push and wait for every required CI job plus `MSRV` and
+   `cargo tests` to be green. Never tag on a red run — and the release
+   job checks: before it attaches a single asset,
+   `tools/required-ci-green.sh` looks up the tagged commit's CI run and
+   refuses, naming the job, unless every `(required)` job, `MSRV` and
+   `cargo tests` (the Rust API gate, the manifest golden, trybuild, the
+   signal audit) concluded success (no run, or a run still
    in progress, refuses too). The `skip-ci-gate` dispatch input is the
    documented override; it prints a warning in the release log.
 5. **Publish to crates.io, in dependency order** — each waits for the

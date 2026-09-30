@@ -1,5 +1,21 @@
 # Roadmap
 
+## 1.0 — the freeze (after 0.8)
+
+What the 1.0.0 commit contains, measured in advance with
+cargo-semver-checks, the release-day sequence, the commit that opens
+1.1 and the Quicklisp issue text:
+[docs/design/v10-plan.md](docs/design/v10-plan.md).
+
+## v0.8 — the axum flagship (next)
+
+An HTTP server with Lisp handlers on axum — probed in the v0.7 panel (47
+packages, 38 s cold build, §7 sweep clean, loopback answered) and
+pull-based by design, since a stored callback returns no value to Rust.
+MCP (rmcp) follows it: its HTTP transport sits on axum. Planned by a
+panel when the cycle opens; the arm job's `load-blob-crate` step and the
+pins move in the commit that opens it (docs/releasing.md step 9).
+
 ## v0.7 — the freeze rehearsal, and the flagship the ask named
 
 The freeze rehearsal before 1.0 (0.8, the axum flagship, comes first —
@@ -150,12 +166,17 @@ Budget 1 L + 1 M + 7 S.
    in the tree — every `.gitignore` entry by name (a 3.9 GB checkout back
    to 40 MB, `.git` included; `git clean -Xdn` then lists nothing); `clean-cache` removes the loader's cache on request and
    prints its size first.
-9. **Close the cycle (M)** — the release gate also counts the
-   semver/audit/golden job; `docs/design/v10-plan.md` written from the
-   measured rehearsal (the re-export hide is invisible to
-   cargo-semver-checks; hiding the runtime's items fires five lints and
-   needs the major; exact pins; the release-day sequence and the
-   Quicklisp issue text); stability §3/§8 as of 0.7.
+9. ✅ **Close the cycle (M)** — the release gate counts the `cargo
+   tests` job too (eight jobs; a red semver gate, golden, trybuild or
+   audit now refuses a tag); `docs/design/v10-plan.md` written from a
+   rehearsal measured again on this tree: the re-export hide is
+   invisible to cargo-semver-checks (196 of 196 pass), hiding the
+   runtime's items fires five `*_now_doc_hidden` lints as a minor and
+   passes as a major with 0 checks — and, new against the panel's
+   record, it changes two trybuild expectations (`Rc<Vec<u8>>` where
+   rustc printed `Rc<std::vec::Vec<u8>>`), so the 1.0 commit
+   regenerates them; the macros crate is not checkable by the tool at
+   all. Stability §3 and §8 read as of 0.7; 1.0 follows 0.8.
 
 Not in v0.7 (causes in the plan): an axum HTTP server with Lisp
 handlers — probed clean (47 packages, 38 s, §7 sweep ok) and decided as

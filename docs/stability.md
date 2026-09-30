@@ -18,9 +18,11 @@ makes is enforced.
 `rulisp-runtime`'s helper functions (`str_arg`, `handle_new`, …) are an
 implementation detail of the macros, not a surface: only generated code
 and the hand-written ABI oracle call them, and they may change in any
-minor. Until 1.0 hides the `rulisp::runtime` path, though, the semver
-job checks it like the rest — hiding it is the 1.0 major's first
-commit, where the tool permits it.
+minor. Until 1.0 hides them, though, the semver job checks them like
+the rest — hiding is the 1.0 major's first commit, and what the tool
+makes of it was measured in advance (docs/design/v10-plan.md: hiding
+the `rulisp::runtime` re-export alone is invisible to it; hiding the
+runtime crate's items is what needs the major).
 
 The Lisp surface's gate: `v06.exported-api-golden` compares the export
 list, each symbol's kind, the classes' superclasses and the functions'
@@ -66,13 +68,15 @@ does not land in a minor.
 
 ## 3. Deprecation
 
-Policy only — nothing is deprecated today. Reviewed for 0.6, the last
-minor before 1.0: no rename or removal found necessary — every export is
-used by README, BOUNDARY §2, the quickstart, the suite or the fetch
-veneer; argument conventions are consistent (paths positional, `:package`
+Policy only — nothing is deprecated today. Reviewed for 0.6 and again
+for 0.7: no rename or removal found necessary — every export is used by
+README, BOUNDARY §2, the quickstart, the suite or the fetch veneer;
+argument conventions are consistent (paths positional, `:package`
 keyword throughout); and a class name in a `handler-case` cannot be
-staged by a style-warning anyway. The one tightening of the cycle, the
-undocumented `(setf crate-generation)`, was a §4 soundness fix.
+staged by a style-warning anyway. 0.6's one tightening, the undocumented
+`(setf crate-generation)`, was a §4 soundness fix; 0.7 added and removed
+no export (`lisp/src/package.lisp` and its golden are unchanged since
+the 0.6.0 tag).
 
 - Rust: `#[deprecated]` for at least one minor before removal, with the
   replacement in the note.
@@ -94,8 +98,9 @@ from crates.io (0.1.0–0.2.1 were, for issue #1); the ASDF system is not
 
 A host is supported exactly when it is a **required** CI job, and
 "required" is checked, not just named: the release job refuses to attach
-assets to a tag whose commit does not have every `(required)` job and
-`MSRV` green (`tools/required-ci-green.sh`, docs/releasing.md step 4).
+assets to a tag whose commit does not have every `(required)` job,
+`MSRV` and `cargo tests` green (`tools/required-ci-green.sh`,
+docs/releasing.md step 4).
 The one
 support table lives in [README §Status](../README.md#status) and equals
 the required jobs in `.github/workflows/ci.yml`; a **best-effort** job
@@ -161,8 +166,12 @@ change. Exit criteria, all checkable:
 the mechanical part of criteria 1, 3, 4 and 5 — the ABI constants, the
 gates by name, the export count against the golden, the GAP count, the
 register's footer, the dry-run step — so a criterion cannot lapse
-quietly. Status as of 0.6.0: 1 holds; 2 shipped; 3 in progress (this
-cycle, gated); 4 holds; 5 mechanical part holds, submission pending.
+quietly. Status as of 0.7.0: 1 holds; 2 shipped; 3 holds — two cycles
+(0.6, 0.7) with no break on any surface, and 0.7 moved none at all
+(CHANGELOG's surfaces paragraph); 4 holds; 5 mechanical part holds — the
+tarball is down to one `.asd` — and the submission waits for 1.0, which
+follows 0.8. What the 1.0.0 commit contains is written down and measured:
+docs/design/v10-plan.md.
 
 ## 9. Quicklisp prerequisites (listed, not scheduled)
 

@@ -7,6 +7,17 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.7 development)
 
+**Surfaces this cycle** (docs/stability.md §8 criterion 3: a second
+cycle without a break). *Lisp API*: no export added or removed —
+`lisp/src/package.lisp` and its golden are as 0.6.0 left them; one
+behaviour tightened, additively: a truncated or corrupt artifact is
+refused with the documented `crate-not-loaded-error` where a fault or a
+false success was. *Rust API*: none — `crates/` is unchanged since
+0.6.0, and `cargo-semver-checks` is green against 0.6.0 as a minor.
+*Manifest*: none; the goldens are untouched. *C ABI*: 1, unchanged
+since 0.1.0. The flagship, the WASI sandbox, is an example: it moved no
+surface and needed no boundary feature.
+
 ### Added
 - **`examples/wasm` has a suite.** README made six claims about it,
   SECURITY.md called it the supported approach for untrusted logic, and
