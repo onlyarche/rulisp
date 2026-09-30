@@ -59,10 +59,16 @@ surface and needed no boundary feature.
   budget, a second plus a microsecond per unit of fuel; and that a FIFO
   inside a preopen blocked the run forever, so a preopen now offers
   regular files and directories only. SECURITY.md lists what the sandbox
-  bounds (each line a test) and what it does not. Twenty-five
-  `wasm.wasi-*` tests with hand-written guests
+  bounds (each line a test) and what it does not. Twenty-six
+  `wasm.wasi-*` tests run on every host: hand-written guests
   (`examples/wasm/wasi-hello.wat`, `wasi-cat.wat`; `tests/wasm-guests/`)
-  run on every host. Dependencies: wasmi_wasi 0.50, cap-std 3 and
+  and one a toolchain built — a std-only Rust program compiled for
+  `wasm32-wasip1`, committed as `tests/wasm-guests/rust-guest.wasm` with
+  its source — which gets its arguments, environment, stdin and files,
+  is refused an escape and a write, and exits with a code; its
+  `thread::sleep` panics into a trap, since the sandbox refuses to wait.
+  (A Rust-built module asks for 17 pages of memory before it runs: give
+  `make-wasi` more than 1.1 MiB.) Dependencies: wasmi_wasi 0.50, cap-std 3 and
   cap-rand 3 (entropy from the OS; the crate's default RNG registers a
   fork handler) — no tokio, no C, and the §7 audit still passes. The
   existing `wasm:make-wasm` API is unchanged.

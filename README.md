@@ -101,8 +101,8 @@ wire host functions so GUEST code calls straight into your Lisp closures
 watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
 matters). Since 0.7 it also runs a **WASI command module** — what a
-`wasm32-wasip1` toolchain produces; the suite's guests are hand-written
-`.wat` — in a sandbox: a fuel budget that must be set, one memory number
+`wasm32-wasip1` toolchain produces; the suite runs a Rust program built
+that way beside its hand-written `.wat` guests — in a sandbox: a fuel budget that must be set, one memory number
 that bounds the guest's memory and its stdout + stderr alike,
 stdin/stdout/stderr as byte vectors, the directories you hand it as its
 whole filesystem — read-only, and `..`, absolute paths and symlinks that

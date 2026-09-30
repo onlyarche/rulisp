@@ -4,8 +4,9 @@
 ;;; make-wasi, built beside it in v0.7.
 ;;;
 ;;; Every test states what a failure would mean. The guests are committed
-;;; .wat text (examples/wasm/, tests/wasm-guests/); nothing here needs a
-;;; wasm-targeting toolchain.
+;;; .wat text (examples/wasm/, tests/wasm-guests/) and one committed binary
+;;; a Rust toolchain built (tests/wasm-guests/rust-guest.wasm, its source
+;;; beside it); nothing here needs a wasm-targeting toolchain.
 
 (in-package #:rulisp/test)
 
@@ -833,3 +834,56 @@ is a second stuck thread."
       (is (search "all fuel consumed" result))
       ;; and once the run is over the handle answers again
       (is (< (wf "WASI-FUEL-LEFT" w) 16)))))
+
+;;; ---------------------------------------------------------------------------
+;;; A guest a toolchain built. Every guest above is hand-written .wat; this
+;;; one is a Rust program, std only, compiled for wasm32-wasip1 — source in
+;;; tests/wasm-guests/rust-guest/, the binary committed beside it.
+;;; ---------------------------------------------------------------------------
+
+(test wasm.wasi-runs-a-toolchain-built-module
+  "README: the sandbox runs what a wasm32-wasip1 toolchain produces. A real
+program makes WASI calls nobody wrote by hand — prestat to find its
+directories, fdstat, readdir, a 17-page memory before main — and its libc
+turns errnos into messages. A failure means the sandbox runs our guests
+and not a user's."
+  (ensure-wasm)
+  ;; Rust asks for 17 pages, 1.1 MiB, before it runs: 1 MiB is refused at load
+  (is (search "resource limiter"
+              (trap-message (wf "MAKE-WASI" (wasi-guest "rust-guest.wasm") 10000000 1048576))))
+  (with-wasi-world (sandbox root)
+    (with-wasi (w "rust-guest.wasm" :fuel 10000000 :limit 16777216)
+      (dolist (arg '("rust-guest" "hello" "extra")) (wf "WASI-ARG" w arg))
+      (wf "WASI-ENV" w "HOME" "/nowhere")
+      (wf "WASI-STDIN" w (map '(vector (unsigned-byte 8)) #'char-code "piped in"))
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 3 (wf "WASI-RUN" w)) "std::process::exit(3) did not arrive as the value 3")
+      (let ((out (ascii (wf "WASI-STDOUT" w))))
+        (dolist (line '("hello from rust, args=[\"hello\", \"extra\"]"
+                        "HOME=Some(\"/nowhere\")"
+                        "stdin=\"piped in\""
+                        "file=\"inside\\n\""
+                        "escape refused: " "(os error 63)"
+                        "write refused: " "(os error 69)"
+                        "dir has 2 entries"))
+          (is (search line out) "~S is missing from the guest's stdout:~%~A" line out))
+        (is (not (search "OUTSIDE" out)) "the file outside the preopen was read"))
+      (is (string= (format nil "to stderr~%") (ascii (wf "WASI-STDERR" w))))))
+  ;; std::thread::sleep asserts that the host's wait succeeded: refused, it
+  ;; panics, and a panic is a trap — at once, not two seconds later
+  (with-wasi (w "rust-guest.wasm" :fuel 10000000 :limit 16777216)
+    (wf "WASI-ARG" w "rust-guest")
+    (wf "WASI-ARG" w "sleep")
+    (let (message)
+      (is (< (seconds-of (lambda () (setf message (trap-message (wf "WASI-RUN" w))))) 2)
+          "the guest's 2-second sleep was honoured")
+      (is (search "unreachable" message)))
+    (is (string= (format nil "before sleep~%") (ascii (wf "WASI-STDOUT" w))))
+    (is (search "panicked" (ascii (wf "WASI-STDERR" w)))))
+  ;; an allocator the memory number stops: the guest aborts, the host's
+  ;; memory is not what gives
+  (with-wasi (w "rust-guest.wasm" :fuel 10000000 :limit 8388608)
+    (wf "WASI-ARG" w "rust-guest")
+    (wf "WASI-ARG" w "alloc")
+    (is (search "unreachable" (trap-message (wf "WASI-RUN" w))))
+    (is (search "memory allocation" (ascii (wf "WASI-STDERR" w))))))

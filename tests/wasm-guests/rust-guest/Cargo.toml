@@ -1,0 +1,24 @@
+# The one guest in the suite that a toolchain built: a Rust program for
+# wasm32-wasip1, committed as ../rust-guest.wasm so the suite needs no
+# wasm target. To rebuild it (rustup target add wasm32-wasip1):
+#
+#   cargo build --release --target wasm32-wasip1 \
+#     --manifest-path tests/wasm-guests/rust-guest/Cargo.toml
+#   cp tests/wasm-guests/rust-guest/target/wasm32-wasip1/release/rust-guest.wasm \
+#      tests/wasm-guests/rust-guest.wasm
+#
+# The committed binary was built with rustc 1.97.0; a different compiler
+# produces different bytes and the same behaviour, which is what
+# wasm.wasi-runs-a-toolchain-built-module checks.
+[package]
+name = "rust-guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[profile.release]
+opt-level = "s"
+strip = true
+
+# not a member of the repository's workspace: it builds for another target
+[workspace]

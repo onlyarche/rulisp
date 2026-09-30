@@ -10,3 +10,6 @@
 
 *.sexp text eol=lf
 *.sh text eol=lf
+
+# a compiled guest for the WASI suite: bytes, never line endings
+*.wasm binary

@@ -194,9 +194,10 @@ HEAD for the first time — sixteen assets built and audited on four
 hosts, `libwasm` with its WASI dependencies audited on macOS and
 Windows at last — and the rehearsal is now a step of
 docs/releasing.md, before crates.io, with the notes step guarded so it
-can end green. Not done, a maintainer's call: committing a
-toolchain-built `.wasm` fixture so that run is a test rather than a
-record.
+can end green. The Rust guest is committed, by the maintainer's call,
+as `tests/wasm-guests/rust-guest.wasm` with its source, and
+`wasm.wasi-runs-a-toolchain-built-module` makes that run a test rather
+than a record.
 
 Not in v0.7 (causes in the plan): an axum HTTP server with Lisp
 handlers — probed clean (47 packages, 38 s, §7 sweep ok) and decided as
