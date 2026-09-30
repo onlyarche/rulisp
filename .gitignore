@@ -14,6 +14,7 @@ examples/*/target-abort-check/
 !tests/golden/*
 # ECL program-op smoke executable and its logs
 tests/ecl-program/rulisp-ecl-smoke
+tests/ecl-program/rulisp-ecl-smoke.asd
 ecl-program-*.log
 tools/audit-fixture/target/
 tests/abi-fixture/target/

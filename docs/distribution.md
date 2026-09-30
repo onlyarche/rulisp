@@ -143,7 +143,11 @@ the smallest such consumer, built and run by the ECL CI job
 `ecl --norc --load build.lisp`, where the script loads Quicklisp (rulisp's
 dependencies come from there), pushes rulisp's `lisp/` directory and the
 application's own directory onto `asdf:*central-registry*`, loads the
-dependencies (fact 4 below), and calls `(asdf:make "my-app")`. The
+dependencies (fact 4 below), and calls `(asdf:make "my-app")`. (The
+smoke consumer's own system file is committed as a template,
+`rulisp-ecl-smoke.asd.in`, which its `build.lisp` copies to a `.asd`
+first — only so that this repository ships a single `.asd`; your
+application's is an ordinary file.) The
 executable lands next to the `.asd`. Four facts shape the system
 definition and that build script, all verified against ECL 21.2.1 as
 packaged by Debian/Ubuntu (bundled ASDF 3.1.8.8):

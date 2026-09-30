@@ -173,8 +173,11 @@ the last minute:
 - `(ql:quickload :rulisp)` succeeds **without cargo on PATH** — loading the
   system opens no library and runs no toolchain; cargo is needed only by
   `use-crate`. The SBCL/Linux CI job proves this on every push.
-- Every system in every `.asd` of the tarball — `rulisp`, `rulisp/test`,
-  `rulisp-ecl-smoke` — loads with no cargo reachable (`make dist-dryrun`,
+- The tarball has one `.asd`, `lisp/rulisp.asd`, and both systems it
+  defines — `rulisp`, `rulisp/test` — load with no cargo reachable (the
+  ECL smoke consumer's system file is a template, `.asd.in`, that its
+  build script copies at test time: a dist that indexes every `.asd`
+  would otherwise publish a test consumer) (`make dist-dryrun`,
   run by the SBCL/Linux CI job on a `git archive` of every push; a
   top-level `use-crate` anywhere in the tree would turn it red); only *running*
   `rulisp/test` needs cargo, because its tests build the examples

@@ -53,6 +53,15 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   existing `wasm:make-wasm` API is unchanged.
 
 ### Changed
+- **The repository ships one `.asd`.** `rulisp-ecl-smoke`, the ECL
+  `program-op` test consumer, was a committed system file, so a dist
+  that indexes every `.asd` it finds published it: Ultralisp lists
+  `rulisp-ecl-smoke` next to `rulisp`, and the Quicklisp submission at
+  1.0 would have frozen that. Its system file is now a template
+  (`tests/ecl-program/rulisp-ecl-smoke.asd.in`) that the build script
+  writes out at test time. If you quickloaded `rulisp-ecl-smoke` from
+  Ultralisp — it was never a documented entry point — it goes away with
+  the dist's next poll.
 - **The macOS fetch step is required** — 37 consecutive green runs since
   it was added, never a failure of its own; promoted by the written
   procedure. **fetch runs on Windows**, best-effort to start: the

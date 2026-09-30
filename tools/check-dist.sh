@@ -16,6 +16,14 @@ URL=$(echo "$LINE" | awk '{print $2}')
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 curl -sfL "$URL" | tar -xz -C "$TMP"
 GOT=$(sed -n 's/.*:version "\([^"]*\)".*/\1/p' "$TMP"/*/lisp/rulisp.asd | head -1)
+# what the dist indexes for the project: one row per system, from the
+# .asd files of the archive it built (rulisp and rulisp/test once it has
+# polled a tree without the ECL smoke consumer's .asd)
+SYSTEMS=$(curl -sfL "$DIST" | awk -F': ' '/^system-index-url/ {print $2}' | tr -d '\r')
+if [ -n "$SYSTEMS" ]; then
+    echo "systems the dist indexes for onlyarche-rulisp (system-file system-name):"
+    curl -sfL "$SYSTEMS" | awk '$1 == "onlyarche-rulisp" {print "  " $2 " " $3}'
+fi
 if [ "$GOT" = "$WANT" ]; then
     echo "ultralisp serves rulisp $GOT ($(basename "$URL"))"
 else

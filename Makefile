@@ -100,14 +100,16 @@ compat:
 # source tarball of HEAD — every system of every .asd loads with no cargo
 # reachable: off PATH, and RULISP_CARGO pointed at nothing, since rulisp's
 # lookup would otherwise find ~/.cargo/bin/cargo (tests/dist-dryrun.lisp
-# prints DRYRUN-OK per system; three today).
+# prints DRYRUN-OK per system; two today: rulisp and rulisp/test — the ECL
+# smoke consumer's system file is a template its build script copies, so
+# the tarball has one .asd).
 DIST := $(CURDIR)/target/dist
 dist-dryrun:
 	rm -rf $(DIST) && mkdir -p $(DIST)
 	git archive HEAD | tar -x -C $(DIST)
 	env -i HOME="$$HOME" PATH=/bin:/usr/bin RULISP_CARGO=/nonexistent/cargo RULISP_DIST_ROOT=$(DIST) \
 	  sbcl --non-interactive --load $(CURDIR)/tests/dist-dryrun.lisp 2>&1 | tee $(DIST).log
-	test "$$(grep -c '^DRYRUN-OK' $(DIST).log)" -eq 3
+	test "$$(grep -c '^DRYRUN-OK' $(DIST).log)" -eq 2
 
 # docs/stability.md §8: the 1.0 exit criteria as commands (constants,
 # gate names, counts); run by the MSRV CI job next to check-versions

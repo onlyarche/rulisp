@@ -37,9 +37,13 @@ Budget 1 L + 1 M + 7 S.
    WARNING` and `bus error`; after, 13/13 and none of the three; all
    twelve v0.6.0 assets accepted and 36 cuts of them (60 %, 4 KiB,
    −1 KiB) refused naming the segment, section or table that overruns.
-3. **One `.asd` in the tarball** — the ECL smoke's system file becomes a
-   template copied at build time; Ultralisp indexes `rulisp-ecl-smoke`
-   today.
+3. ✅ **One `.asd` in the tarball** — the ECL smoke's system file is a
+   committed template, `rulisp-ecl-smoke.asd.in`, that its `build.lisp`
+   writes out as a `.asd` at test time (ignored by git); `git ls-files
+   '*.asd'` is `lisp/rulisp.asd` alone and the dist dry run asserts two
+   systems, not three. Ultralisp's index still lists `rulisp-ecl-smoke`
+   until it polls this tree — `tools/check-dist.sh` now prints the
+   dist's system rows so the change is visible when it happens.
 4. **Version-agnostic manifest-golden comparison** — the `"0.4.0"`
    placeholder and releasing.md step 3's hand edit go away.
 5. ✅ **Every attached asset has a job that runs its suite on its host** —
