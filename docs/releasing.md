@@ -13,13 +13,10 @@ worked; each has a check, so a slip is caught before the next step.
 2. **CHANGELOG.** Rename `## Unreleased (…)` to `## X.Y.Z — YYYY-MM-DD`.
    The release workflow takes that section, verbatim, as the GitHub
    Release body — and fails if it cannot find it.
-3. **Golden.** The manifest goldens carry `:rulisp-version "0.4.0"` as a
-   placeholder that both golden tests substitute with the running
-   version, so a version bump does not rewrite them. Regenerate only when
-   the renderer's output changed — and if the regenerated golden then
-   carries a different version, update the placeholder string in
-   `tests/suite/m2.lisp` and `examples/wordbag/tests/manifest_golden.rs`
-   to match it.
+3. **Golden.** Nothing to do for a version bump: both golden tests
+   replace the value of the golden's `:rulisp-version` key, whatever it
+   is, with the running version before comparing byte for byte.
+   Regenerate the goldens only when the renderer's output changed.
 4. **Gates.** Push and wait for every required CI job plus `MSRV` to be
    green. Never tag on a red run — and the release job checks: before it
    attaches a single asset, `tools/required-ci-green.sh` looks up the

@@ -44,8 +44,12 @@ Budget 1 L + 1 M + 7 S.
    systems, not three. Ultralisp's index still lists `rulisp-ecl-smoke`
    until it polls this tree — `tools/check-dist.sh` now prints the
    dist's system rows so the change is visible when it happens.
-4. **Version-agnostic manifest-golden comparison** — the `"0.4.0"`
-   placeholder and releasing.md step 3's hand edit go away.
+4. ✅ **Version-agnostic manifest-golden comparison** — both golden
+   tests replace the value of the `:rulisp-version` key by pattern
+   instead of the literal `"0.4.0"`: with the golden's version set to
+   `9.9.9` both stay green (both red before), any other changed byte
+   still turns both red, and releasing.md step 3 has nothing left to
+   edit.
 5. ✅ **Every attached asset has a job that runs its suite on its host** —
    the macOS fetch step is required (promoted 2026-09-28 after 37
    consecutive green runs; demotion procedure beside it); fetch runs on

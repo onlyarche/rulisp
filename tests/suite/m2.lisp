@@ -14,6 +14,17 @@
     (concatenate 'string
                  (subseq s 0 i) replacement (subseq s (+ i (length needle))))))
 
+(defun substitute-rulisp-version (golden version)
+  "GOLDEN with the value of its :rulisp-version key replaced by VERSION —
+whatever value the golden carries there, so a release bump, or a golden
+regenerated at another version, needs no edit here."
+  (let* ((key ":rulisp-version \"")
+         (at (search key golden)))
+    (assert at () "the golden has no :rulisp-version key")
+    (let* ((from (+ at (length key)))
+           (to (position #\" golden :start from)))
+      (concatenate 'string (subseq golden 0 from) version (subseq golden to)))))
+
 ;;; ---------------------------------------------------------------------------
 ;;; Manifest reader fixtures: every corruption → rulisp:manifest-error
 ;;; ---------------------------------------------------------------------------
@@ -134,13 +145,14 @@
          (golden (if (search "x86_64-unknown-linux-gnu" golden)
                      (string-replace-once "x86_64-unknown-linux-gnu" target golden)
                      golden))
-         ;; :rulisp-version is a placeholder in the golden for the same reason
+         ;; :rulisp-version is the release the crate was built with: the
+         ;; golden's value there is replaced by it, whatever it is. A crate
+         ;; that stopped emitting the key leaves the golden as it is, and
+         ;; the comparison below fails
          (built-with (rulisp::manifest-rulisp-version
                       (rulisp::crate-manifest rulisp/test::*crate*)))
          (golden (if built-with
-                     (string-replace-once ":rulisp-version \"0.4.0\""
-                                          (format nil ":rulisp-version ~S" built-with)
-                                          golden)
+                     (substitute-rulisp-version golden built-with)
                      golden)))
     (is (string= golden
                  (rulisp::crate-manifest-source rulisp/test::*crate*)))))
