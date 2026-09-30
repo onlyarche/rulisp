@@ -30,4 +30,5 @@
                (:file "v05")
                (:file "v06")
                (:file "v07")
-               (:file "fetch")))
+               (:file "fetch")
+               (:file "wasm")))

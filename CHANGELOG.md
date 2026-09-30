@@ -7,6 +7,19 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.7 development)
 
+### Added
+- **`examples/wasm` has a suite.** README made six claims about it,
+  SECURITY.md called it the supported approach for untrusted logic, and
+  every release attached three `wasm` blobs — with no test and no job
+  that had ever loaded one. `tests/suite/wasm.lisp` (`:rulisp-wasm`, 15
+  tests, in `run-m4` on every job) pins what ships: the `.wat` guests load
+  and list their exports, a binary `.wasm` module loads, i32 coercion including the wrap at 2^31, traps
+  and bad calls as `wasm:wasm-error`, fuel exhaustion and refuel, the
+  unmetered fuel API, memory round trip and bounds (an offset of 2^64−1
+  is refused, not wrapped), host callbacks into Lisp on the calling
+  thread, a closure's condition becoming a guest trap, the unset and the
+  dead callback, a freed instance, a missing file. The crate is unchanged.
+
 ### Changed
 - **The macOS fetch step is required** — 37 consecutive green runs since
   it was added, never a failure of its own; promoted by the written

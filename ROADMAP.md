@@ -55,7 +55,12 @@ Budget 1 L + 1 M + 7 S.
    built and audited the four examples in 1m1s, the release job
    re-audited 16 downloaded assets on Linux, nothing published. B: the
    one-commit promotion when the streak from 2026-09-08 reaches ECL's 24.
-7. **The flagship (L)** — `examples/wasm` gets the suite it never had
+7. **The flagship (L)** — *commit 1 of 2 done:* `tests/suite/wasm.lisp`
+   pins the existing API (15 tests, 46 checks, SBCL/CCL/ECL; four
+   mutations — `boom` that no longer traps, `host.notify` swallowing the
+   closure's failure, a wrapped memory offset, a wrong expected value —
+   each fail the test that names the claim). Next: the `Wasi` handle, on
+   a branch first. The item: `examples/wasm` gets the suite it never had
    (six README claims, SECURITY.md's "supported approach", three blobs
    per release, zero tests), then grows a WASI plugin sandbox: a second
    `Wasi` handle on wasmi 0.50 + wasmi_wasi 0.50 + cap-std (117 packages,
