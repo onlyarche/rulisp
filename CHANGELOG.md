@@ -30,13 +30,19 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   `wasi-preopen`, `wasi-stdin` configure it; `wasi-run` calls `_start`
   once and returns the exit code as a value; `wasi-stdout`, `wasi-stderr`
   and `wasi-fuel-left` read the result. Nothing of the process is
-  inherited, and the guest cannot wait: WASI's `poll_oneoff`/sleep — a
-  guest-chosen `std::thread::sleep` at zero fuel in the stock scheduler,
-  measured 3.0 s — answer ENOTSUP at once. Sixteen `wasm.wasi-*` tests
-  with hand-written guests (`examples/wasm/wasi-hello.wat`,
-  `wasi-cat.wat`; `tests/wasm-guests/`) run on every host. Dependencies:
-  wasmi_wasi 0.50 and cap-std 3 — no tokio, no C, and the §7 audit still
-  passes. The existing `wasm:make-wasm` API is unchanged.
+  inherited, and the guest cannot wait through WASI: `poll_oneoff`/sleep
+  — a guest-chosen `std::thread::sleep` at zero fuel in the stock
+  scheduler, measured 3.0 s — answer ENOTSUP at once. The preopens are
+  read-only and the guest holds at most 256 open descriptors, released
+  when the run ends (the commit's adversarial review found a guest
+  writing 8 MiB to the host disk for 5,000 fuel and another exhausting
+  the image's file descriptors and keeping them until the handle was
+  freed). Eighteen `wasm.wasi-*` tests with hand-written guests
+  (`examples/wasm/wasi-hello.wat`, `wasi-cat.wat`; `tests/wasm-guests/`)
+  run on every host. Dependencies: wasmi_wasi 0.50, cap-std 3 and
+  cap-rand 3 (entropy from the OS; the crate's default RNG registers a
+  fork handler) — no tokio, no C, and the §7 audit still passes. The
+  existing `wasm:make-wasm` API is unchanged.
 
 ### Changed
 - **The macOS fetch step is required** — 37 consecutive green runs since

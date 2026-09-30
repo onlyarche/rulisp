@@ -68,7 +68,29 @@ Budget 1 L + 1 M + 7 S.
    API, every fuel-free blocking path, the output cap's errno — an
    `io::Error` would have been a trap — wasmi's limits, the macros, the
    three Lisps' scratch idioms, the guests), then the branch run was the
-   cross-host check. *Still to do:* the adversarial pass over the sandbox
+   cross-host check: run 36663154994 on `wasi-sandbox`, 8/8 green at the
+   first attempt — the sixteen tests ran on Windows (588 checks, the
+   symlink test skipping itself), macOS arm64 and Linux aarch64 (599),
+   SBCL/CCL Linux (602) and ECL (582); the escape refusals answered the
+   same EPERM through cap-std's manual resolver on macOS and Windows as
+   through Linux's openat2. A five-lens adversarial review of the branch
+   (rust, sandbox attacks, test vacuity, hosts, docs; every unreproduced
+   finding given a skeptic; a critic last) found 21, kept 19, all fixed
+   before the merge: preopens are now read-only (a guest wrote 8 MiB of
+   host disk for 5,000 fuel and could plant symlinks), the guest's
+   descriptors are capped at 256 and released when the run ends (a
+   guest exhausted the image's descriptors and kept them until the
+   handle was freed), `_start`'s type is checked at load, NUL bytes and
+   malformed or repeated environment keys are refused, a `(start)`
+   section that exits is refused by name, every method answers rather
+   than blocks while another thread is inside a run, entropy comes from
+   the OS instead of a thread-local RNG that registered a fork handler,
+   the wall-time estimate says minutes where it said seconds, and the
+   tests pin the two-memory/two-table refusal, the unaligned and the
+   stderr cap, the (start) section's fuel, the defaults of stdin and
+   argv, and configuration after a run. Two review remarks were refuted
+   by their skeptics (an aligned cap is not a defect; inheriting stdin
+   would be caught). *Still to do:* the adversarial pass over the sandbox
    claims before the tag, with SECURITY.md re-cited and bounded in the
    same commit. The item: `examples/wasm` gets the suite it never had
    (six README claims, SECURITY.md's "supported approach", three blobs

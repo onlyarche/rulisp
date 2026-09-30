@@ -41,7 +41,12 @@ the documented API can reach memory unsafety:
 
 If you want to run untrusted logic in-process, `examples/wasm` shows the
 supported approach: a WebAssembly sandbox with a fuel-metered CPU budget
-and bounds-checked memory.
+and bounds-checked memory — since 0.7 the WASI handle, `wasm:make-wasi`,
+which bounds a guest's instructions, memory, table, output and open
+descriptors, gives it read-only directories and no way to wait. It is a
+budget for a guest, not isolation from the host: a bug in wasmi or in
+the glue is in-process, and what the numbers do not bound is listed on
+`make-wasi` itself.
 
 ## Supported versions
 

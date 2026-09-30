@@ -306,7 +306,7 @@ boundary as anything but wasm:wasm-error."
 ;;; return values.
 ;;;
 ;;; WASI preview1 errno numbers the guests hand back as exit codes:
-;;;   8 EBADF, 44 ENOENT, 51 ENOSPC, 58 ENOTSUP, 63 EPERM.
+;;;   8 EBADF, 33 EMFILE, 44 ENOENT, 51 ENOSPC, 58 ENOTSUP, 63 EPERM, 69 EROFS.
 ;;; ===========================================================================
 
 (defun wasi-guest (file)
@@ -396,7 +396,12 @@ of the five things it hands a guest."
       (let ((err (wf "WASI-STDERR" w)))
         (is (= 1 (length err)) "stderr is not the one errno byte: ~S" err)
         (is (= 63 (aref err 0)) "the escape was not refused with EPERM: ~S" err))
-      (is (< (wf "WASI-FUEL-LEFT" w) 1000000)))))
+      (is (< (wf "WASI-FUEL-LEFT" w) 1000000)))
+    ;; nothing given: the greeting and the file, no argument bytes
+    (with-wasi (w "wasi-hello.wat")
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 7 (wf "WASI-RUN" w)))
+      (is (string= (format nil "hello from wasi~%inside~%") (ascii (wf "WASI-STDOUT" w)))))))
 
 (test wasm.wasi-env
   "The environment is what wasi-env gave and nothing else. A failure means
@@ -411,7 +416,17 @@ the process environment leaked in, or a variable was lost."
                  (ascii (wf "WASI-STDOUT" w)))))
   (with-wasi (w "wasi-env.wat")
     (is (= 0 (wf "WASI-RUN" w)))
-    (is (= 0 (length (wf "WASI-STDOUT" w))) "an environment the caller never set")))
+    (is (= 0 (length (wf "WASI-STDOUT" w))) "an environment the caller never set"))
+  ;; a key is set once, is a name, and carries no NUL: the guest's libc
+  ;; would only ever see the first entry
+  (with-wasi (w "wasi-env.wat")
+    (wf "WASI-ENV" w "HOME" "/one")
+    (is (search "already set" (trap-message (wf "WASI-ENV" w "HOME" "/two"))))
+    (is (search "not a variable name" (trap-message (wf "WASI-ENV" w "A=B" "c"))))
+    (is (search "not a variable name" (trap-message (wf "WASI-ENV" w "" "v"))))
+    (is (search "NUL" (trap-message (wf "WASI-ENV" w "K" (format nil "a~Cb" (code-char 0))))))
+    (is (= 0 (wf "WASI-RUN" w)))
+    (is (string= (format nil "HOME=/one~C" (code-char 0)) (ascii (wf "WASI-STDOUT" w))))))
 
 (test wasm.wasi-stdin-roundtrip
   "stdin is exactly the bytes given, then EOF; the cat guest copies it in
@@ -427,7 +442,16 @@ saw EOF (which would be a fuel trap, not a hang)."
     (cat (octets 97 98 0 255 99))
     (let ((big (make-array 10000 :element-type '(unsigned-byte 8))))
       (dotimes (i 10000) (setf (aref big i) (mod (* i 7) 256)))
-      (cat big))))
+      (cat big)))
+  ;; nothing given: stdin is empty, not the process's; and the last call wins
+  (with-wasi (w "wasi-cat.wat")
+    (is (= 0 (wf "WASI-RUN" w)))
+    (is (= 0 (length (wf "WASI-STDOUT" w)))))
+  (with-wasi (w "wasi-cat.wat")
+    (wf "WASI-STDIN" w (octets 1 2 3))
+    (wf "WASI-STDIN" w (octets 9))
+    (is (= 0 (wf "WASI-RUN" w)))
+    (is (equalp (octets 9) (wf "WASI-STDOUT" w)))))
 
 (test wasm.wasi-preopen-reads-inside
   "A file inside the preopen is readable, through `..` that stays inside
@@ -508,6 +532,11 @@ memory beyond the number."
               (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-bigtable.wat") 1000000 1048576))))
   (with-wasi (w "wasi-bigtable.wat" :limit 2097152)
     (is (= 0 (wf "WASI-RUN" w))))
+  ;; the number is per memory and per table, so the sandbox allows one of each
+  (is (search "too many linear memories"
+              (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-twomem.wat") 1000000 1048576))))
+  (is (search "too many tables"
+              (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-twotable.wat") 1000000 1048576))))
   (with-wasi (w "wasi-grow.wat" :limit 1048576)
     (is (= 0 (wf "WASI-RUN" w)))
     (is (string= (format nil "16~%") (ascii (wf "WASI-STDOUT" w)))))
@@ -525,7 +554,17 @@ its output."
     (is (= 51 (wf "WASI-RUN" w)))
     (is (= 1048576 (length (wf "WASI-STDOUT" w))))
     (is (= 0 (length (wf "WASI-STDERR" w))))
-    (is (< 0 (wf "WASI-FUEL-LEFT" w)))))
+    (is (< 0 (wf "WASI-FUEL-LEFT" w))))
+  ;; a cap that is not a multiple of the guest's chunk: the bytes that fit
+  ;; are kept (disk-full semantics), then ENOSPC
+  (with-wasi (w "wasi-flood.wat" :fuel 10000000 :limit (+ 1048576 100))
+    (is (= 51 (wf "WASI-RUN" w)))
+    (is (= (+ 1048576 100) (length (wf "WASI-STDOUT" w)))))
+  ;; stderr draws on the same budget
+  (with-wasi (w "wasi-errflood.wat" :fuel 10000000 :limit 1048576)
+    (is (= 51 (wf "WASI-RUN" w)))
+    (is (= 1048576 (length (wf "WASI-STDERR" w))))
+    (is (= 0 (length (wf "WASI-STDOUT" w))))))
 
 (test wasm.wasi-unmetered-is-refused
   "make-wasi refuses what it cannot bound or run: fuel 0 (the run is
@@ -568,6 +607,9 @@ memory as the first run left them — can be re-entered."
     (is (search "once" (trap-message (wf "WASI-RUN" w))))
     (is (search "already run" (trap-message (wf "WASI-ARG" w "late"))))
     (is (search "already run" (trap-message (wf "WASI-STDIN" w (octets 1)))))
+    (is (search "already run" (trap-message (wf "WASI-ENV" w "K" "v"))))
+    (is (search "already run"
+                (trap-message (wf "WASI-PREOPEN" w (host-dir (uiop:temporary-directory)) "/"))))
     ;; what the first run produced is still readable
     (is (search "hello from wasi" (ascii (wf "WASI-STDOUT" w))))))
 
@@ -591,6 +633,18 @@ the sandbox never gave it, or the (start) section is a way around fuel."
               (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-unknown-import.wat") 1000000 1048576))))
   (is (search "all fuel consumed"
               (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-start-spins.wat") 10000 1048576))))
+  ;; ... and a (start) section that behaves runs under the fuel and writes
+  ;; to the captured stdout, before _start does
+  (with-wasi (w "wasi-start-ok.wat" :fuel 10000)
+    (is (< (wf "WASI-FUEL-LEFT" w) 10000) "the (start) section ran outside the fuel")
+    (is (= 0 (wf "WASI-RUN" w)))
+    (is (string= "sm" (ascii (wf "WASI-STDOUT" w)))))
+  (is (search "exited with status 0"
+              (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-start-exit.wat") 10000 1048576))))
+  (is (search "no parameters"
+              (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-bad-start.wat") 10000 1048576))))
+  (with-wasi (w "wasi-hello.wat")
+    (is (search "NUL" (trap-message (wf "WASI-ARG" w (format nil "a~Cb" (code-char 0)))))))
   (with-wasi-world (sandbox root)
     (with-wasi (w "wasi-hello.wat")
       (is (search "cannot open"
@@ -607,3 +661,46 @@ reached the other's shims."
   (with-wasm (m "fib.wat")
     (signals rulisp:invalid-argument (wf "WASI-RUN" m))
     (signals rulisp:invalid-argument (wf "WASI-STDOUT" m))))
+
+(test wasm.wasi-preopen-is-read-only
+  "A preopen is read-only: creating a file and opening an existing one for
+writing answer EROFS, and nothing appears on the host. A failure means a
+guest can write the host's disk — 5,000 fuel wrote 8 MiB before this."
+  (with-wasi-world (sandbox root)
+    (with-wasi (w "wasi-write.wat")
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 69 (wf "WASI-RUN" w)) "the write was not refused with EROFS"))
+    (is (not (probe-file (uiop:subpathname sandbox "new.txt"))) "the guest created a file")
+    ;; the directory is still readable through the wrapper
+    (multiple-value-bind (code out) (read-through-sandbox sandbox "secret.txt")
+      (is (= 0 code)) (is (string= (format nil "inside~%") out)))))
+
+(defun open-fd-count ()
+  "This process's open file descriptors, on hosts with /proc; NIL elsewhere."
+  (let ((tag rulisp::*process-tag*))
+    (when (and (probe-file "/proc/self/fd/") (char= #\p (char tag 0)))
+      (parse-integer
+       (uiop:run-program (list "sh" "-c" (format nil "ls /proc/~A/fd | wc -l" (subseq tag 1)))
+                         :output :string)
+       :junk-allowed t))))
+
+(test wasm.wasi-open-descriptors-are-capped-and-released
+  "A guest may hold 256 descriptors at once: the 257th path_open is EMFILE,
+and every descriptor is released when the run ends, while the handle is
+still alive. A failure means a guest can take the image's file
+descriptors — every other thread's open fails — and keep them until the
+handle is freed."
+  (with-wasi-world (sandbox root)
+    (let ((before (open-fd-count)))
+      (with-wasi (w "wasi-fdflood.wat")
+        (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+        (is (= 33 (wf "WASI-RUN" w)) "the flood was not stopped with EMFILE")
+        (is (string= (format nil "256~%") (ascii (wf "WASI-STDOUT" w))))
+        ;; the 257 descriptors the guest held would still be here if the
+        ;; run did not release them; the count itself is not exact — ECL's
+        ;; run-program closes its pipes lazily, a few at a time
+        (if before
+            (let ((after (open-fd-count)))
+              (is (< (abs (- after before)) 64)
+                  "descriptors survived the run: ~D before, ~D after" before after))
+            (pass "no /proc on this host; the release is asserted on Linux"))))))

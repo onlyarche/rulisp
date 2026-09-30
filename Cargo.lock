@@ -1755,6 +1755,7 @@ dependencies = [
 name = "wasm"
 version = "0.1.0"
 dependencies = [
+ "cap-rand",
  "cap-std",
  "rulisp",
  "wasmi",

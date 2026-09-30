@@ -21,3 +21,5 @@ wat = "1"
 # the audit (make audit) checks the artifact on every push
 wasmi_wasi = "0.50"
 cap-std = "3"
+# the sandbox's entropy: the OS, not a thread-local RNG with a fork handler
+cap-rand = "3"

@@ -100,13 +100,16 @@ wire host functions so GUEST code calls straight into your Lisp closures
 (stored callbacks; a condition in the closure becomes a guest trap), and
 watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
-matters). Since 0.7 it also runs a **WASI command module** — anything built
-for `wasm32-wasip1`, from Rust, C, Zig or Go — in a sandbox: a fuel budget
-that must be set, one memory number that bounds the guest's memory and
-its output alike, stdin/stdout/stderr as byte vectors, the directories you
-hand it as its whole filesystem (`..`, absolute paths and symlinks that
-lead outside are refused), its exit code as a value, and no way to sleep
-or wait. The suite runs on every CI host.
+matters). Since 0.7 it also runs a **WASI command module** — what a
+`wasm32-wasip1` toolchain produces; the suite's guests are hand-written
+`.wat` — in a sandbox: a fuel budget that must be set, one memory number
+that bounds the guest's memory and its stdout + stderr alike,
+stdin/stdout/stderr as byte vectors, the directories you hand it as its
+whole filesystem — read-only, and `..`, absolute paths and symlinks that
+lead outside are refused — at most 256 open descriptors, released when
+the run ends, its exit code as a value, and no way to sleep or wait
+through WASI (what the host filesystem does inside a directory you hand
+it, a FIFO say, is yours). The suite runs on every CI host.
 [`examples/fetch/`](examples/fetch/) is an async HTTPS client
 on tokio and rustls: the pattern for a crate that owns threads (capped
 waits, no signal handlers, a declared dump hook), with its own suite in
