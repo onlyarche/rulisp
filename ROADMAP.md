@@ -13,8 +13,9 @@ An HTTP server with Lisp handlers on axum — probed in the v0.7 panel (47
 packages, 38 s cold build, §7 sweep clean, loopback answered) and
 pull-based by design, since a stored callback returns no value to Rust.
 MCP (rmcp) follows it: its HTTP transport sits on axum. Planned by a
-panel when the cycle opens; the arm job's `load-blob-crate` step and the
-pins move in the commit that opens it (docs/releasing.md step 9).
+panel when the cycle opens. The cycle is open: the gates compare against
+v0.7.0, and the aarch64 job loads its own release asset with
+`load-blob-crate`, as the x86-64 job does.
 
 ## v0.7 — the freeze rehearsal, and the flagship the ask named
 
@@ -88,8 +89,8 @@ cycle, and a Rust-built guest in the suite. No versioned surface moved.
    has the `linux-arm64` leg and expects 16 assets, the release gate
    counts seven jobs, and README, stability §5, releasing, usage,
    installation and the claims register say so. The arm job's own
-   `load-blob-crate` step waits for the first release with an arm asset
-   (the "open the next cycle" commit after 0.7.0).
+   `load-blob-crate` step came with the first release that has an arm
+   asset, in the commit that opened 0.8.
 7. **The flagship (L)** — *commit 1 done:* `tests/suite/wasm.lisp`
    pins the existing API (15 tests, 46 checks, SBCL/CCL/ECL; four
    mutations — `boom` that no longer traps, `host.notify` swallowing the
