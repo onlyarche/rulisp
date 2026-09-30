@@ -772,17 +772,20 @@ pub struct Wasi {
 
 #[rulisp::export]
 impl Wasi {
-    /// (wasm:make-wasi "/path/to/module.wasm" 1000000 1048576) — a WASI
-    /// preview1 command module (anything built for wasm32-wasip1, or .wat
-    /// text), to be run once with wasi-run.
+    /// (wasm:make-wasi "/path/to/module.wasm" 10000000 16777216) — a WASI
+    /// preview1 command module (what a wasm32-wasip1 toolchain produces,
+    /// or .wat text), to be run once with wasi-run.
     ///
     /// FUEL bounds the run: every guest instruction consumes fuel and
     /// running out is a condition. The run is synchronous on the calling
     /// thread, so an unmetered sandbox is refused (FUEL must be positive).
     /// MEMORY-LIMIT, in bytes, bounds the guest's linear memory (a module
-    /// asking for more is refused here; memory.grow past it answers -1),
+    /// asking for more is refused here — one built by Rust asks for 17
+    /// pages, 1.1 MiB, before it runs; memory.grow past it answers -1),
     /// its table, and the bytes kept from stdout and stderr together (a
-    /// write past the cap fails inside the guest with ENOSPC).
+    /// write past the cap fails inside the guest with ENOSPC, on either
+    /// stream: a guest that fills the cap on stdout has no room left to
+    /// complain on stderr).
     ///
     /// The guest starts with no arguments, no environment, no directories,
     /// empty stdin, and stdout/stderr captured; nothing of the process is
@@ -933,11 +936,11 @@ impl Wasi {
     /// truncating, unlinking, renaming, linking and setting times inside
     /// it answer EROFS, and only regular files and directories open (a
     /// FIFO, a device or a socket is EACCES: it could block the run). The
-    /// preopens are the guest's whole filesystem: a
-    /// path that leads outside one — through `..`, an absolute path, a
-    /// symlink to the outside, or an absolute symlink even when its target
-    /// lies inside — fails with EPERM; a relative symlink that stays inside
-    /// works. Before wasi-run only.
+    /// preopens are the guest's whole filesystem: a path that leads outside
+    /// one — through `..`, an absolute path, a symlink to the outside, or
+    /// an absolute symlink even when its target lies inside — fails with
+    /// EPERM; a relative symlink that stays inside works. Before wasi-run
+    /// only.
     pub fn preopen(&self, host_dir: &str, guest_path: &str) -> Result<(), WasmError> {
         let mut inner = self.lock("wasi-preopen")?;
         inner.not_run_yet("wasi-preopen")?;

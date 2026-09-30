@@ -63,8 +63,8 @@ It bounds:
 - **waiting** — `poll_oneoff` and sleep answer ENOTSUP at once
 - **the filesystem** — only the directories you preopen, read-only,
   regular files and directories only (a FIFO, a device or a socket is
-  EACCES); `..`, absolute paths and symlinks that lead outside are EPERM
-  for every path call, not only open
+  EACCES); `..`, absolute paths and symlinks that lead outside are EPERM,
+  for open and for stat alike
 - **descriptors** — 256 open at once, all released when the run ends
 - **the process** — no arguments, environment, stdio or directory is
   inherited; the exit code is a value
@@ -75,7 +75,9 @@ It does not bound:
   budget for a guest, **not isolation from the host** — the crash-
   isolation bullet above applies to it as to every crate
 - host memory beyond the number: about three times the memory limit is
-  resident per live instance (memory, table, captured output)
+  resident per live instance (memory, table, captured output) — and the
+  number has to admit the module at all: one built by Rust asks for
+  1.1 MiB of memory before it runs
 - one host call in flight: it may touch the whole guest memory, or list a
   directory as large as you made it, before the time budget is checked
 - the module file: reading and validating it is linear in its size, and

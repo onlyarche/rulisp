@@ -178,6 +178,26 @@ Budget 1 L + 1 M + 7 S.
    regenerates them; the macros crate is not checkable by the tool at
    all. Stability §3 and §8 read as of 0.7; 1.0 follows 0.8.
 
+**Pre-release review** (2026-09-30, the whole `v0.6.0..HEAD` diff). No
+defect in behaviour; documents that disagreed with the code, and a gap
+in the release procedure. A real Rust program built for `wasm32-wasip1`
+ran in the sandbox for the first time — arguments, environment, stdin,
+files, EPERM, EROFS, read_dir, the exit code, `thread::sleep` panicking
+into a trap, fuel, a failed allocation, the output cap — and showed that
+`make-wasi`'s own example numbers refused it: Rust asks for 17 pages of
+memory before it runs, the example said 1 MiB (now 16 MiB, and says
+why). BOUNDARY §9 said a section-stripped ELF is refused; it loads, as
+it should — the sentence is corrected and
+`v07.section-stripped-artifact-still-loads` holds the loader to it (an
+over-refusing check fails it). The release workflow was rehearsed on
+HEAD for the first time — sixteen assets built and audited on four
+hosts, `libwasm` with its WASI dependencies audited on macOS and
+Windows at last — and the rehearsal is now a step of
+docs/releasing.md, before crates.io, with the notes step guarded so it
+can end green. Not done, a maintainer's call: committing a
+toolchain-built `.wasm` fixture so that run is a test rather than a
+record.
+
 Not in v0.7 (causes in the plan): an axum HTTP server with Lisp
 handlers — probed clean (47 packages, 38 s, §7 sweep ok) and decided as
 **the 0.8 flagship**, pull-based like fetch's mirror; an MCP example on

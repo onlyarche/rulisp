@@ -24,15 +24,19 @@ surface and needed no boundary feature.
   every release attached three `wasm` blobs — with no test and no job
   that had ever loaded one. `tests/suite/wasm.lisp` (`:rulisp-wasm`, 15
   tests, in `run-m4` on every job) pins what ships: the `.wat` guests load
-  and list their exports, a binary `.wasm` module loads, i32 coercion including the wrap at 2^31, traps
-  and bad calls as `wasm:wasm-error`, fuel exhaustion and refuel, the
+  and list their exports, a binary `.wasm` module loads, i32 coercion
+  including the wrap at 2^31, traps and bad calls as `wasm:wasm-error`,
+  fuel exhaustion and refuel, the
   unmetered fuel API, memory round trip and bounds (an offset of 2^64−1
   is refused, not wrapped), host callbacks into Lisp on the calling
   thread, a closure's condition becoming a guest trap, the unset and the
-  dead callback, a freed instance, a missing file. The crate is unchanged.
+  dead callback, a freed instance, a missing file. These tests pin
+  `wasm:make-wasm` as 0.6.0 shipped it; the sandbox below was built
+  beside it.
 - **`examples/wasm` runs WASI command modules in a sandbox** — the
-  flagship of 0.7. A second handle, `wasm:make-wasi`, loads anything
-  built for `wasm32-wasip1` (or a hand-written `.wat`) with a fuel budget
+  flagship of 0.7. A second handle, `wasm:make-wasi`, loads a WASI
+  preview1 command module — what a `wasm32-wasip1` toolchain produces, or
+  a hand-written `.wat` — with a fuel budget
   that must be set (the run is synchronous on the calling thread; only
   fuel makes it finite) and one memory number that bounds the guest's
   linear memory, its table and the bytes kept from stdout + stderr (a
@@ -71,6 +75,10 @@ surface and needed no boundary feature.
   regenerable artifact `.gitignore` hides, by name; the loader's cache
   under `~/.cache/rulisp/`, shared with other checkouts and running
   images, goes only with the new `make clean-cache`.
+- **The release gate also counts the `cargo tests` job.** The Rust API
+  gate, the manifest golden, the trybuild cases and the signal audit run
+  there; a tag on a commit where any of them was red is now refused, as
+  it already was for a red host or MSRV (eight jobs).
 - **Linux aarch64 is a supported host.** The SBCL job on
   `ubuntu-24.04-arm` is required: 26 consecutive green runs on main
   since its clock restarted on 2026-09-08, and the deployment path

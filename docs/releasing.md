@@ -26,6 +26,12 @@ worked; each has a check, so a slip is caught before the next step.
    signal audit) concluded success (no run, or a run still
    in progress, refuses too). The `skip-ci-gate` dispatch input is the
    documented override; it prints a warning in the release log.
+   **Rehearse the release workflow on this commit before step 5** —
+   crates.io cannot be undone, and the examples' release-profile builds
+   and their audits on macOS and Windows run nowhere else: Actions →
+   `blobs` → Run workflow with `tag` = `main` and `publish` unchecked
+   builds and audits all sixteen assets, runs the CI gate and the
+   re-audit, and publishes nothing.
 5. **Publish to crates.io, in dependency order** — each waits for the
    previous one to be indexed:
 

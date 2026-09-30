@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build and attach assets to (e.g. v0.5.0)'
+        description: 'Existing tag to build and attach assets to (e.g. v0.5.0); with publish=false, any ref (e.g. main) to rehearse'
         required: true
       publish:
         description: 'Create or replace the release assets (false: build and audit only)'
@@ -126,7 +126,10 @@ jobs:
           n=0
           for f in blobs/*; do sh .tooling/tools/rulisp-audit.sh "$f"; n=$((n+1)); done
           echo "re-audited $n assets"
+      # only when something is published: a `publish: false` dispatch is a
+      # rehearsal (docs/releasing.md step 4), for a ref that may not be a tag
       - name: release notes = this version's CHANGELOG section
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           V=${TAG#v}
           awk -v v="$V" '$1=="##" && $2==v {p=1; next} $1=="##" {p=0} p' CHANGELOG.md > notes.md

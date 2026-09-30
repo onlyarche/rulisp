@@ -1,9 +1,11 @@
 ;;; examples/wasm suite: the WebAssembly runtime README.md describes and
-;;; every release attaches as a blob — pinned here as it ships, before the
-;;; WASI sandbox is built on it (v0.7 item 7).
+;;; every release attaches as a blob. First the plain module runner,
+;;; make-wasm, as 0.6.0 shipped it; then (further down) the WASI sandbox,
+;;; make-wasi, built beside it in v0.7.
 ;;;
-;;; Every test states what a failure would mean. The guests are the two
-;;; committed .wat files; nothing here needs a wasm-targeting toolchain.
+;;; Every test states what a failure would mean. The guests are committed
+;;; .wat text (examples/wasm/, tests/wasm-guests/); nothing here needs a
+;;; wasm-targeting toolchain.
 
 (in-package #:rulisp/test)
 
