@@ -106,10 +106,12 @@ matters). Since 0.7 it also runs a **WASI command module** — what a
 that bounds the guest's memory and its stdout + stderr alike,
 stdin/stdout/stderr as byte vectors, the directories you hand it as its
 whole filesystem — read-only, and `..`, absolute paths and symlinks that
-lead outside are refused — at most 256 open descriptors, released when
-the run ends, its exit code as a value, and no way to sleep or wait
-through WASI (what the host filesystem does inside a directory you hand
-it, a FIFO say, is yours). The suite runs on every CI host.
+lead outside are refused, FIFOs and devices too — at most 256 open
+descriptors, released when the run ends, its exit code as a value, no
+way to sleep or wait, and a budget for the time spent inside host calls,
+which fuel does not meter (a second plus a microsecond per unit of
+fuel). SECURITY.md lists what that bounds and what it does not. The
+suite runs on every CI host.
 [`examples/fetch/`](examples/fetch/) is an async HTTPS client
 on tokio and rustls: the pattern for a crate that owns threads (capped
 waits, no signal handlers, a declared dump hook), with its own suite in

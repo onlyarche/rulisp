@@ -306,7 +306,8 @@ boundary as anything but wasm:wasm-error."
 ;;; return values.
 ;;;
 ;;; WASI preview1 errno numbers the guests hand back as exit codes:
-;;;   8 EBADF, 33 EMFILE, 44 ENOENT, 51 ENOSPC, 58 ENOTSUP, 63 EPERM, 69 EROFS.
+;;;   2 EACCES, 8 EBADF, 33 EMFILE, 44 ENOENT, 51 ENOSPC, 58 ENOTSUP,
+;;;   63 EPERM, 69 EROFS.
 ;;; ===========================================================================
 
 (defun wasi-guest (file)
@@ -532,6 +533,11 @@ memory beyond the number."
               (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-bigtable.wat") 1000000 1048576))))
   (with-wasi (w "wasi-bigtable.wat" :limit 2097152)
     (is (= 0 (wf "WASI-RUN" w))))
+  ;; ... and table.grow past the bound answers -1, as memory.grow does
+  (with-wasi (w "wasi-tablegrow.wat" :limit 1048576)
+    (is (= 1 (wf "WASI-RUN" w))))
+  (with-wasi (w "wasi-tablegrow.wat" :limit 2097152)
+    (is (= 3 (wf "WASI-RUN" w))))
   ;; the number is per memory and per table, so the sandbox allows one of each
   (is (search "too many linear memories"
               (trap-message (wf "MAKE-WASI" (wasi-guest "wasi-twomem.wat") 1000000 1048576))))
@@ -560,6 +566,11 @@ its output."
   (with-wasi (w "wasi-flood.wat" :fuel 10000000 :limit (+ 1048576 100))
     (is (= 51 (wf "WASI-RUN" w)))
     (is (= (+ 1048576 100) (length (wf "WASI-STDOUT" w)))))
+  ;; the cap cuts inside one call and inside one iovec: two 40,000-byte
+  ;; iovecs per fd_write under 131,072
+  (with-wasi (w "wasi-iovec.wat" :limit 131072)
+    (is (= 51 (wf "WASI-RUN" w)))
+    (is (= 131072 (length (wf "WASI-STDOUT" w)))))
   ;; stderr draws on the same budget
   (with-wasi (w "wasi-errflood.wat" :fuel 10000000 :limit 1048576)
     (is (= 51 (wf "WASI-RUN" w)))
@@ -704,3 +715,119 @@ handle is freed."
               (is (< (abs (- after before)) 64)
                   "descriptors survived the run: ~D before, ~D after" before after))
             (pass "no /proc on this host; the release is asserted on Linux"))))))
+
+;;; ---------------------------------------------------------------------------
+;;; The adversarial pass (v0.7 item 7): attacks written against the finished
+;;; sandbox, each one now a test or a limit stated on make-wasi and in
+;;; SECURITY.md.
+;;; ---------------------------------------------------------------------------
+
+(test wasm.wasi-host-time-is-budgeted
+  "Fuel meters instructions, not what the host does for a WASI call:
+random_get of 1 MiB in a loop ran 103 seconds on 100,000 fuel before host
+calls had a budget of their own (a second plus a microsecond per unit of
+fuel). The run now ends in a trap within that budget, its fuel barely
+touched. A failure is a thread stuck in host calls for as long as the
+guest likes — 1e9 fuel would have been days."
+  (with-wasi (w "wasi-random.wat" :fuel 100000 :limit 2097152)
+    (let (message)
+      (is (< (seconds-of (lambda () (setf message (trap-message (wf "WASI-RUN" w))))) 20)
+          "the host-call budget of 1.1 seconds was not enforced")
+      (is (search "host-call time budget" message))
+      (is (< 50000 (wf "WASI-FUEL-LEFT" w)) "fuel, not the time budget, ended the run"))))
+
+(test wasm.wasi-special-files-are-refused
+  "A preopen offers regular files and directories only: a FIFO is EACCES,
+at once. Opening one used to block the run until a writer came — forever,
+with none. A failure is a thread the image cannot get back."
+  (if (uiop:os-windows-p)
+      (pass "skipped: no mkfifo on Windows")
+      (with-wasi-world (sandbox root)
+        (uiop:run-program (list "mkfifo" (host-dir (uiop:subpathname sandbox "fifo"))))
+        ;; a safety net, so that a regression fails instead of hanging the
+        ;; suite: a writer waits on the FIFO in the background and is
+        ;; killed after eight seconds. If the guest's open is ever let
+        ;; through again, the writer releases it and the guest exits 0
+        (uiop:run-program
+         (list "sh" "-c" "( ( : > \"$0\" ) & w=$!; sleep 8; kill $w 2>/dev/null ) >/dev/null 2>&1 &"
+               (host-dir (uiop:subpathname sandbox "fifo"))))
+        (let (code)
+          (is (< (seconds-of (lambda () (setf code (read-through-sandbox sandbox "fifo")))) 5)
+              "opening the FIFO waited")
+          (is (= 2 code) "the FIFO was not refused with EACCES but ~D" code)))))
+
+(test wasm.wasi-traps-leave-the-image-standing
+  "Unbounded recursion stops at wasmi's depth limit — guest frames live on
+the heap, the host stack is never at risk — and a WASI call from a module
+that exports no memory traps; both are conditions, and the next instance
+runs. A failure here is a crashed image."
+  (with-wasi (w "wasi-recurse.wat" :fuel 100000000)
+    (is (search "call stack exhausted" (trap-message (wf "WASI-RUN" w)))))
+  (with-wasi (w "wasi-nomem.wat")
+    (is (search "memory export" (trap-message (wf "WASI-RUN" w)))))
+  (with-wasi (w "wasi-exit125.wat")
+    (is (= 125 (wf "WASI-RUN" w)))))
+
+(test wasm.wasi-reads-through-the-wrapper
+  "What a reader does works through the read-only wrapper: list the
+directory, stat an open file, seek, read, read at an offset. A failure
+means the wrapper that refuses writes also broke reading."
+  (with-wasi-world (sandbox root)
+    (with-wasi (w "wasi-fileops.wat")
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 7 (wf "WASI-RUN" w)) "not the size of secret.txt")
+      (is (string= "siins" (ascii (wf "WASI-STDOUT" w)))))))
+
+(test wasm.wasi-every-path-call-stays-inside
+  "Not only open: path_filestat_get on a path outside is EPERM, and an
+opened subdirectory is its own root — `..` from it does not climb back
+into the preopen. path_readlink answers a link's text, never the file it
+points at. A failure means a call other than open sees outside."
+  (with-wasi-world (sandbox root)
+    (unless (uiop:os-windows-p)
+      (symlink "../outside.txt" (uiop:subpathname sandbox "escape-file")))
+    (with-wasi (w "wasi-stat.wat")
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 63 (wf "WASI-RUN" w)) "stat of a path outside was not EPERM")
+      (let ((out (ascii (wf "WASI-STDOUT" w))))
+        (is (not (search "OUTSIDE" out)) "the outside file's content leaked: ~S" out)
+        (unless (uiop:os-windows-p)
+          (is (string= "../outside.txt" out) "readlink did not answer the link's text: ~S" out))))
+    (with-wasi (w "wasi-subdir.wat")
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 63 (wf "WASI-RUN" w))))))
+
+(test wasm.wasi-renumbering-stdout-loses-nothing
+  "A guest may fd_renumber a file onto its own stdout; what was captured
+before stays captured, and writing to the file is refused — it is
+read-only. A failure means a guest can write a host file through fd 1,
+or erase what it already wrote."
+  (with-wasi-world (sandbox root)
+    (with-wasi (w "wasi-renumber.wat")
+      (wf "WASI-PREOPEN" w (host-dir sandbox) "/")
+      (is (= 8 (wf "WASI-RUN" w)) "the write to the renumbered file was not EBADF")
+      (is (string= (format nil "before~%") (ascii (wf "WASI-STDOUT" w)))))
+    (multiple-value-bind (code out) (read-through-sandbox sandbox "secret.txt")
+      (is (= 0 code)) (is (string= (format nil "inside~%") out) "the guest changed the file"))))
+
+(test wasm.wasi-busy-handle-answers
+  "While one thread is inside wasi-run, another thread's call on the same
+handle is a condition at once — not a wait on a lock for as long as the
+run lasts, which would make that thread uninterruptible too. A failure
+is a second stuck thread."
+  (with-wasi (w "wasi-spin.wat" :fuel 100000000)
+    (let* ((result nil)
+           (runner (bt:make-thread
+                    (lambda () (setf result (trap-message (wf "WASI-RUN" w))))
+                    :name "wasi-busy-runner"))
+           (seen nil))
+      (unwind-protect
+           (loop repeat 2000 until seen
+                 do (sleep 0.005)
+                    (setf seen (trap-message (wf "WASI-FUEL-LEFT" w))))
+        (bt:join-thread runner))
+      (is (search "a run is in progress" seen)
+          "no call was refused while the run was in progress: ~S" seen)
+      (is (search "all fuel consumed" result))
+      ;; and once the run is over the handle answers again
+      (is (< (wf "WASI-FUEL-LEFT" w) 16)))))

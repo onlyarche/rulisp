@@ -52,6 +52,10 @@ impl Wasm {
     /// binary. FUEL > 0 enables metering with that budget: every guest
     /// instruction consumes fuel and running out traps (a condition, not a
     /// hang). FUEL = 0 runs unmetered.
+    ///
+    /// For modules you trust: an unmetered instance can run forever and
+    /// nothing here bounds memory. For code you do not trust, make-wasi is
+    /// the sandbox.
     #[rulisp(constructor)]
     pub fn load(path: &str, fuel: u64) -> Result<Wasm, WasmError> {
         let bytes = if path.ends_with(".wat") {
@@ -244,11 +248,19 @@ impl Wasm {
 //   no waiting    WASI's poll_oneoff / sleep go to a scheduler; the stock
 //                 one calls std::thread::sleep for a guest-chosen u64 of
 //                 nanoseconds at zero fuel. Ours answers ENOTSUP at once.
-//   preopens      read-only, and the descriptors opened through them
-//                 counted (256 at once): a guest cannot write the host's
-//                 disk — 5,000 fuel wrote 8 MiB before — nor hold the
-//                 image's file descriptors; they are released when the
-//                 run ends, not when the handle is freed.
+//   host time     fuel meters instructions, not what the host does for
+//                 a WASI call: random_get of 1 MiB again and again ran
+//                 103 s on 100,000 fuel (measured; 1e9 would be days).
+//                 So the wall-clock time spent inside host calls has a
+//                 budget of its own, derived from the fuel — one second
+//                 plus a microsecond per unit — and the run traps past it.
+//   preopens      read-only, regular files and directories only (a FIFO
+//                 or a device would block for as long as the host likes),
+//                 and the descriptors opened through them counted (256 at
+//                 once): a guest cannot write the host's disk — 5,000
+//                 fuel wrote 8 MiB before — nor hold the image's file
+//                 descriptors; they are released when the run ends, not
+//                 when the handle is freed.
 // What it does not bound is stated on `Wasi::load`.
 // ---------------------------------------------------------------------------
 
@@ -259,8 +271,9 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, MutexGuard, TryLockError};
+use std::time::{Duration, Instant};
 
-use wasmi::{CompilationMode, StoreLimits, StoreLimitsBuilder};
+use wasmi::{CallHook, CompilationMode, StoreLimits, StoreLimitsBuilder};
 use wasmi_wasi::wasi_common::dir::{OpenResult, ReaddirCursor, ReaddirEntity, WasiDir};
 use wasmi_wasi::wasi_common::file::{Advice, FdFlags, FileType, Filestat, OFlags};
 use wasmi_wasi::wasi_common::pipe::ReadPipe;
@@ -463,6 +476,13 @@ impl WasiDir for ReadOnlyDir {
         Box::pin(async move {
             if write || oflags.intersects(OFlags::CREATE | OFlags::TRUNCATE | OFlags::EXCLUSIVE) {
                 return Err(WasiError::from(Errno::Rofs));
+            }
+            // regular files and directories only: opening a FIFO, or
+            // reading a device, blocks for as long as the host likes (a
+            // symlink left unfollowed goes on to the open, which says ELOOP)
+            let kind = self.inner.get_path_filestat(path, symlink_follow).await?.filetype;
+            if !matches!(kind, FileType::RegularFile | FileType::Directory | FileType::SymbolicLink) {
+                return Err(WasiError::from(Errno::Acces));
             }
             let slot = Slot::take(&self.live)?;
             Ok(match self.inner.open_file(symlink_follow, path, oflags, read, false, fdflags).await? {
@@ -701,6 +721,25 @@ struct WasiHost {
     captured: Arc<Mutex<Captured>>,
     /// descriptors the guest holds through its preopens
     live: Arc<Live>,
+    host_time: HostTime,
+}
+
+/// The wall-clock time the guest has spent inside host calls, against its
+/// budget: one second plus a microsecond per unit of fuel.
+struct HostTime {
+    budget: Duration,
+    spent: Duration,
+    entered: Option<Instant>,
+}
+
+impl HostTime {
+    fn for_fuel(fuel: u64) -> HostTime {
+        HostTime {
+            budget: Duration::from_secs(1).saturating_add(Duration::from_micros(fuel)),
+            spent: Duration::ZERO,
+            entered: None,
+        }
+    }
 }
 
 struct WasiInner {
@@ -747,26 +786,30 @@ impl Wasi {
     ///
     /// The guest starts with no arguments, no environment, no directories,
     /// empty stdin, and stdout/stderr captured; nothing of the process is
-    /// inherited. Its preopens are read-only and it may hold 256 open
-    /// descriptors at once (EMFILE beyond), all released when the run
-    /// ends. It cannot wait through WASI: poll_oneoff and sleep answer
+    /// inherited. Its preopens are read-only, offer regular files and
+    /// directories only (a FIFO, a device or a socket is EACCES), and it
+    /// may hold 256 open descriptors at once (EMFILE beyond), all released
+    /// when the run ends. It cannot wait: poll_oneoff and sleep answer
     /// ENOTSUP at once — C sees the errno and goes on, Rust's
     /// std::thread::sleep panics on it (the run ends in a trap), Go's
     /// runtime throws.
     ///
-    /// What the numbers do not bound: wall time is fuel times the work a
-    /// host call does — a WASI call costs a few fuel but microseconds of
-    /// host time, or up to MEMORY-LIMIT bytes of copying, so 1e9 fuel of
-    /// host calls is tens of MINUTES of an uninterruptible thread (choose
-    /// fuel by the work you expect: 1e7 is a fraction of a second of
-    /// interpretation); resident host memory reaches about three times
-    /// MEMORY-LIMIT (memory, table, captured output); the time to read and
-    /// validate the module file, linear in its size and the caller's to
-    /// choose; what the host filesystem does inside a preopened directory
-    /// (a FIFO blocks like a FIFO); and, as for every crate, a bug in
-    /// wasmi or in this glue — the sandbox is a budget for a guest, not
-    /// isolation from the host. The guest sees the real clocks and real
-    /// entropy.
+    /// How long a run can take: fuel meters instructions (tens of millions
+    /// a second), and the time spent inside WASI calls — which fuel does
+    /// not meter — has its own budget of one second plus a microsecond per
+    /// unit of FUEL, past which the run ends in a trap. So a run takes at
+    /// most about a second plus a microsecond per unit of fuel, plus the
+    /// one host call in flight (which may touch MEMORY-LIMIT bytes, or
+    /// list a directory as large as the host made it): size FUEL as the
+    /// seconds you can wait times a million.
+    ///
+    /// What the numbers do not bound: resident host memory reaches about
+    /// three times MEMORY-LIMIT (memory, table, captured output); the time
+    /// to read and validate the module file, linear in its size and the
+    /// caller's to choose; a filesystem that is itself slow; and, as for
+    /// every crate, a bug in wasmi or in this glue — the sandbox is a
+    /// budget for a guest, not isolation from the host. The guest sees the
+    /// real clocks and real entropy.
     #[rulisp(constructor)]
     pub fn load(path: &str, fuel: u64, memory_limit: u64) -> Result<Wasi, WasmError> {
         if fuel == 0 {
@@ -816,8 +859,28 @@ impl Wasi {
             .tables(1)
             .instances(1)
             .build();
-        let mut store = Store::new(&engine, WasiHost { wasi, limits, captured, live: Live::new() });
+        let mut store = Store::new(
+            &engine,
+            WasiHost { wasi, limits, captured, live: Live::new(), host_time: HostTime::for_fuel(fuel) },
+        );
         store.limiter(|h| &mut h.limits);
+        store.call_hook(|h: &mut WasiHost, hook| {
+            match hook {
+                CallHook::CallingHost => h.host_time.entered = Some(Instant::now()),
+                CallHook::ReturningFromHost => {
+                    if let Some(entered) = h.host_time.entered.take() {
+                        h.host_time.spent = h.host_time.spent.saturating_add(entered.elapsed());
+                    }
+                    if h.host_time.spent > h.host_time.budget {
+                        return Err(wasmi::Error::new(
+                            "host-call time budget exhausted: more than a second plus a microsecond per unit of fuel was spent inside WASI calls",
+                        ));
+                    }
+                }
+                _ => {}
+            }
+            Ok(())
+        });
         store.set_fuel(fuel)?;
         let mut linker: Linker<WasiHost> = Linker::new(&engine);
         wasmi_wasi::add_to_linker(&mut linker, |h: &mut WasiHost| &mut h.wasi)
@@ -868,7 +931,9 @@ impl Wasi {
     /// Give the guest the host directory HOST-DIR as GUEST-PATH (the first
     /// preopen is fd 3, the next fd 4, ...), read-only: creating, writing,
     /// truncating, unlinking, renaming, linking and setting times inside
-    /// it answer EROFS. The preopens are the guest's whole filesystem: a
+    /// it answer EROFS, and only regular files and directories open (a
+    /// FIFO, a device or a socket is EACCES: it could block the run). The
+    /// preopens are the guest's whole filesystem: a
     /// path that leads outside one — through `..`, an absolute path, a
     /// symlink to the outside, or an absolute symlink even when its target
     /// lies inside — fails with EPERM; a relative symlink that stays inside

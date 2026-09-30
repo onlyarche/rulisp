@@ -90,9 +90,39 @@ Budget 1 L + 1 M + 7 S.
    stderr cap, the (start) section's fuel, the defaults of stdin and
    argv, and configuration after a run. Two review remarks were refuted
    by their skeptics (an aligned cap is not a defect; inheriting stdin
-   would be caught). *Still to do:* the adversarial pass over the sandbox
-   claims before the tag, with SECURITY.md re-cited and bounded in the
-   same commit. The item: `examples/wasm` gets the suite it never had
+   would be caught). *The pass, done:* attacks written against the
+   finished sandbox, each now a test or a stated limit. Found and closed:
+   **host calls are not metered by fuel** — `random_get` of 1 MiB in a
+   loop ran 103.6 s on 100,000 fuel (1e9: days), `fd_readdir` of a
+   5,000-entry directory likewise — so the time inside host calls has a
+   budget of a second plus a microsecond per unit of fuel (the same
+   guests now trap at 1.10 s; `wasm.wasi-host-time-is-budgeted`); **a
+   FIFO inside a preopen blocked the run forever** — a preopen now
+   offers regular files and directories only
+   (`wasm.wasi-special-files-are-refused`). Attacked and held, now
+   pinned: unbounded recursion and a WASI call without an exported
+   memory are traps (`wasi-traps-leave-the-image-standing`); the cap
+   cuts inside a call and inside an iovec, `table.grow` answers −1 at
+   the bound (added to the output and memory tests); `path_filestat_get`
+   outside is EPERM and an opened subdirectory is its own root
+   (`wasi-every-path-call-stays-inside`); reading through the wrapper
+   works — readdir, filestat, seek, pread (`wasi-reads-through-the-
+   wrapper`); `fd_renumber` onto stdout loses nothing and writes nothing
+   (`wasi-renumbering-stdout-loses-nothing`); a second thread's call
+   during a run answers at once (`wasi-busy-handle-answers`); fuel and
+   memory at u64's maximum, a memory number of 0, and freeing the handle
+   from another thread during a run behave (probed, not pinned). Stated
+   as limits in SECURITY.md and on `make-wasi`: in-process, not
+   isolation; ~3× the memory number resident; one host call in flight;
+   the module file's size; real clocks, real entropy, names and sizes
+   under a preopen and the text of its symlinks; a slow or changing
+   filesystem. Two mutations fail exactly the tests that name them (the
+   budget check removed; the file-type check removed — that one hung
+   the suite until the test got a writer that releases a wrongly
+   admitted open, so a regression now fails instead of hanging CI).
+   SECURITY.md is
+   re-cited and says `make-wasm` is for trusted modules, as its docstring
+   now does. The item: `examples/wasm` gets the suite it never had
    (six README claims, SECURITY.md's "supported approach", three blobs
    per release, zero tests), then grows a WASI plugin sandbox: a second
    `Wasi` handle on wasmi 0.50 + wasmi_wasi 0.50 + cap-std (117 packages,
@@ -610,6 +640,14 @@ constructor demand case appears, and then as an OPT-IN attribute
 - Tagged enums / richer value types (UniFFI-style semantics without the
   per-call serialization cost).
 - Multiple return values mapped to CL `(values ...)`.
+- What the 0.7 flagship would have used, had it existed (each a new type
+  token, so `:schema` 2 and additive in 1.x — the flagship needed none):
+  `(:vec :string)` for argument lists, environments and export names
+  (`wasi-arg` is one call per item, `wasm-exports` is comma-joined); a
+  structured trap payload, kind and exit code in one condition, instead
+  of a message the caller parses; several values from one call (exit
+  code, stdout, stderr); a stored callback that returns a value to the
+  guest — host functions implemented in Lisp with results.
 - Bulk zero-copy data via Apache Arrow's C data interface.
 - LispWorks / Allegro / ABCL validation.
 

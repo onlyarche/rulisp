@@ -40,13 +40,51 @@ the documented API can reach memory unsafety:
 - loading an untrusted `.so`, which is equivalent to running untrusted code
 
 If you want to run untrusted logic in-process, `examples/wasm` shows the
-supported approach: a WebAssembly sandbox with a fuel-metered CPU budget
-and bounds-checked memory — since 0.7 the WASI handle, `wasm:make-wasi`,
-which bounds a guest's instructions, memory, table, output and open
-descriptors, gives it read-only directories and no way to wait. It is a
-budget for a guest, not isolation from the host: a bug in wasmi or in
-the glue is in-process, and what the numbers do not bound is listed on
-`make-wasi` itself.
+supported approach: the WASI sandbox, `wasm:make-wasi` (since 0.7).
+`wasm:make-wasm`, the plain module runner, is for modules you trust: it
+may run unmetered and bounds no memory.
+
+### What the WASI sandbox bounds, and what it does not
+
+Each line of the first list is a test in `tests/suite/wasm.lisp`
+(`wasm.wasi-*`), found or confirmed by attacking the finished sandbox.
+
+It bounds:
+
+- **instructions** — fuel is mandatory; out of fuel is a condition, also
+  for a `(start)` section, and unbounded recursion stops at the
+  interpreter's depth limit (guest frames are on the heap)
+- **time inside host calls** — fuel does not meter what the host does for
+  a WASI call, so that time has its own budget: one second plus a
+  microsecond per unit of fuel (before it, 100,000 fuel of `random_get`
+  ran 103 seconds)
+- **memory** — one number for the linear memory, the table and the bytes
+  kept from stdout and stderr together; one memory, one table
+- **waiting** — `poll_oneoff` and sleep answer ENOTSUP at once
+- **the filesystem** — only the directories you preopen, read-only,
+  regular files and directories only (a FIFO, a device or a socket is
+  EACCES); `..`, absolute paths and symlinks that lead outside are EPERM
+  for every path call, not only open
+- **descriptors** — 256 open at once, all released when the run ends
+- **the process** — no arguments, environment, stdio or directory is
+  inherited; the exit code is a value
+
+It does not bound:
+
+- a bug in wasmi, wasi-common, cap-std or the glue: the sandbox is a
+  budget for a guest, **not isolation from the host** — the crash-
+  isolation bullet above applies to it as to every crate
+- host memory beyond the number: about three times the memory limit is
+  resident per live instance (memory, table, captured output)
+- one host call in flight: it may touch the whole guest memory, or list a
+  directory as large as you made it, before the time budget is checked
+- the module file: reading and validating it is linear in its size, and
+  you chose the file
+- what the guest can learn: the real clocks, real entropy, the names and
+  sizes of everything under a preopen, and the text of its symlinks
+  (never the file a link outside points at)
+- a filesystem that is itself slow, and a directory that changes under
+  the guest while it runs
 
 ## Supported versions
 

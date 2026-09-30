@@ -37,7 +37,15 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   when the run ends (the commit's adversarial review found a guest
   writing 8 MiB to the host disk for 5,000 fuel and another exhausting
   the image's file descriptors and keeping them until the handle was
-  freed). Eighteen `wasm.wasi-*` tests with hand-written guests
+  freed). An adversarial pass over the finished sandbox then found that
+  fuel does not meter what the host does for a call — `random_get` of
+  1 MiB in a loop ran 103 seconds on 100,000 fuel, and 1e9 would have
+  been days — so the time spent inside host calls now has its own
+  budget, a second plus a microsecond per unit of fuel; and that a FIFO
+  inside a preopen blocked the run forever, so a preopen now offers
+  regular files and directories only. SECURITY.md lists what the sandbox
+  bounds (each line a test) and what it does not. Twenty-five
+  `wasm.wasi-*` tests with hand-written guests
   (`examples/wasm/wasi-hello.wat`, `wasi-cat.wat`; `tests/wasm-guests/`)
   run on every host. Dependencies: wasmi_wasi 0.50, cap-std 3 and
   cap-rand 3 (entropy from the OS; the crate's default RNG registers a
