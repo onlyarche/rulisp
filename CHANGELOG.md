@@ -53,6 +53,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   existing `wasm:make-wasm` API is unchanged.
 
 ### Changed
+- **`make clean` cleans the checkout.** It removed the root `target/`
+  and the oracle's, while `use-crate` builds every crate into its own
+  `<crate>/target/` and the other gates leave theirs: a 40 MB checkout
+  grew to several GB with `git status` clean. It now removes every
+  regenerable artifact `.gitignore` hides, by name; the loader's cache
+  under `~/.cache/rulisp/`, shared with other checkouts and running
+  images, goes only with the new `make clean-cache`.
 - **Linux aarch64 is a supported host.** The SBCL job on
   `ubuntu-24.04-arm` is required: 26 consecutive green runs on main
   since its clock restarted on 2026-09-08, and the deployment path

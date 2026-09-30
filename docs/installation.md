@@ -160,7 +160,9 @@ cargo test --workspace                # manifest golden + compile-fail tests
 - **Library cache**: every load dlopens a unique copy under UIOP's
   cache directory — `~/.cache/rulisp/` on Linux and macOS,
   `%LOCALAPPDATA%\cache\rulisp\` on Windows; `$XDG_CACHE_HOME` overrides
-  on every OS. Older copies are swept automatically.
+  on every OS. Older copies are swept automatically; `make clean-cache`
+  removes the directory on request (`make clean` cleans the checkout
+  only — the cache is shared with other checkouts and running images).
 - **Loading rulisp itself never runs cargo** and opens no foreign
   libraries — cargo is needed only when you `use-crate` a glue crate.
 

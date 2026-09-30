@@ -1,7 +1,7 @@
 CARGO ?= $(HOME)/.cargo/bin/cargo
 SBCL ?= sbcl
 
-.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat dist-dryrun check-1.0 check-dist bench clean
+.PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-ccl test-ecl-program audit doc check-versions compat dist-dryrun check-1.0 check-dist bench clean clean-cache
 
 build:
 	$(CARGO) build
@@ -133,6 +133,31 @@ CCL ?= $(HOME)/ccl/lx86cl64
 test-ccl:
 	$(CCL) --batch --load tests/run-m4.lisp
 
+# Every regenerable artifact the targets above leave in the tree — exactly
+# what .gitignore hides, by name (not `git clean -X`, which would also take
+# a developer's own ignored files):
+#   target/                         cargo; also make compat, dist-dryrun, audit
+#   examples/*/target               use-crate builds each crate into its own
+#                                   directory (test-m4, test-fetch, test-ccl)
+#   */target-abort-check            m1's panic=abort probe
+#   tests/m1-handwritten/target     the ABI oracle (test-m2)
+#   tests/abi-fixture/target        v06.abi-mismatch-refused
+#   tools/audit-fixture/target      the audit self-test
+#   tests/ecl-program/…             the program-op executable, its generated
+#                                   .asd and the two logs (test-ecl-program)
+# Nothing under $$HOME is touched: the loader's cache is `make clean-cache`.
 clean:
 	$(CARGO) clean
-	rm -rf tests/m1-handwritten/target tests/m1-handwritten/target-abort-check
+	rm -rf examples/*/target examples/*/target-abort-check \
+	       tests/m1-handwritten/target tests/m1-handwritten/target-abort-check \
+	       tests/abi-fixture/target tools/audit-fixture/target \
+	       tests/ecl-program/rulisp-ecl-smoke tests/ecl-program/rulisp-ecl-smoke.asd \
+	       ecl-program-*.log
+
+# The loader's cache of library copies (docs/installation.md "Library
+# cache") lives outside the tree and is shared with other checkouts and
+# with running images, which sweep it themselves — so it is removed only on
+# request. Prints its size first.
+clean-cache:
+	$(SBCL) --non-interactive --eval '(require :asdf)' \
+	  --eval '(let ((d (uiop:xdg-cache-home "rulisp/"))) (format t "~&~A: ~A~%" d (if (probe-file d) (string-trim (list #\Newline) (uiop:run-program (list "du" "-sh" (namestring d)) :output :string)) "absent")) (uiop:delete-directory-tree d :validate (lambda (p) (search "rulisp" (namestring p))) :if-does-not-exist :ignore))'

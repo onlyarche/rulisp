@@ -146,8 +146,10 @@ Budget 1 L + 1 M + 7 S.
    as a value; hand-written `.wat` guests; an adversarial pass over the
    sandbox claims before the tag. Boundary features it would want are
    recorded as 1.x findings, not 0.7 wire changes.
-8. **`make clean` removes every regenerable artifact** the suite leaves in
-   the tree; `clean-cache` sweeps the loader's cache on request.
+8. ✅ **`make clean` removes every regenerable artifact** the suite leaves
+   in the tree — every `.gitignore` entry by name (a 3.9 GB checkout back
+   to 40 MB, `.git` included; `git clean -Xdn` then lists nothing); `clean-cache` removes the loader's cache on request and
+   prints its size first.
 9. **Close the cycle (M)** — the release gate also counts the
    semver/audit/golden job; `docs/design/v10-plan.md` written from the
    measured rehearsal (the re-export hide is invisible to
