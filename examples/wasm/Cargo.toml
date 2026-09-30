@@ -16,3 +16,8 @@ rulisp = { path = "../../crates/rulisp" }
 # sigaction").
 wasmi = "0.50"
 wat = "1"
+# the WASI preview1 sandbox (v0.7): wasi-common's sync implementation and
+# cap-std's capability-based directories — no tokio, no signal handlers;
+# the audit (make audit) checks the artifact on every push
+wasmi_wasi = "0.50"
+cap-std = "3"

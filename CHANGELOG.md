@@ -19,6 +19,24 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   is refused, not wrapped), host callbacks into Lisp on the calling
   thread, a closure's condition becoming a guest trap, the unset and the
   dead callback, a freed instance, a missing file. The crate is unchanged.
+- **`examples/wasm` runs WASI command modules in a sandbox** — the
+  flagship of 0.7. A second handle, `wasm:make-wasi`, loads anything
+  built for `wasm32-wasip1` (or a hand-written `.wat`) with a fuel budget
+  that must be set (the run is synchronous on the calling thread; only
+  fuel makes it finite) and one memory number that bounds the guest's
+  linear memory, its table and the bytes kept from stdout + stderr (a
+  flooding guest gets ENOSPC inside the sandbox — measured before the
+  cap: 5 M fuel bought 101 GiB of output). `wasi-arg`, `wasi-env`,
+  `wasi-preopen`, `wasi-stdin` configure it; `wasi-run` calls `_start`
+  once and returns the exit code as a value; `wasi-stdout`, `wasi-stderr`
+  and `wasi-fuel-left` read the result. Nothing of the process is
+  inherited, and the guest cannot wait: WASI's `poll_oneoff`/sleep — a
+  guest-chosen `std::thread::sleep` at zero fuel in the stock scheduler,
+  measured 3.0 s — answer ENOTSUP at once. Sixteen `wasm.wasi-*` tests
+  with hand-written guests (`examples/wasm/wasi-hello.wat`,
+  `wasi-cat.wat`; `tests/wasm-guests/`) run on every host. Dependencies:
+  wasmi_wasi 0.50 and cap-std 3 — no tokio, no C, and the §7 audit still
+  passes. The existing `wasm:make-wasm` API is unchanged.
 
 ### Changed
 - **The macOS fetch step is required** — 37 consecutive green runs since

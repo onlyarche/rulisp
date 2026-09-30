@@ -55,12 +55,22 @@ Budget 1 L + 1 M + 7 S.
    built and audited the four examples in 1m1s, the release job
    re-audited 16 downloaded assets on Linux, nothing published. B: the
    one-commit promotion when the streak from 2026-09-08 reaches ECL's 24.
-7. **The flagship (L)** — *commit 1 of 2 done:* `tests/suite/wasm.lisp`
+7. **The flagship (L)** — *commit 1 done:* `tests/suite/wasm.lisp`
    pins the existing API (15 tests, 46 checks, SBCL/CCL/ECL; four
    mutations — `boom` that no longer traps, `host.notify` swallowing the
    closure's failure, a wrapped memory offset, a wrong expected value —
-   each fail the test that names the claim). Next: the `Wasi` handle, on
-   a branch first. The item: `examples/wasm` gets the suite it never had
+   each fail the test that names the claim). *Commit 2 done:* the `Wasi`
+   handle — fuel mandatory, one memory number for memory, table and
+   captured output, a scheduler that never waits (the stock one slept
+   3.0 s at zero fuel, measured), stdio as bytes, preopens as the whole
+   filesystem — with sixteen `wasm.wasi-*` tests over hand-written
+   guests; seven readers established the facts first (the WASI context
+   API, every fuel-free blocking path, the output cap's errno — an
+   `io::Error` would have been a trap — wasmi's limits, the macros, the
+   three Lisps' scratch idioms, the guests), then the branch run was the
+   cross-host check. *Still to do:* the adversarial pass over the sandbox
+   claims before the tag, with SECURITY.md re-cited and bounded in the
+   same commit. The item: `examples/wasm` gets the suite it never had
    (six README claims, SECURITY.md's "supported approach", three blobs
    per release, zero tests), then grows a WASI plugin sandbox: a second
    `Wasi` handle on wasmi 0.50 + wasmi_wasi 0.50 + cap-std (117 packages,

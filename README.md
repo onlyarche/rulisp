@@ -92,7 +92,7 @@ crate (the finished example is [`examples/rx/`](examples/rx/)). [docs/usage.md](
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
 toolchain needed) vs building your own. For something bigger,
 [`examples/wasm/`](examples/wasm/) gives Common Lisp a WebAssembly runtime
-in under 250 lines of glue: load `.wat`/`.wasm` modules from the REPL, call
+in a few hundred lines of glue: load `.wat`/`.wasm` modules from the REPL, call
 their exports under a fuel-metered CPU budget (runaway guest code traps as
 a condition instead of hanging the image), move byte buffers in and out of
 the guest's linear memory (bounds-checked; out-of-bounds is a condition),
@@ -100,7 +100,14 @@ wire host functions so GUEST code calls straight into your Lisp closures
 (stored callbacks; a condition in the closure becomes a guest trap), and
 watch wasm traps arrive as Lisp conditions (built on the
 signal-handler-free `wasmi` interpreter — see BOUNDARY.md §7 for why that
-matters). [`examples/fetch/`](examples/fetch/) is an async HTTPS client
+matters). Since 0.7 it also runs a **WASI command module** — anything built
+for `wasm32-wasip1`, from Rust, C, Zig or Go — in a sandbox: a fuel budget
+that must be set, one memory number that bounds the guest's memory and
+its output alike, stdin/stdout/stderr as byte vectors, the directories you
+hand it as its whole filesystem (`..`, absolute paths and symlinks that
+lead outside are refused), its exit code as a value, and no way to sleep
+or wait. The suite runs on every CI host.
+[`examples/fetch/`](examples/fetch/) is an async HTTPS client
 on tokio and rustls: the pattern for a crate that owns threads (capped
 waits, no signal handlers, a declared dump hook), with its own suite in
 CI. The full contract is in [BOUNDARY.md](BOUNDARY.md);

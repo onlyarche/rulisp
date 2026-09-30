@@ -222,13 +222,376 @@ impl Wasm {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// The WASI sandbox (v0.7): run a command module — anything compiled for
+// wasm32-wasip1, or a hand-written .wat — with a CPU budget, one memory
+// number, and nothing of the host it was not given.
+//
+// What bounds the run, and why each bound is there:
+//   fuel          every guest instruction; the run is synchronous on the
+//                 calling Lisp thread, which cannot be interrupted inside
+//                 foreign code, so the budget is what makes it finite.
+//                 A metered instance is therefore mandatory (fuel > 0).
+//   memory_limit  the guest's linear memory (wasmi's resource limiter: a
+//                 module asking for more is refused at load, memory.grow
+//                 past it answers -1), its table (memory_limit / 8
+//                 funcrefs, so a table cannot outgrow the memory), AND the
+//                 total bytes captured on stdout + stderr: a guest that
+//                 floods its output gets ENOSPC from fd_write, never a
+//                 hang or a host allocation it did not pay for. Measured
+//                 before the cap: 5 M fuel bought 101 GiB of output.
+//   no waiting    WASI's poll_oneoff / sleep go to a scheduler; the stock
+//                 one calls std::thread::sleep for a guest-chosen u64 of
+//                 nanoseconds at zero fuel. Ours answers ENOTSUP at once.
+// What it does not bound is stated on `Wasi::load`.
+// ---------------------------------------------------------------------------
+
+use std::future::Future;
+use std::io::IoSlice;
+use std::pin::Pin;
+use std::sync::Arc;
+
+use wasmi::{CompilationMode, StoreLimits, StoreLimitsBuilder};
+use wasmi_wasi::wasi_common::file::{FdFlags, FileType};
+use wasmi_wasi::wasi_common::pipe::ReadPipe;
+use wasmi_wasi::wasi_common::sched::{Poll, WasiSched};
+use wasmi_wasi::wasi_common::snapshots::preview_1::error::Errno;
+use wasmi_wasi::wasi_common::sync::{clocks_ctx, random_ctx};
+use wasmi_wasi::wasi_common::{Error as WasiError, ErrorExt, Table};
+use wasmi_wasi::{WasiCtx, WasiFile};
+
+/// What a WASI host function returns: wasmi_wasi drives these futures with
+/// a one-shot executor, so every one below is ready on its first poll.
+type Ready<'t, T> = Pin<Box<dyn Future<Output = T> + Send + 't>>;
+
+/// A scheduler that never waits. `wasi_common::WasiSched` is declared with
+/// `#[async_trait]`, which wasmi_wasi does not re-export; this is the form
+/// that attribute expands to.
+struct NoWait;
+
+impl WasiSched for NoWait {
+    fn poll_oneoff<'a, 'l0, 'l1, 't>(&'l0 self, _poll: &'l1 mut Poll<'a>) -> Ready<'t, Result<(), WasiError>>
+    where
+        'a: 't,
+        'l0: 't,
+        'l1: 't,
+        Self: 't,
+    {
+        Box::pin(std::future::ready(Err(WasiError::not_supported()
+            .context("poll_oneoff is refused: a sandboxed run cannot wait"))))
+    }
+    fn sched_yield<'l0, 't>(&'l0 self) -> Ready<'t, Result<(), WasiError>>
+    where
+        'l0: 't,
+        Self: 't,
+    {
+        Box::pin(std::future::ready(Ok(())))
+    }
+    fn sleep<'l0, 't>(&'l0 self, _duration: std::time::Duration) -> Ready<'t, Result<(), WasiError>>
+    where
+        'l0: 't,
+        Self: 't,
+    {
+        Box::pin(std::future::ready(Err(WasiError::not_supported()
+            .context("sleep is refused: a sandboxed run cannot wait"))))
+    }
+}
+
+/// stdout and stderr, captured under ONE byte budget.
+struct Captured {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    cap: usize,
+}
+
+#[derive(Clone, Copy)]
+enum Stream {
+    Stdout,
+    Stderr,
+}
+
+/// One of the two output streams as the guest's fd 1 or fd 2. A write
+/// past the budget fails with ENOSPC — as a disk that is full would: the
+/// bytes that fit are kept, the next non-empty write is refused. (An
+/// `io::Error` from a plain `WritePipe` would not do: wasi-common turns
+/// any kind it cannot map into a trap that ends the whole run.)
+struct CappedStream {
+    shared: Arc<Mutex<Captured>>,
+    stream: Stream,
+}
+
+impl WasiFile for CappedStream {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn get_filetype<'l0, 't>(&'l0 self) -> Ready<'t, Result<FileType, WasiError>>
+    where
+        'l0: 't,
+        Self: 't,
+    {
+        Box::pin(std::future::ready(Ok(FileType::Pipe)))
+    }
+    fn get_fdflags<'l0, 't>(&'l0 self) -> Ready<'t, Result<FdFlags, WasiError>>
+    where
+        'l0: 't,
+        Self: 't,
+    {
+        Box::pin(std::future::ready(Ok(FdFlags::APPEND)))
+    }
+    fn write_vectored<'a, 'l0, 'l1, 't>(
+        &'l0 self,
+        bufs: &'l1 [IoSlice<'a>],
+    ) -> Ready<'t, Result<u64, WasiError>>
+    where
+        'a: 't,
+        'l0: 't,
+        'l1: 't,
+        Self: 't,
+    {
+        let total: usize = bufs.iter().map(|b| b.len()).sum();
+        let result = if total == 0 {
+            Ok(0)
+        } else {
+            let mut c = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+            let room = c.cap.saturating_sub(c.stdout.len() + c.stderr.len());
+            if room == 0 {
+                Err(WasiError::from(Errno::Nospc))
+            } else {
+                let target = match self.stream {
+                    Stream::Stdout => &mut c.stdout,
+                    Stream::Stderr => &mut c.stderr,
+                };
+                let mut n = 0;
+                for b in bufs {
+                    let take = (room - n).min(b.len());
+                    target.extend_from_slice(&b[..take]);
+                    n += take;
+                    if n == room {
+                        break;
+                    }
+                }
+                Ok(n as u64)
+            }
+        };
+        Box::pin(std::future::ready(result))
+    }
+}
+
+/// Per-instance host state of a sandboxed run.
+struct WasiHost {
+    wasi: WasiCtx,
+    limits: StoreLimits,
+    captured: Arc<Mutex<Captured>>,
+}
+
+struct WasiInner {
+    store: Store<WasiHost>,
+    instance: wasmi::Instance,
+    /// `_start` runs once; after it the instance is spent, whatever happened.
+    ran: bool,
+}
+
+/// A WASI command module in a sandbox: a fuel budget, one memory number,
+/// stdio as bytes, the preopened directories as its whole filesystem.
+#[rulisp::handle]
+pub struct Wasi {
+    inner: Mutex<WasiInner>,
+}
+
+#[rulisp::export]
+impl Wasi {
+    /// (wasm:make-wasi "/path/to/module.wasm" 1000000 1048576) — a WASI
+    /// preview1 command module (anything built for wasm32-wasip1, or .wat
+    /// text), to be run once with wasi-run.
+    ///
+    /// FUEL bounds the run: every guest instruction consumes fuel and
+    /// running out is a condition. The run is synchronous on the calling
+    /// thread, so an unmetered sandbox is refused (FUEL must be positive).
+    /// MEMORY-LIMIT, in bytes, bounds the guest's linear memory (a module
+    /// asking for more is refused here; memory.grow past it answers -1),
+    /// its table, and the bytes kept from stdout and stderr together (a
+    /// write past the cap fails inside the guest with ENOSPC).
+    ///
+    /// The guest starts with no arguments, no environment, no directories,
+    /// empty stdin, and stdout/stderr captured; nothing of the process is
+    /// inherited. It cannot wait: WASI's poll_oneoff and sleep answer
+    /// ENOTSUP at once, so the run ends within its fuel.
+    ///
+    /// What the numbers do not bound: wall time is fuel times the work a
+    /// host call does (a WASI call costs a few fuel but may touch up to
+    /// MEMORY-LIMIT bytes — 1e9 fuel is tens of seconds of an
+    /// uninterruptible thread); resident host memory reaches about three
+    /// times MEMORY-LIMIT (memory, table, captured output); the time to
+    /// read and validate the module file, linear in its size and the
+    /// caller's to choose; what the host filesystem does inside a preopened
+    /// directory (a FIFO blocks like a FIFO); and, as for every crate, a
+    /// bug in wasmi or in this glue — the sandbox is a budget for a guest,
+    /// not isolation from the host. The guest sees the real clocks and real
+    /// entropy.
+    #[rulisp(constructor)]
+    pub fn load(path: &str, fuel: u64, memory_limit: u64) -> Result<Wasi, WasmError> {
+        if fuel == 0 {
+            return Err(WasmError(
+                "fuel must be positive: a sandboxed run is synchronous and only its fuel budget makes it finite".into(),
+            ));
+        }
+        let memory_limit = usize::try_from(memory_limit)
+            .map_err(|_| WasmError("memory limit exceeds the address space".into()))?;
+        let bytes = if path.ends_with(".wat") {
+            wat::parse_file(path).map_err(|e| WasmError(e.to_string()))?
+        } else {
+            std::fs::read(path).map_err(|e| WasmError(e.to_string()))?
+        };
+        let mut config = Config::default();
+        config.consume_fuel(true);
+        // validate and translate everything now: a module that does not
+        // validate is refused here, and no translation is charged to fuel
+        config.compilation_mode(CompilationMode::Eager);
+        let engine = Engine::new(&config);
+        let module = Module::new(&engine, &bytes)?;
+        if module.get_export("_start").map(|ty| ty.func().is_some()) != Some(true) {
+            return Err(WasmError(
+                "module exports no _start function: not a WASI command".into(),
+            ));
+        }
+        let captured = Arc::new(Mutex::new(Captured {
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            cap: memory_limit,
+        }));
+        let wasi = WasiCtx::new(random_ctx(), clocks_ctx(), Box::new(NoWait), Table::new());
+        wasi.set_stdout(Box::new(CappedStream { shared: captured.clone(), stream: Stream::Stdout }));
+        wasi.set_stderr(Box::new(CappedStream { shared: captured.clone(), stream: Stream::Stderr }));
+        let limits = StoreLimitsBuilder::new()
+            .memory_size(memory_limit)
+            .table_elements(memory_limit / 8)
+            .memories(1)
+            .tables(1)
+            .instances(1)
+            .build();
+        let mut store = Store::new(&engine, WasiHost { wasi, limits, captured });
+        store.limiter(|h| &mut h.limits);
+        store.set_fuel(fuel)?;
+        let mut linker: Linker<WasiHost> = Linker::new(&engine);
+        wasmi_wasi::add_to_linker(&mut linker, |h: &mut WasiHost| &mut h.wasi)
+            .map_err(|e| WasmError(e.to_string()))?;
+        // a (start) section runs here, under the fuel and the limits
+        let instance = linker.instantiate_and_start(&mut store, &module)?;
+        Ok(Wasi {
+            inner: Mutex::new(WasiInner { store, instance, ran: false }),
+        })
+    }
+
+    /// Append one command-line argument (argv[0] included: pass the program
+    /// name first if the guest expects one). Before wasi-run only.
+    pub fn arg(&self, arg: &str) -> Result<(), WasmError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.not_run_yet("wasi-arg")?;
+        inner.store.data_mut().wasi.push_arg(arg).map_err(|e| WasmError(e.to_string()))
+    }
+
+    /// Set one environment variable for the guest. Before wasi-run only.
+    pub fn env(&self, key: &str, value: &str) -> Result<(), WasmError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.not_run_yet("wasi-env")?;
+        inner.store.data_mut().wasi.push_env(key, value).map_err(|e| WasmError(e.to_string()))
+    }
+
+    /// Give the guest the host directory HOST-DIR as GUEST-PATH (the first
+    /// preopen is fd 3, the next fd 4, ...). The preopens are the guest's
+    /// whole filesystem: a path that leads outside one — through `..`, an
+    /// absolute path, or a symlink, even a symlink whose target lies inside
+    /// — fails with EPERM. Before wasi-run only.
+    pub fn preopen(&self, host_dir: &str, guest_path: &str) -> Result<(), WasmError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.not_run_yet("wasi-preopen")?;
+        let dir = cap_std::fs::Dir::open_ambient_dir(host_dir, cap_std::ambient_authority())
+            .map_err(|e| WasmError(format!("cannot open {host_dir}: {e}")))?;
+        let dir = wasmi_wasi::wasi_common::sync::dir::Dir::from_cap_std(dir);
+        inner
+            .store
+            .data_mut()
+            .wasi
+            .push_preopened_dir(Box::new(dir), guest_path)
+            .map_err(|e| WasmError(e.to_string()))
+    }
+
+    /// The bytes the guest reads from stdin (fd 0); EOF after them. Before
+    /// wasi-run only; the last call wins.
+    pub fn stdin(&self, data: &[u8]) -> Result<(), WasmError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.not_run_yet("wasi-stdin")?;
+        inner.store.data_mut().wasi.set_stdin(Box::new(ReadPipe::from(data.to_vec())));
+        Ok(())
+    }
+
+    /// Run `_start` once and return the exit code as a value: 0 when the
+    /// guest returns, N when it calls proc_exit(N) (0..125 — larger codes
+    /// are refused by WASI as a trap). A trap — out of fuel, unreachable,
+    /// a memory fault, a refused wait — is a wasm:wasm-error, and so is a
+    /// second run: the instance is spent either way.
+    pub fn run(&self) -> Result<i64, WasmError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.not_run_yet("wasi-run")?;
+        inner.ran = true;
+        let WasiInner { store, instance, .. } = &mut *inner;
+        let start = instance.get_typed_func::<(), ()>(&*store, "_start")?;
+        match start.call(&mut *store, ()) {
+            Ok(()) => Ok(0),
+            Err(e) => match e.i32_exit_status() {
+                Some(code) => Ok(i64::from(code)),
+                None => Err(e.into()),
+            },
+        }
+    }
+
+    /// What the guest wrote to stdout (at most MEMORY-LIMIT bytes together
+    /// with stderr).
+    pub fn stdout(&self) -> Vec<u8> {
+        self.inner.lock().unwrap().captured(Stream::Stdout)
+    }
+
+    /// What the guest wrote to stderr.
+    pub fn stderr(&self) -> Vec<u8> {
+        self.inner.lock().unwrap().captured(Stream::Stderr)
+    }
+
+    /// Fuel not yet consumed.
+    pub fn fuel_left(&self) -> Result<u64, WasmError> {
+        self.inner.lock().unwrap().store.get_fuel().map_err(Into::into)
+    }
+}
+
+impl WasiInner {
+    fn not_run_yet(&self, what: &str) -> Result<(), WasmError> {
+        if self.ran {
+            Err(WasmError(format!(
+                "{what}: this instance has already run; a Wasi runs _start once — make another"
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn captured(&self, stream: Stream) -> Vec<u8> {
+        let c = self.store.data().captured.lock().unwrap_or_else(|p| p.into_inner());
+        match stream {
+            Stream::Stdout => c.stdout.clone(),
+            Stream::Stderr => c.stderr.clone(),
+        }
+    }
+}
+
 rulisp::module! {
     name: "wasm",
-    handles: [Wasm],
+    handles: [Wasm, Wasi],
     fns: [
         Wasm::load, Wasm::exports, Wasm::call0, Wasm::call1, Wasm::call2,
         Wasm::on_notify,
         Wasm::memory_write, Wasm::memory_read,
         Wasm::refuel, Wasm::fuel_left,
+        Wasi::load, Wasi::arg, Wasi::env, Wasi::preopen, Wasi::stdin,
+        Wasi::run, Wasi::stdout, Wasi::stderr, Wasi::fuel_left,
     ],
 }
