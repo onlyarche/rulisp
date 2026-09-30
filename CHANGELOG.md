@@ -5,7 +5,7 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
-## Unreleased (0.7 development)
+## 0.7.0 — 2026-09-30
 
 **Surfaces this cycle** (docs/stability.md §8 criterion 3: a second
 cycle without a break). *Lisp API*: no export added or removed —
@@ -115,7 +115,12 @@ surface and needed no boundary feature.
   compares the two Lisp API goldens with `tests/compat/api-subset.lisp`
   (every previous entry present and unchanged; additions pass), and runs
   the old suite against this tree's golden. Every 1.x minor will add
-  exports; the gate permits what stability §1 permits.
+  exports; the gate permits what stability §1 permits. And the rule that
+  section already stated is now implemented: a test of the previous
+  release's suite that reaches `rulisp::` internals is recorded by name
+  with its reason (`tests/compat/skipped-internal.txt`) and not counted —
+  one today, found at this release's version bump, where it would have
+  turned the gate red on the release commit itself.
 
 ### Fixed
 - **A truncated or corrupt artifact is refused before `dlopen`.** A

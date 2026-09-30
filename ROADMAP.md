@@ -33,6 +33,10 @@ plan from a measured rehearsal. Full plan with demand cases, acceptance
 criteria and cut order: [docs/design/v07-plan.md](docs/design/v07-plan.md).
 Budget 1 L + 1 M + 7 S.
 
+**Released as 0.7.0** (2026-09-30): all nine items, the flagship with
+its review and its adversarial pass, a pre-release review of the whole
+cycle, and a Rust-built guest in the suite. No versioned surface moved.
+
 1. ✅ **`make compat` tells additive from breaking** — the old tree's
    `rulisp.asd` is assembled from this tree's `rulisp` defsystem and the
    previous release's `rulisp/test`, this tree's golden replaces the
