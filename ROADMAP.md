@@ -7,15 +7,50 @@ cargo-semver-checks, the release-day sequence, the commit that opens
 1.1 and the Quicklisp issue text:
 [docs/design/v10-plan.md](docs/design/v10-plan.md).
 
-## v0.8 — the axum flagship (next)
+## v0.8 — the server that owns a listener (next)
 
-An HTTP server with Lisp handlers on axum — probed in the v0.7 panel (47
-packages, 38 s cold build, §7 sweep clean, loopback answered) and
-pull-based by design, since a stored callback returns no value to Rust.
-MCP (rmcp) follows it: its HTTP transport sits on axum. Planned by a
-panel when the cycle opens. The cycle is open: the gates compare against
+The first example that owns a listening socket: `examples/httpd`, an
+HTTP/1.1 + h2c server on axum/hyper/tokio whose handlers are Lisp
+functions, built on the boundary exactly as 0.7's flagship was — the
+maintainer's call of 2026-09-28 ("a recent web server, light and fast,
+with good async support"; MCP on rmcp follows it, on its HTTP
+transport). The shape is dictated: a stored callback returns no value
+to Rust, so the server is fetch's mirror, pull-based — Rust owns the
+listener, every connection and the protocol, parks each request in a
+bounded queue, Lisp threads pull with capped waits and answer through
+the request handle. The panel's probe built it on 0.7.0's macros
+unchanged (axum 0.8.9, tokio 1.53.1, hyper 1.11.1; 52 registry
+packages, four new over fetch's tree; 2.03 MB stripped with h2;
+`audit ok`) and measured it from SBCL: two OS threads and no Lisp thread
+per server, 14k req/s with two pullers, h2c answered, 413/503/500 where
+they belong, the dump hook quiescing and the restored image serving.
+No surface moves: ABI 1, `:schema` 1, the Lisp API golden's 47 rows
+(no export added), the Rust API checked as a minor against 0.7.0. Every
+bound a server cannot ship without — a head timer, a body timer, a
+handler timeout, a connection cap, a bounded queue that waits before
+503, dead-slot pruning, a bounded dump drain — is in the first feature
+commit, because the probe measured the holes and `axum::serve` sets no
+timer; the cross-host compile is dispatched from a branch before any
+feature; the suite's client is an in-crate `Probe`; a web developer
+reads docs/httpd.md first. CI is budgeted on the measured baseline —
+run 36690864696 (2026-09-30): 6 min 42 s wall, Lisp jobs 134-397 s; the
+0.7 flagship cost +30-50 s per Lisp job — and 0.8's cost is measured the
+same way at its close. The cycle is open: the gates compare against
 v0.7.0, and the aarch64 job loads its own release asset with
-`load-blob-crate`, as the x86-64 job does.
+`load-blob-crate`, as the x86-64 job does. Full plan with demand cases,
+acceptance criteria and cut order:
+[docs/design/v08-plan.md](docs/design/v08-plan.md).
+Budget 1 L + 1 M + 7 S, one S reserved for what the review and the pass find.
+
+1. ☐ Open the cycle on true documents: BOUNDARY §12's fetch rows name the four hosts that run them, README and claims.md add aarch64, ROADMAP's missing ✅ and stale v0.2 sentences, stability.md's "0.6.0 suite" (S).
+2. ☐ The flagship: `examples/httpd` — the pull-based server with every bound in the first feature commit, the `web` veneer with the debugger-in-the-handler-frame discipline, an in-crate `Probe` client, ≈ 33 tests on fetch's route (required on SBCL/Linux, CCL, macOS, aarch64; best-effort on Windows), the cross-host compile dispatched first, the five-lens review and the adversarial pass before any blob ships (L).
+3. ☐ The web developer's page: docs/httpd.md (transcripts, the loop's contract, the error discipline, the limits table, testing, deployment), the ten-line hello in docs/usage.md evaluated byte-identically by a test, the README sentence, and a claims row per sentence with the footer recounted (S).
+4. ☐ The fifth crate across every count site (blobs.yml 16 → 20, releasing, usage, distribution, claims, v10-plan, installation) and the release path rehearsed from a branch with `publish=false` and twenty assets before the tag (M).
+5. ☐ Windows: the fetch step promoted at ECL's count of 24 green runs; the httpd step starts best-effort on the same procedure (S).
+6. ☐ `load-crate` on a directory signals `crate-not-loaded-error` naming `use-crate`, not the host's stream error (reproduced on SBCL: `SIMPLE-STREAM-ERROR … Is a directory`); tests/suite/v08.lisp on all six Lisp jobs (S).
+7. ☐ Two macro diagnostics the flagship's author hit: `Option<Handle>` as a result names its real rule, and `on_dump` naming a function with parameters is a rulisp-worded error, not a raw E0308; two trybuild cases (S).
+8. ☐ Close the cycle: the pre-release review of v0.7.0..HEAD, the write-up with its falsification evidence and the measured CI cost, stability §3/§8 "as of 0.8", 0.8.0 with twenty assets, and the commit that opens the next cycle with the pins at v0.8.0 (S).
+9. ☐ Reserved: one S for what the review and the pass find; if nothing claims it, the three WASI behaviours 0.7 probed but did not pin (ROADMAP v0.7 item 7's "probed, not pinned") (S).
 
 ## v0.7 — the freeze rehearsal, and the flagship the ask named
 
