@@ -49,9 +49,9 @@ tree's loader files, the previous release's tests). When that old suite
 fails, the rule is: a test that reaches `rulisp::` internals is recorded
 by name with its reason (`tests/compat/skipped-internal.txt`) and not
 counted; a failure through an exported symbol is a break and does not
-land in a minor. One test is recorded today: the 0.6.0 suite asserts that
-the crate it loads was built with the loader's own version, which stops
-being true in the compat tree at every version bump.
+land in a minor. One test is recorded today: the previous release's suite
+asserts that the crate it loads was built with the loader's own version,
+which stops being true in the compat tree at every version bump.
 
 ## 2. Versions
 

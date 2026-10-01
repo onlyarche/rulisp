@@ -42,7 +42,7 @@ acceptance criteria and cut order:
 [docs/design/v08-plan.md](docs/design/v08-plan.md).
 Budget 1 L + 1 M + 7 S, one S reserved for what the review and the pass find.
 
-1. ☐ Open the cycle on true documents: BOUNDARY §12's fetch rows name the four hosts that run them, README and claims.md add aarch64, ROADMAP's missing ✅ and stale v0.2 sentences, stability.md's "0.6.0 suite" (S).
+1. ✅ Open the cycle on true documents: BOUNDARY §12's fetch rows name the four hosts that run them, README and claims.md add aarch64, ROADMAP's missing ✅ and stale v0.2 sentences, stability.md's "0.6.0 suite" (S). Done 2026-10-01: the three §12 rows cite the `make test-fetch` steps of the four required jobs and the best-effort Windows step; README's job paragraph and claims row 162 add aarch64 (required since 2026-09-30); v0.5 item 1 ✅ with c58ff38; the v0.2 Windows and WASI sentences are records now; stability §1 says "the previous release's suite". Found on the way: two claims rows cited ROADMAP by line numbers that had been stale since v0.3 — they cite by section now, which does not rot; `check-1.0.sh` holds and the footer still reads 362 rows.
 2. ☐ The flagship: `examples/httpd` — the pull-based server with every bound in the first feature commit, the `web` veneer with the debugger-in-the-handler-frame discipline, an in-crate `Probe` client, ≈ 33 tests on fetch's route (required on SBCL/Linux, CCL, macOS, aarch64; best-effort on Windows), the cross-host compile dispatched first, the five-lens review and the adversarial pass before any blob ships (L).
 3. ☐ The web developer's page: docs/httpd.md (transcripts, the loop's contract, the error discipline, the limits table, testing, deployment), the ten-line hello in docs/usage.md evaluated byte-identically by a test, the README sentence, and a claims row per sentence with the footer recounted (S).
 4. ☐ The fifth crate across every count site (blobs.yml 16 → 20, releasing, usage, distribution, claims, v10-plan, installation) and the release path rehearsed from a branch with `publish=false` and twenty assets before the tag (M).
@@ -436,8 +436,11 @@ soundness issue). ABI 1 frozen; every wire change is an additive manifest
 key. Full plan with demand cases, acceptance criteria and cut order:
 docs/design/v05-plan.md (three-proposal panel, two verifying judges).
 
-1. **Run the fetch suite in CI** — 23 tests §12 cites as enforcement have
-   only ever run on the maintainer's machine.
+1. ✅ **Run the fetch suite in CI** — 23 tests §12 cites as enforcement had
+   only ever run on the maintainer's machine; since c58ff38 (2026-09-02)
+   the SBCL/Linux and CCL/Linux jobs run `make test-fetch` (the macOS
+   step, required since v0.7, and the aarch64 job run it too; Windows
+   best-effort).
 2. ✅ **docs/stability.md** — the four versioned surfaces, semver and
    deprecation policy, host support = the required matrix with the
    promotion/demotion procedure, the manifest key-class rule, the 1.0 exit
@@ -716,8 +719,9 @@ constructor demand case appears, and then as an OPT-IN attribute
 - Image dump/restore on non-SBCL hosts: the m7 test runs for real on CCL
   and on Windows since v0.4; ECL has no image dump and ships
   `program-op` executables instead (docs/distribution.md Pattern B′).
-- Windows: excluded from v1; needs LLP64 `uintptr` handling, DLL
-  file-locking discipline for reload, and CI.
+- Windows: shipped in 0.3 (`uintptr` derived from the pointer size,
+  `LoadLibrary`/`GetProcAddress`, artifact naming without the `lib`
+  prefix); the Windows job is required and runs the full suite.
 
 ### 6. Performance
 
@@ -732,7 +736,8 @@ constructor demand case appears, and then as an OPT-IN attribute
 - ✅ Wasm linear-memory access via `:bytes` — shipped alongside `:bytes`
   (bounds-checked `memory-read`/`memory-write` + a guest function summing
   a host-written buffer). Host functions via stored callbacks shipped
-  with 0.2 (§2 above); WASI stays unplanned.
+  with 0.2 (§2 above); WASI is 0.7's flagship — the `Wasi` sandbox
+  (v0.7 item 7).
 
 ## Later / exploratory
 
