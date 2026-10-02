@@ -484,25 +484,22 @@ puller, six requests against a queue of two leave two parked and four
   (with-httpd-server (s :queue 2 :queue-wait-ms 200)
     (let* ((start (get-internal-real-time))
            (ids (loop for i below 6 collect (send s (raw-request "GET" (format nil "/q/~D" i)))))
-           (first-503 nil)
-           (statuses (loop for id in ids
-                           collect (let ((r (hc "PROBE-POLL" *probe* id 100)))
-                                     (and r (response-status r))))))
-      ;; the four refusals land after the queue wait
-      (let ((deadline-start (get-internal-real-time)))
-        (loop until (= 4 (count 503 statuses))
-              while (< (ms-since deadline-start) 2000)
-              do (setf statuses (loop for id in ids for st in statuses
-                                      collect (or st (let ((r (hc "PROBE-POLL" *probe* id 50)))
-                                                       (when (and r (not first-503))
-                                                         (setf first-503 (ms-since start)))
-                                                       (and r (response-status r))))))))
+           (statuses (make-list 6 :initial-element nil))
+           (first-503 nil))
+      ;; short polls, so the time the first 503 is seen is the time it came
+      (loop until (= 4 (count 503 statuses))
+            while (< (ms-since start) 2500)
+            do (loop for id in ids for cell on statuses
+                     when (null (car cell))
+                       do (let ((r (hc "PROBE-POLL" *probe* id 10)))
+                            (when r
+                              (setf (car cell) (response-status r))
+                              (when (and (eql (car cell) 503) (not first-503))
+                                (setf first-503 (ms-since start)))))))
       (is (= 4 (count 503 statuses)) "statuses ~S" statuses)
       (is (= 2 (count nil statuses)))
-      (is (and first-503 (> first-503 150)) "the first 503 came after ~,0F ms" first-503)
+      (is (and first-503 (> first-503 150)) "the first 503 came after ~A ms" first-503)
       (is (= 2 (hc "SERVER-PENDING" s)))
-      (let ((refused (loop for id in ids for st in statuses when (eql st 503) collect id)))
-        (declare (ignore refused)))
       ;; now pull and answer the two parked ones
       (with-puller (s #'echo-path)
         (loop for id in ids for st in statuses
