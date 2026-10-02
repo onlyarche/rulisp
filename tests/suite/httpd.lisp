@@ -73,7 +73,7 @@ stop, poll stopped, shutdown, free."
 
 ;;; --- the wire, from Lisp -------------------------------------------------
 
-(defun octets (string) (babel:string-to-octets string :encoding :utf-8))
+(defun utf8 (string) (babel:string-to-octets string :encoding :utf-8))
 (defun text (octets) (babel:octets-to-string octets :encoding :utf-8))
 
 (defun raw-request (method path &key (headers '(("host" . "t"))) body)
@@ -85,11 +85,11 @@ stop, poll stopped, shutdown, free."
                 (when body
                   (format o "content-length: ~D~C~C" (length body) #\Return #\Linefeed))
                 (format o "~C~C" #\Return #\Linefeed))))
-    (concatenate '(vector (unsigned-byte 8)) (octets head) (or body #()))))
+    (concatenate '(vector (unsigned-byte 8)) (utf8 head) (or body #()))))
 
 (defun crlf-block (&rest pairs)
   "(\"name\" \"value\" ...) -> the CRLF header block as octets."
-  (octets (with-output-to-string (o)
+  (utf8 (with-output-to-string (o)
             (loop for (n v) on pairs by #'cddr
                   do (format o "~A: ~A~C~C" n v #\Return #\Linefeed)))))
 
@@ -172,7 +172,7 @@ the server is stopped (\"usage\")."
 
 (defun echo-path (r)
   "The reference handler: 200, the path as the body."
-  (hc "REQUEST-RESPOND" r 200 nil (octets (hc "REQUEST-PATH" r))))
+  (hc "REQUEST-RESPOND" r 200 nil (utf8 (hc "REQUEST-PATH" r))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Contract: the shape the design promised
@@ -201,7 +201,7 @@ wait makes the image un-Ctrl-C-able. A failure here is a ten-minute hang."
       (is (not (hc "SERVER-STOPPED" s 600000)))
       (let ((ms (ms-since start)))
         (is (< ms 500) "server-stopped 600000 on a live server took ~,0F ms" ms)))
-    (let ((id (send s (octets "GET /half") "hold"))
+    (let ((id (send s (utf8 "GET /half") "hold"))
           (start (get-internal-real-time)))
       (is (null (hc "PROBE-POLL" *probe* id 600000)))
       (let ((ms (ms-since start)))
@@ -286,11 +286,11 @@ answer carries its status, the Lisp-set header and a Content-Length."
                                      (text (hc "REQUEST-BODY" r))))
                     (hc "REQUEST-RESPOND" r 201 (crlf-block "x-answer" "yes"
                                                             "content-type" "text/plain")
-                        (octets "hello back"))))
+                        (utf8 "hello back"))))
       (let* ((id (send *httpd-server*
                        (raw-request "POST" "/hello/world?x=1&y=2"
                                     :headers '(("host" . "t") ("x-trace" . "abc"))
-                                    :body (octets "payload"))))
+                                    :body (utf8 "payload"))))
              (resp (poll-until id)))
         (is (not (null resp)) "no response within 3 s")
         (when resp
@@ -322,7 +322,7 @@ out in the order Lisp wrote them."
                           first (hc "REQUEST-HEADER" r "x-a"))
                     (hc "REQUEST-RESPOND" r 200 (crlf-block "set-cookie" "a=1"
                                                             "set-cookie" "b=2")
-                        (octets "ok"))))
+                        (utf8 "ok"))))
       (let ((resp (poll-until (send *httpd-server*
                                     (raw-request "GET" "/h"
                                                  :headers '(("host" . "t") ("x-a" . "1")
@@ -354,7 +354,7 @@ over is 413 whether the length is declared or chunked; the cap itself is
   (ensure-httpd)
   (with-puller (*httpd-server*
                 (lambda (r) (hc "REQUEST-RESPOND" r 200 nil
-                                (octets (format nil "~D" (length (hc "REQUEST-BODY" r)))))))
+                                (utf8 (format nil "~D" (length (hc "REQUEST-BODY" r)))))))
     (let ((at-cap (make-array 65536 :element-type '(unsigned-byte 8) :initial-element 65))
           (over (make-array 65537 :element-type '(unsigned-byte 8) :initial-element 66)))
       (let ((resp (poll-until (send *httpd-server* (raw-request "POST" "/b" :body at-cap)))))
@@ -363,10 +363,10 @@ over is 413 whether the length is declared or chunked; the cap itself is
       (let ((resp (poll-until (send *httpd-server* (raw-request "POST" "/b" :body over)))))
         (is (eql 413 (and resp (response-status resp)))))
       ;; chunked, no Content-Length: one 65537-byte chunk
-      (let* ((head (octets (format nil "POST /c HTTP/1.1~C~Chost: t~C~Ctransfer-encoding: chunked~C~C~C~C~X~C~C"
+      (let* ((head (utf8 (format nil "POST /c HTTP/1.1~C~Chost: t~C~Ctransfer-encoding: chunked~C~C~C~C~X~C~C"
                                    #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed
                                    #\Return #\Linefeed 65537 #\Return #\Linefeed)))
-             (tail (octets (format nil "~C~C0~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed
+             (tail (utf8 (format nil "~C~C0~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed
                                    #\Return #\Linefeed)))
              (resp (poll-until (send *httpd-server*
                                      (concatenate '(vector (unsigned-byte 8)) head over tail)))))
@@ -378,7 +378,7 @@ slow sender cannot hold a connection's worth of buffer for long."
   (ensure-httpd)
   (with-httpd-server (s :body-ms 300)
     (let* ((start (get-internal-real-time))
-           (resp (poll-until (send s (raw-request "POST" "/d" :body (octets "0123456789"))
+           (resp (poll-until (send s (raw-request "POST" "/d" :body (utf8 "0123456789"))
                                    "drip:100")
                              3000)))
       (is (eql 408 (and resp (response-status resp))))
@@ -392,7 +392,7 @@ here is a connection held open for free."
   (ensure-httpd)
   (with-httpd-server (s :head-ms 300)
     (with-puller (s #'echo-path)
-      (let ((half (send s (octets "GET /never-finished") "hold"))
+      (let ((half (send s (utf8 "GET /never-finished") "hold"))
             (start (get-internal-real-time)))
         (let ((whole (poll-until (send s (raw-request "GET" "/whole")))))
           (is (equal "/whole" (and whole (text (response-body whole))))))
@@ -451,7 +451,7 @@ request stays answerable."
                                (setf missing-kind
                                      (kind-of-signal (hc "REQUEST-RESPOND-FILE" r 200 nil
                                                          "/nonexistent/httpd/file")))
-                               (hc "REQUEST-RESPOND" r 404 nil (octets "no such file")))
+                               (hc "REQUEST-RESPOND" r 404 nil (utf8 "no such file")))
                              (let ((before #+sbcl (sb-ext:get-bytes-consed) #-sbcl 0))
                                (hc "REQUEST-RESPOND-FILE" r 200 nil (uiop:native-namestring path))
                                (setf consed (- #+sbcl (sb-ext:get-bytes-consed) #-sbcl 0 before))))))
@@ -543,7 +543,7 @@ entries making later live clients 503 — the 503 storm after a stall."
         (let ((r (hc "TAKE-REQUEST" s)))
           (is (equal "/live" (hc "REQUEST-PATH" r)) "take handed out ~S" (hc "REQUEST-PATH" r))
           (is (hc "REQUEST-ALIVE" r))
-          (hc "REQUEST-RESPOND" r 200 nil (octets "alive"))
+          (hc "REQUEST-RESPOND" r 200 nil (utf8 "alive"))
           (rulisp:free r))
         (is (equal "alive" (text (response-body (poll-until live)))))
         (is (string= "empty" (kind-of-signal (hc "TAKE-REQUEST" s)))))
@@ -554,7 +554,7 @@ entries making later live clients 503 — the 503 storm after a stall."
           (hc "PROBE-CLOSE" *probe* late)
           (loop repeat 40 while (hc "REQUEST-ALIVE" r) do (sleep 0.05))
           (is (not (hc "REQUEST-ALIVE" r)))
-          (is (string= "gone" (kind-of-signal (hc "REQUEST-RESPOND" r 200 nil (octets "x")))))
+          (is (string= "gone" (kind-of-signal (hc "REQUEST-RESPOND" r 200 nil (utf8 "x")))))
           (rulisp:free r))))))
 
 (test httpd.unanswered-request-is-500-on-free
@@ -596,7 +596,7 @@ client forever. (0, the REPL default, lets a debugger session hold it.)"
              (let ((resp (poll-until id 2000)))
                (is (eql 504 (and resp (response-status resp))))
                (is (not (hc "REQUEST-ALIVE" r)))
-               (is (string= "gone" (kind-of-signal (hc "REQUEST-RESPOND" r 200 nil (octets "late"))))))
+               (is (string= "gone" (kind-of-signal (hc "REQUEST-RESPOND" r 200 nil (utf8 "late"))))))
           (rulisp:free r))))))
 
 (test httpd.double-respond-is-usage
@@ -608,9 +608,9 @@ status or header block is \"response\" with the request still answerable."
     (let ((r (hc "TAKE-REQUEST" *httpd-server*)))
       (unwind-protect
            (progn
-             (is (string= "response" (kind-of-signal (hc "REQUEST-RESPOND" r 99 nil (octets "x")))))
-             (hc "REQUEST-RESPOND" r 200 nil (octets "once"))
-             (is (string= "usage" (kind-of-signal (hc "REQUEST-RESPOND" r 200 nil (octets "again"))))))
+             (is (string= "response" (kind-of-signal (hc "REQUEST-RESPOND" r 99 nil (utf8 "x")))))
+             (hc "REQUEST-RESPOND" r 200 nil (utf8 "once"))
+             (is (string= "usage" (kind-of-signal (hc "REQUEST-RESPOND" r 200 nil (utf8 "again"))))))
         (rulisp:free r))
       (is (equal "once" (text (response-body (poll-until id))))))))
 
@@ -626,19 +626,19 @@ cannot start from Lisp — and the request stays answerable afterwards."
            (progn
              (is (string= "response"
                           (kind-of-signal (hc "REQUEST-RESPOND" r 200
-                                              (octets (format nil "x-a: 1~Cx-b: 2~C" #\Linefeed #\Linefeed))
-                                              (octets "x")))))
+                                              (utf8 (format nil "x-a: 1~Cx-b: 2~C" #\Linefeed #\Linefeed))
+                                              (utf8 "x")))))
              (is (string= "response"
                           (kind-of-signal (hc "REQUEST-RESPOND" r 200
-                                              (octets (format nil "x-a: 1~CSet-Cookie: evil~C~C"
+                                              (utf8 (format nil "x-a: 1~CSet-Cookie: evil~C~C"
                                                               #\Return #\Return #\Linefeed))
-                                              (octets "x")))))
+                                              (utf8 "x")))))
              (is (string= "response"
                           (kind-of-signal (hc "REQUEST-RESPOND" r 200
-                                              (octets (format nil "x-a: 1~C~Cno colon here~C~C"
+                                              (utf8 (format nil "x-a: 1~C~Cno colon here~C~C"
                                                               #\Return #\Linefeed #\Return #\Linefeed))
-                                              (octets "x")))))
-             (hc "REQUEST-RESPOND" r 200 (crlf-block "x-a" "1") (octets "clean")))
+                                              (utf8 "x")))))
+             (hc "REQUEST-RESPOND" r 200 (crlf-block "x-a" "1") (utf8 "clean")))
         (rulisp:free r))
       (let ((resp (poll-until id)))
         (is (equal "clean" (and resp (text (response-body resp)))))
@@ -662,7 +662,7 @@ only then. A failure is a client cut off mid-handler."
              (is (not (loop repeat 3 thereis (hc "SERVER-STOPPED" s 100)))
                  "stopped turned T with a pulled request unanswered")
              (is (null (hc "PROBE-POLL" *probe* pulled-id 50)))
-             (hc "REQUEST-RESPOND" r 200 nil (octets "finished"))
+             (hc "REQUEST-RESPOND" r 200 nil (utf8 "finished"))
              (rulisp:free r)
              (is (equal "finished" (text (response-body (poll-until pulled-id)))))
              (is (loop repeat 20 thereis (hc "SERVER-STOPPED" s 100))
@@ -717,7 +717,7 @@ four admits the rest. A failure is a flood exhausting the image's
 descriptors — the reason the WASI sandbox caps at 256."
   (ensure-httpd)
   (with-httpd-server (s :connections 4 :head-ms 5000)
-    (let ((ids (loop repeat 8 collect (send s (octets "GET /hold") "hold"))))
+    (let ((ids (loop repeat 8 collect (send s (utf8 "GET /hold") "hold"))))
       (loop repeat 20 until (= 4 (hc "SERVER-CONNECTIONS" s)) do (sleep 0.05))
       (sleep 0.2)
       (is (= 4 (hc "SERVER-CONNECTIONS" s)))
@@ -740,7 +740,7 @@ closed) and never parked."
   (let* ((many (loop for i below 101 collect (cons (format nil "x-h~D" i) "v")))
          (a (poll-until (send *httpd-server* (raw-request "GET" "/bomb" :headers many))))
          (huge (send *httpd-server*
-                     (octets (format nil "GET /~A HTTP/1.1~C~Chost: t~C~C~C~C"
+                     (utf8 (format nil "GET /~A HTTP/1.1~C~Chost: t~C~C~C~C"
                                      (make-string 1100000 :initial-element #\a)
                                      #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed))))
          (b (handler-case (poll-until huge 3000) (rulisp:rust-error (e) (err-kind e)))))
