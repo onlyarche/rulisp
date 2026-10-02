@@ -31,4 +31,5 @@
                (:file "v06")
                (:file "v07")
                (:file "fetch")
-               (:file "wasm")))
+               (:file "wasm")
+               (:file "httpd")))

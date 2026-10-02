@@ -97,6 +97,8 @@ jobs:
         run: make compat PREV=v0.7.0
       - name: fetch suite (async HTTPS example; the §7/§10 enforcement §12 cites)
         run: make test-fetch
+      - name: httpd suite (the HTTP server example, v0.8's flagship)
+        run: make test-httpd
       # docs/stability.md §9: loading the system must need no toolchain.
       # Separate --evals: a form is READ before the previous one runs, so
       # asdf:/uiop: symbols can only appear after (require :asdf).
@@ -175,6 +177,8 @@ jobs:
       - run: make test-ccl CCL="$HOME/ccl/lx86cl64"
       - name: fetch suite on CCL
         run: make test-fetch-ccl CCL="$HOME/ccl/lx86cl64"
+      - name: httpd suite on CCL
+        run: make test-httpd-ccl CCL="$HOME/ccl/lx86cl64"
 
   sbcl-macos:
     name: SBCL / macOS arm64 (required)
@@ -207,6 +211,8 @@ jobs:
       # and downgrades README/CHANGELOG wording — never silently.
       - name: fetch suite (async HTTPS example)
         run: make test-fetch
+      - name: httpd suite (the HTTP server example)
+        run: make test-httpd
 
   sbcl-windows:
     name: SBCL / Windows x86-64 (required)
@@ -258,6 +264,12 @@ jobs:
       - name: fetch suite (best-effort on Windows)
         continue-on-error: true
         run: make test-fetch
+      # the httpd suite's first runs on Windows (httpd.dll will ship in every
+      # release): best-effort, promoted by the written procedure once it has
+      # a streak — counted from its first green run on main
+      - name: httpd suite (best-effort on Windows)
+        continue-on-error: true
+        run: make test-httpd
 
   ecl-linux:
     # Promoted to required 2026-09-02 after 24 consecutive green runs since
@@ -338,6 +350,8 @@ jobs:
       - run: make test-m4
       - name: fetch suite on aarch64
         run: make test-fetch
+      - name: httpd suite on aarch64
+        run: make test-httpd
       # docs/usage.md Case A on this host, as on x86-64: the previous
       # release's arm asset (0.7.0 is the first release that has one),
       # downloaded and loaded with load-blob-crate, cargo out of reach

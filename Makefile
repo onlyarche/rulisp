@@ -29,6 +29,16 @@ test-fetch-ccl:
 	sh examples/fetch/audit.sh
 	$(CCL) --batch --load tests/run-fetch.lisp
 
+# examples/httpd: the HTTP server with Lisp handlers (fetch's route — its
+# own runner, not run-m4; hermetic, the suite talks to 127.0.0.1 only)
+test-httpd:
+	sh examples/httpd/audit.sh
+	$(SBCL) --non-interactive --load tests/run-httpd.lisp
+
+test-httpd-ccl:
+	sh examples/httpd/audit.sh
+	$(CCL) --batch --load tests/run-httpd.lisp
+
 # ECL has no image dump: applications ship as asdf:program-op executables.
 # Builds the minimal consumer in tests/ecl-program and runs it against the
 # wordbag artifact. ECL exits 0 even from its debugger, so the marker is
@@ -50,7 +60,7 @@ test-ecl-program:
 audit:
 	sh tools/rulisp-audit-selftest.sh
 	$(CARGO) build --workspace
-	for c in wordbag rx wasm fetch; do \
+	for c in wordbag rx wasm fetch httpd; do \
 	  f=$$(ls target/debug/lib$$c.so target/debug/lib$$c.dylib target/debug/$$c.dll 2>/dev/null | head -1); \
 	  sh tools/rulisp-audit.sh "$$f" examples/$$c || exit 1; done
 

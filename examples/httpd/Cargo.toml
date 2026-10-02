@@ -1,0 +1,24 @@
+[package]
+name = "httpd"
+version = "0.1.0"
+edition = "2021"
+description = "rulisp example: an HTTP server for Common Lisp (axum + hyper on tokio) whose handlers are a Lisp pull loop"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rulisp = { path = "../../crates/rulisp" }
+
+# default-features = false is load-bearing, not hygiene (fetch's rule): it
+# keeps tokio's "signal" and "process" features out of the build. A foreign
+# signal handler destabilises SBCL's signal-driven GC — BOUNDARY.md §7.
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread", "net", "time", "sync", "macros",
+] }
+# HTTP/1.1 and h2c (HTTP/2 without TLS). No TLS in this example: the
+# deployment story is a terminating proxy in front — see docs/httpd.md.
+axum = { version = "0.8", default-features = false, features = [
+    "http1", "http2", "tokio",
+] }
