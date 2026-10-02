@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::header::{CONTENT_LENGTH, RETRY_AFTER};
+use axum::http::header::{CONTENT_LENGTH, HOST, RETRY_AFTER, TRANSFER_ENCODING};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Request as HttpRequest, Response, StatusCode};
 use axum::Router;
 use hyper::body::Incoming;
@@ -125,6 +125,13 @@ fn status_only(code: u16) -> Response<Body> {
     Response::builder().status(code).body(Body::empty()).unwrap()
 }
 
+/// No slot within QUEUE-WAIT: backpressure, and the client may retry.
+fn retry_later() -> Response<Body> {
+    let mut r = status_only(503);
+    r.headers_mut().insert(RETRY_AFTER, HeaderValue::from_static("1"));
+    r
+}
+
 struct Parts {
     method: String,
     path: String,
@@ -153,6 +160,11 @@ struct Svc {
     body_cap: usize,
     body_wait: Duration,
     queue_wait: Duration,
+    /// One permit per body being read: with HTTP/2 one connection runs a
+    /// park() per stream (hyper allows 200), so without this a single
+    /// client holds streams × BODY-CAP; with it, bodies being read are at
+    /// most QUEUE, whatever the protocol or the connection count.
+    body_permits: Arc<Semaphore>,
     handler_wait: Option<Duration>,
     head_wait: Duration,
     max_connections: usize,
@@ -180,11 +192,20 @@ impl Svc {
             notified.as_mut().enable();
             {
                 let mut q = self.q.lock().unwrap();
-                Self::prune(&mut q);
+                // stop stores `down` before it drains under this lock: a push
+                // that locks after the drain is refused here (503), one that
+                // locked before was drained — nothing parks after stop
+                if self.down.load(SeqCst) {
+                    return Err(p);
+                }
+                let freed = Self::prune(&mut q);
                 if q.len() < self.cap {
                     q.push_back(p);
                     drop(q);
                     self.cv.notify_one();
+                    if freed {
+                        self.slot_freed.notify_waiters();
+                    }
                     return Ok(());
                 }
             }
@@ -234,15 +255,42 @@ impl Svc {
 #[derive(Clone, Copy)]
 struct Peer(SocketAddr);
 
+/// One connection's permit and its place in the count, released when the
+/// connection task ends — however it ends. A hyper task that panics (a
+/// framing assertion, say) unwinds through this Drop, so the count cannot
+/// drift and the cap cannot leak.
+struct ConnGuard {
+    svc: Arc<Svc>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
+}
+
+impl Drop for ConnGuard {
+    fn drop(&mut self) {
+        self.svc.connections.fetch_sub(1, SeqCst);
+    }
+}
+
 async fn park(State(svc): State<Arc<Svc>>, req: axum::extract::Request) -> Response<Body> {
     if svc.down.load(SeqCst) {
         return status_only(503);
     }
-    let (parts, body) = req.into_parts();
-    // the whole body is read here, under BODY-CAP and BODY-MS, before the
+    let (mut parts, body) = req.into_parts();
+    // HTTP/2 carries the host as :authority, which hyper keeps in the URI:
+    // give Lisp the same `host` header an HTTP/1.1 client sends
+    if !parts.headers.contains_key(HOST) {
+        if let Some(v) = parts.uri.authority().and_then(|a| HeaderValue::from_str(a.as_str()).ok()) {
+            parts.headers.insert(HOST, v);
+        }
+    }
+    // a body slot first — QUEUE-WAIT-MS at most, then 503 — then the
+    // whole body is read here, under BODY-CAP and BODY-MS, before the
     // request is parked: a slow or oversized body never reaches Lisp.
     // (A client that resets mid-body also lands in the 413 arm; nobody
     // is left to read that status.)
+    let permit = match tokio::time::timeout(svc.queue_wait, svc.body_permits.clone().acquire_owned()).await {
+        Ok(Ok(p)) => p,
+        _ => return retry_later(),
+    };
     let body = match tokio::time::timeout(svc.body_wait, axum::body::to_bytes(body, svc.body_cap)).await {
         Err(_) => return status_only(408),
         Ok(Err(_)) => return status_only(413),
@@ -261,11 +309,10 @@ async fn park(State(svc): State<Arc<Svc>>, req: axum::extract::Request) -> Respo
         },
         reply: tx,
     };
-    if svc.push(parked).await.is_err() {
-        // no slot within QUEUE-WAIT: backpressure, and the client may retry
-        let mut r = status_only(503);
-        r.headers_mut().insert(RETRY_AFTER, HeaderValue::from_static("1"));
-        return r;
+    let pushed = svc.push(parked).await;
+    drop(permit); // parked now (counted by the queue) or refused
+    if pushed.is_err() {
+        return retry_later();
     }
     // Err: the Parked was dropped before Lisp answered (stop drained it, or
     // the entry was pruned after this client left)
@@ -279,11 +326,14 @@ async fn park(State(svc): State<Arc<Svc>>, req: axum::extract::Request) -> Respo
 }
 
 /// The hyper service for one connection: the Router, with the peer
-/// address stamped into every request before axum sees it.
+/// address stamped into every request before axum sees it, and a flag the
+/// accept loop's watchdog reads — hyper calls the service only once a head
+/// has been parsed, for h1 and h2 alike.
 #[derive(Clone)]
 struct WithPeer {
     app: Router,
     peer: SocketAddr,
+    seen: Arc<AtomicBool>,
 }
 
 impl hyper::service::Service<HttpRequest<Incoming>> for WithPeer {
@@ -292,6 +342,7 @@ impl hyper::service::Service<HttpRequest<Incoming>> for WithPeer {
     type Future = Pin<Box<dyn Future<Output = Result<Response<Body>, Infallible>> + Send>>;
 
     fn call(&self, req: HttpRequest<Incoming>) -> Self::Future {
+        self.seen.store(true, SeqCst);
         let mut req = req.map(Body::new);
         req.extensions_mut().insert(Peer(self.peer));
         let mut app = self.app.clone();
@@ -338,15 +389,30 @@ async fn accept_loop(
             },
         };
         svc.connections.fetch_add(1, SeqCst);
+        let guard = ConnGuard { svc: svc.clone(), _permit: permit };
+        let seen = Arc::new(AtomicBool::new(false));
         let conn = builder
-            .serve_connection(TokioIo::new(stream), WithPeer { app: app.clone(), peer })
+            .serve_connection(TokioIo::new(stream), WithPeer { app: app.clone(), peer, seen: seen.clone() })
             .into_owned();
         let conn = graceful.watch(conn);
-        let svc = svc.clone();
+        let head_wait = svc.head_wait;
         tokio::spawn(async move {
-            let _ = conn.await;
-            svc.connections.fetch_sub(1, SeqCst);
-            drop(permit);
+            let _guard = guard;
+            // hyper's header timer arms only once the auto builder has
+            // sniffed the first 24 bytes for the h2 preface, and that sniff
+            // has no timer of its own: a client that sends nothing, or a
+            // prefix of the preface, would hold its permit forever. The
+            // first head shares HEAD-MS; after it, hyper's timers rule.
+            let mut conn = std::pin::pin!(conn);
+            tokio::select! {
+                _ = &mut conn => {}
+                _ = tokio::time::sleep(head_wait) => {
+                    if seen.load(SeqCst) {
+                        let _ = conn.await;
+                    }
+                    // else: dropping the connection closes it
+                }
+            }
         });
     }
     drop(listener); // the port closes here
@@ -374,7 +440,7 @@ impl ServerInner {
         let (lock, cv) = &*self.finished;
         let mut done = lock.lock().unwrap();
         while !*done && started.elapsed() < grace {
-            done = cv.wait_timeout(done, grace - started.elapsed()).unwrap().0;
+            done = cv.wait_timeout(done, grace.saturating_sub(started.elapsed())).unwrap().0;
         }
         drop(done);
         if let Some(rt) = self.rt.lock().unwrap().take() {
@@ -411,7 +477,8 @@ impl Drop for Server {
 #[rulisp::export]
 impl Server {
     /// (httpd:make-server "127.0.0.1:0" 256 2 512 1048576 10000 10000 1000 0):
-    /// bind ADDR (port 0 picks a free one — `server-port` tells which);
+    /// bind ADDR, a literal ip:port (port 0 picks a free one — `server-port`
+    /// tells which);
     /// park at most QUEUE requests; run WORKERS tokio threads; keep at
     /// most MAX-CONNECTIONS open (the next waits in the kernel backlog);
     /// read at most BODY-CAP bytes of a body (more is 413); allow HEAD-MS
@@ -433,7 +500,12 @@ impl Server {
         queue_wait_ms: u64,
         handler_ms: u64,
     ) -> Result<Server, HttpError> {
-        let listener = std::net::TcpListener::bind(addr).map_err(HttpError::io)?;
+        // a literal ip:port only: a hostname would resolve on this Lisp
+        // thread with no cap (BOUNDARY §7)
+        let sock: SocketAddr = addr
+            .parse()
+            .map_err(|_| HttpError::new("usage", format!("ADDR must be a literal ip:port, got {addr:?}")))?;
+        let listener = std::net::TcpListener::bind(sock).map_err(HttpError::io)?;
         listener.set_nonblocking(true).map_err(HttpError::io)?;
         let port = listener.local_addr().map_err(HttpError::io)?.port();
         let rt = Builder::new_multi_thread()
@@ -452,6 +524,7 @@ impl Server {
             body_cap: body_cap.clamp(1 << 10, 1 << 30) as usize,
             body_wait: Duration::from_millis(body_ms.clamp(1, 3_600_000)),
             queue_wait: Duration::from_millis(queue_wait_ms.min(3_600_000)),
+            body_permits: Arc::new(Semaphore::new(queue.clamp(1, 65536) as usize)),
             handler_wait: (handler_ms > 0).then(|| Duration::from_millis(handler_ms)),
             head_wait: Duration::from_millis(head_ms.clamp(1, 3_600_000)),
             max_connections: max_connections.clamp(1, 1 << 20) as usize,
@@ -479,9 +552,14 @@ impl Server {
         self.inner.port as u64
     }
 
-    /// Requests parked and not yet pulled.
+    /// Live requests parked and not yet pulled (entries whose client left
+    /// are pruned here, as on wait, take and push).
     pub fn pending(&self) -> u64 {
-        self.inner.svc.q.lock().unwrap().len() as u64
+        let mut q = self.inner.svc.q.lock().unwrap();
+        if Svc::prune(&mut q) {
+            self.inner.svc.slot_freed.notify_waiters();
+        }
+        q.len() as u64
     }
 
     /// Requests pulled by Lisp and not yet answered.
@@ -492,6 +570,12 @@ impl Server {
     /// Connections open right now (at most MAX-CONNECTIONS).
     pub fn connections(&self) -> u64 {
         self.inner.svc.connections.load(SeqCst)
+    }
+
+    /// Request bodies being read right now (at most QUEUE, whatever the
+    /// protocol: an HTTP/2 client's streams share the same slots).
+    pub fn reading(&self) -> u64 {
+        (self.inner.svc.cap - self.inner.svc.body_permits.available_permits()) as u64
     }
 
     /// T once `server-stop`, `server-shutdown` or the dump hook ran.
@@ -510,9 +594,10 @@ impl Server {
         Ok(self.inner.svc.wait(wait_ms))
     }
 
-    /// Graceful: stop accepting (the port closes), answer unpulled
-    /// requests 503, let pulled ones finish. Returns at once; poll
-    /// `server-stopped` from Lisp.
+    /// Graceful: stop accepting (the port closes; a client the kernel had
+    /// queued is reset), answer unpulled requests 503, let pulled ones
+    /// finish, give a connection still sending its head until HEAD-MS.
+    /// Returns at once; poll `server-stopped` from Lisp.
     pub fn stop(&self) {
         self.inner.svc.down.store(true, SeqCst);
         self.inner.stop.notify_one();
@@ -575,11 +660,44 @@ impl Request {
         tx.send(resp).map_err(|_| HttpError::new("gone", "client went away"))
     }
 
-    fn builder(status: u16, headers: Option<&[u8]>) -> Result<axum::http::response::Builder, HttpError> {
+    /// The status and the Lisp-set headers, checked before anything is
+    /// taken: a 1xx is not a final response; framing is hyper's — a
+    /// Transfer-Encoding is refused, and a Content-Length must say what the
+    /// body is (hyper asserts on the mismatch and the connection task dies
+    /// with it), except on a HEAD answer, whose empty body may announce any
+    /// length.
+    fn builder(
+        &self,
+        status: u16,
+        headers: Option<&[u8]>,
+        body_len: Option<u64>,
+    ) -> Result<axum::http::response::Builder, HttpError> {
         let code = StatusCode::from_u16(status).map_err(|e| HttpError::new("response", e.to_string()))?;
+        if code.is_informational() {
+            return Err(HttpError::new("response", format!("{status} is not a final response")));
+        }
+        let bodiless = matches!(status, 204 | 304);
+        if bodiless && body_len.is_some_and(|n| n > 0) {
+            return Err(HttpError::new("response", format!("a {status} response carries no body")));
+        }
         let mut b = Response::builder().status(code);
         if let Some(h) = headers {
-            *b.headers_mut().unwrap() = decode_headers(h)?;
+            let map = decode_headers(h)?;
+            if map.contains_key(TRANSFER_ENCODING) {
+                return Err(HttpError::new("response", "framing is hyper's: Transfer-Encoding is refused"));
+            }
+            let head_answer = self.p.method == "HEAD" && body_len == Some(0);
+            for v in map.get_all(CONTENT_LENGTH) {
+                let n = v.to_str().ok().and_then(|t| t.trim().parse::<u64>().ok());
+                if n.is_none() || (!head_answer && n != body_len) {
+                    return Err(HttpError::new(
+                        "response",
+                        format!("Content-Length {} does not match the body ({} bytes)",
+                                String::from_utf8_lossy(v.as_bytes()), body_len.unwrap_or(0)),
+                    ));
+                }
+            }
+            *b.headers_mut().unwrap() = map;
         }
         Ok(b)
     }
@@ -614,7 +732,8 @@ impl Request {
     pub fn query(&self) -> Option<String> {
         self.p.query.clone()
     }
-    /// "HTTP/1.1" or "HTTP/2.0".
+    /// "HTTP/1.1" or "HTTP/2.0" — or "HTTP/1.0" for a 1.0 client, which
+    /// hyper serves and closes after the answer.
     pub fn version(&self) -> String {
         self.p.version.clone()
     }
@@ -637,39 +756,52 @@ impl Request {
     pub fn body(&self) -> Vec<u8> {
         self.p.body.clone()
     }
-    /// NIL once the client gave up waiting (its connection closed, or
-    /// HANDLER-MS answered it 504).
+    /// NIL once this request can no longer be answered: the client gave up
+    /// (its connection closed), HANDLER-MS answered it 504, or it was
+    /// answered already.
     pub fn alive(&self) -> bool {
         self.reply.lock().unwrap().as_ref().is_some_and(|tx| !tx.is_closed())
     }
 
     /// (httpd:request-respond r 200 nil body): answer once. HEADERS is a
     /// CRLF block or NIL. Kind "usage" on a second call, "gone" when the
-    /// client already went away, "response" for a bad status or block —
-    /// after which the request is still answerable.
+    /// client already went away, "response" for a bad status (a 1xx; a 204
+    /// or 304 with a body) or a bad block (not CRLF-separated, a CR or LF
+    /// in a value, a Transfer-Encoding, a Content-Length that is not the
+    /// body's) — after which the request is still answerable.
     pub fn respond(&self, status: u16, headers: Option<&[u8]>, body: &[u8]) -> Result<(), HttpError> {
-        let resp = Self::builder(status, headers)?
+        let resp = self
+            .builder(status, headers, Some(body.len() as u64))?
             .body(Body::from(body.to_vec()))
             .map_err(|e| HttpError::new("response", e.to_string()))?;
         self.send(resp)
     }
 
     /// (httpd:request-respond-file r 200 nil "/path"): answer with a
-    /// file's bytes, which never cross the boundary — opened here on the
-    /// calling thread (kind "io" if that fails, and the request stays
-    /// answerable), streamed by tokio. Content-Length is set from the
-    /// file unless HEADERS carries one.
+    /// regular file's bytes, which never cross the boundary — opened here
+    /// on the calling thread (kind "io" if that fails, and the request
+    /// stays answerable), streamed by tokio. Content-Length is the file's
+    /// size (one in HEADERS must agree). A FIFO, a device or a directory is
+    /// refused before it is opened (opening a FIFO blocks until a writer
+    /// appears, and nothing can interrupt this thread there).
     pub fn respond_file(&self, status: u16, headers: Option<&[u8]>, path: &str) -> Result<(), HttpError> {
+        // stat before open — the wasm example's rule (examples/wasm/src/lib.rs)
+        let kind = std::fs::metadata(path).map_err(HttpError::io)?;
+        if !kind.is_file() {
+            return Err(HttpError::new("io", format!("{path} is not a regular file")));
+        }
         let file = std::fs::File::open(path).map_err(HttpError::io)?;
-        let meta = file.metadata().map_err(HttpError::io)?;
+        let meta = file.metadata().map_err(HttpError::io)?; // the fd actually opened
         if !meta.is_file() {
             return Err(HttpError::new("io", format!("{path} is not a regular file")));
         }
-        let mut b = Self::builder(status, headers)?;
+        if matches!(status, 204 | 304) {
+            return Err(HttpError::new("response", format!("a {status} response carries no body")));
+        }
+        let mut b = self.builder(status, headers, Some(meta.len()))?;
         b.headers_mut()
             .unwrap()
-            .entry(CONTENT_LENGTH)
-            .or_insert_with(|| HeaderValue::from_str(&meta.len().to_string()).unwrap());
+            .insert(CONTENT_LENGTH, HeaderValue::from_str(&meta.len().to_string()).unwrap());
         let stream = ReaderStream::new(tokio::fs::File::from_std(file));
         let resp = b
             .body(Body::from_stream(stream))
@@ -720,7 +852,7 @@ fn split_response(buf: &mut Vec<u8>) -> Option<Vec<u8>> {
             .find_map(|l| l.strip_prefix("content-length:"))
             .and_then(|v| v.trim().parse::<usize>().ok())
             .unwrap_or(0);
-        head_end + len
+        head_end.saturating_add(len)
     };
     (buf.len() >= end).then(|| buf.drain(..end).collect())
 }
@@ -941,7 +1073,7 @@ impl Probe {
             return Err(HttpError::new("io", e.clone()));
         }
         if s.closed {
-            return Err(HttpError::new("gone", "connection closed with no response"));
+            return Err(HttpError::new("gone", "connection closed, nothing left to return"));
         }
         Ok(None)
     }
@@ -978,11 +1110,19 @@ impl Probe {
         self.inner.quiesce(Duration::from_millis(grace_ms.min(5_000)));
         Ok(())
     }
+
+    /// T once `probe-shutdown` or the dump hook took the runtime down.
+    pub fn is_down(&self) -> bool {
+        self.inner.rt.lock().unwrap().is_none()
+    }
 }
 
 /// The declared dump hook: quiesce every live server and probe, 2 s each
-/// at most (BOUNDARY §10). Stop your pullers first — SBCL refuses to dump
-/// with Lisp threads running; this hook covers the Rust threads.
+/// at most (BOUNDARY §10). It runs on every dump attempt, including one
+/// the host then refuses — SBCL refuses to dump with Lisp threads running,
+/// and by then every server is stopped — so stop your pullers first; this
+/// hook covers the Rust threads. A request the dumping thread itself holds
+/// cannot be answered during the grace: respond or free it before dumping.
 #[rulisp::export]
 pub fn shutdown_all() {
     let live: Vec<Arc<ServerInner>> = SERVERS.lock().unwrap().iter().filter_map(Weak::upgrade).collect();
@@ -1000,12 +1140,12 @@ rulisp::module! {
     handles: [Server, Request, Probe],
     fns: [
         Server::bind, Server::port, Server::pending, Server::in_flight, Server::connections,
-        Server::is_down, Server::wait, Server::stop, Server::stopped, Server::shutdown,
+        Server::reading, Server::is_down, Server::wait, Server::stop, Server::stopped, Server::shutdown,
         Request::take, Request::method, Request::path, Request::query, Request::version,
         Request::peer, Request::headers, Request::header, Request::body, Request::alive,
         Request::respond, Request::respond_file,
         Probe::new, Probe::send, Probe::h2c, Probe::poll, Probe::closed, Probe::close,
-        Probe::shutdown,
+        Probe::shutdown, Probe::is_down,
         shutdown_all,
     ],
     on_dump: shutdown_all,

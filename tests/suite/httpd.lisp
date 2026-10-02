@@ -36,6 +36,9 @@ are recreated when a dump-hook test took them down."
     (setf *httpd-server* nil))
   (unless *httpd-server*
     (setf *httpd-server* (hc "MAKE-SERVER" "127.0.0.1:0" 8 2 8 65536 1000 1000 200 0)))
+  (when (and *probe* (hc "PROBE-IS-DOWN" *probe*))
+    (rulisp:free *probe*)
+    (setf *probe* nil))
   (unless *probe*
     (setf *probe* (hc "MAKE-PROBE")))
   *httpd-crate*)
@@ -158,7 +161,9 @@ the server is stopped (\"usage\")."
                                          (incf (puller-errors p))
                                          (format *error-output* "~&puller: ~A~%" e)))
                                   (rulisp:free r))))))
-               (rulisp:rust-error () nil)))
+               ;; "usage" after stop ends the loop; so does a stale or
+               ;; freed server — never a debugger in a non-interactive run
+               (error () nil)))
            :name name))
     p))
 
@@ -189,24 +194,27 @@ binding-generation time. A failure here means someone added a doorbell."
 
 (test httpd.waits-are-capped
   "A Lisp thread inside a foreign call cannot be interrupted; an uncapped
-wait makes the image un-Ctrl-C-able. A failure here is a ten-minute hang."
+wait makes the image un-Ctrl-C-able. A failure here is a twenty-second
+stall per wait (the asked-for wait), where the cap says 100 ms."
   (ensure-httpd)
   (with-httpd-server (s)
     (is (plusp (hc "SERVER-PORT" s)))
     (let ((start (get-internal-real-time)))
-      (hc "SERVER-WAIT" s 600000)
+      (hc "SERVER-WAIT" s 20000)
       (let ((ms (ms-since start)))
-        (is (< ms 500) "server-wait 600000 on an idle server took ~,0F ms" ms)))
+        (is (< ms 500) "server-wait 20000 on an idle server took ~,0F ms" ms)))
     (let ((start (get-internal-real-time)))
-      (is (not (hc "SERVER-STOPPED" s 600000)))
+      (is (not (hc "SERVER-STOPPED" s 20000)))
       (let ((ms (ms-since start)))
-        (is (< ms 500) "server-stopped 600000 on a live server took ~,0F ms" ms)))
+        (is (< ms 500) "server-stopped 20000 on a live server took ~,0F ms" ms)))
     (let ((id (send s (utf8 "GET /half") "hold"))
           (start (get-internal-real-time)))
-      (is (null (hc "PROBE-POLL" *probe* id 600000)))
+      (is (null (hc "PROBE-POLL" *probe* id 20000)))
       (let ((ms (ms-since start)))
-        (is (< ms 500) "probe-poll 600000 with nothing arrived took ~,0F ms" ms))
-      (hc "PROBE-CLOSE" *probe* id))))
+        (is (< ms 500) "probe-poll 20000 with nothing arrived took ~,0F ms" ms))
+      (hc "PROBE-CLOSE" *probe* id))
+    (is (string= "usage" (kind-of-signal (hc "MAKE-SERVER" "localhost:0" 8 1 8 65536 1000 1000 200 0)))
+        "a hostname would resolve on the Lisp thread with no cap; ADDR is a literal ip:port")))
 
 (test httpd.idle-wait-is-nil-not-a-condition
   "The serve loop's idle path is a NIL, not a handler-case: `server-wait`
@@ -254,6 +262,8 @@ that was not there before, or Rust threads that outlive the server."
                  (is (equal (format nil "/t/~D" i) (text (response-body (poll-until id))))))))
            (is (= lisp-before (length (bt:all-threads))))
            (when os-before
+             ;; join-thread returns before the OS thread is gone from /proc
+             (loop repeat 100 until (= (+ os-before 1) (or (os-thread-count) 0)) do (sleep 0.01))
              (is (= (+ os-before 1) (os-thread-count))
                  "one tokio worker asked for, OS threads went ~D -> ~D"
                  os-before (os-thread-count)))
@@ -385,20 +395,32 @@ slow sender cannot hold a connection's worth of buffer for long."
       (is (< (ms-since start) 2500)))))
 
 (test httpd.slowloris-is-closed
-  "A half-sent request line is closed at HEAD-MS while a whole request on
-another connection is answered — the finding the probe measured against
-axum::serve, where the client waited until its own timeout. A failure
-here is a connection held open for free."
+  "A half-sent request line, a connection that sends nothing, and one that
+sends a prefix of the HTTP/2 preface are all closed at HEAD-MS while a
+whole request on another connection is answered. The first is hyper's
+header timer; the other two are the accept loop's own watchdog — hyper's
+timer arms only after the 24-byte protocol sniff, which has none (the
+review found a silent client holding its permit forever). A failure here
+is a connection, and a slot under the cap, held open for free."
   (ensure-httpd)
   (with-httpd-server (s :head-ms 300)
     (with-puller (s #'echo-path)
       (let ((half (send s (utf8 "GET /never-finished") "hold"))
+            (silent (send s (utf8 "") "hold"))
+            (preface (send s (utf8 (format nil "PRI * HTTP/2.0~C~C~C~CSM~C~C"
+                                           #\Return #\Linefeed #\Return #\Linefeed
+                                           #\Return #\Linefeed))
+                           "hold"))
             (start (get-internal-real-time)))
         (let ((whole (poll-until (send s (raw-request "GET" "/whole")))))
           (is (equal "/whole" (and whole (text (response-body whole))))))
         (is (closed-within half 2000) "the half request was not closed within 2 s")
+        (is (closed-within silent 2000) "the silent connection was not closed within 2 s")
+        (is (closed-within preface 2000) "the preface-prefix connection was not closed within 2 s")
         (is (< (ms-since start) 2500))
-        (is (string= "gone" (kind-of-signal (hc "PROBE-POLL" *probe* half 10))))))))
+        (is (string= "gone" (kind-of-signal (hc "PROBE-POLL" *probe* half 10))))
+        (loop repeat 20 until (= 0 (hc "SERVER-CONNECTIONS" s)) do (sleep 0.05))
+        (is (= 0 (hc "SERVER-CONNECTIONS" s)) "~D connections still counted" (hc "SERVER-CONNECTIONS" s))))))
 
 (test httpd.keep-alive-idle-is-closed
   "A keep-alive connection that sends nothing after its answer is closed at
@@ -415,17 +437,28 @@ HEAD-MS: the same timer bounds the idle wait for the next head."
 (test httpd.h2c-prior-knowledge
   "HTTP/2 without TLS (prior knowledge) is served on the same port through
 the same pull loop; the Lisp side sees HTTP/2.0 where an HTTP/1.1 request
-says HTTP/1.1."
+says HTTP/1.1 (and HTTP/1.0 for a 1.0 client), and the host reaches Lisp
+as a `host` header for h2 as for h1 — HTTP/2 carries it as :authority,
+which the review found dropped on the floor."
   (ensure-httpd)
-  (let (versions)
+  (let (versions hosts)
     (with-puller (*httpd-server*
-                  (lambda (r) (push (hc "REQUEST-VERSION" r) versions) (echo-path r)))
+                  (lambda (r)
+                    (push (hc "REQUEST-VERSION" r) versions)
+                    (push (hc "REQUEST-HEADER" r "host") hosts)
+                    (echo-path r)))
       (let ((h2 (poll-until (hc "PROBE-H2C" *probe* (addr *httpd-server*) "/two"))))
         (is (eql 200 (and h2 (response-status h2))))
         (is (equal "/two" (and h2 (text (response-body h2))))))
       (let ((h1 (poll-until (send *httpd-server* (raw-request "GET" "/one")))))
-        (is (equal "/one" (and h1 (text (response-body h1)))))))
-    (is (equal '("HTTP/1.1" "HTTP/2.0") versions))))
+        (is (equal "/one" (and h1 (text (response-body h1))))))
+      (let ((h10 (poll-until (send *httpd-server*
+                                   (utf8 (format nil "GET /ten HTTP/1.0~C~Chost: t~C~C~C~C"
+                                                 #\Return #\Linefeed #\Return #\Linefeed
+                                                 #\Return #\Linefeed))))))
+        (is (equal "/ten" (and h10 (text (response-body h10)))))))
+    (is (equal '("HTTP/1.0" "HTTP/1.1" "HTTP/2.0") versions))
+    (is (equal (list "t" "t" (addr *httpd-server*)) hosts) "hosts seen: ~S" hosts)))
 
 (test httpd.respond-file-streams
   "A file's bytes never cross the boundary: `request-respond-file` opens it
@@ -436,7 +469,14 @@ request stays answerable."
   (let* ((path (uiop:tmpize-pathname (merge-pathnames "httpd-file.bin" (uiop:temporary-directory))))
          (size (* 5 1024 1024))
          (consed 0)
-         (missing-kind nil))
+         (missing-kind nil)
+         ;; a FIFO with no writer: open(2) on it blocks until one appears
+         (fifo (when (and (uiop:os-unix-p) (not (uiop:os-windows-p)))
+                 (let ((f (uiop:native-namestring
+                           (uiop:tmpize-pathname (merge-pathnames "httpd.fifo" (uiop:temporary-directory))))))
+                   (ignore-errors (delete-file f))
+                   (and (zerop (nth-value 2 (uiop:run-program (list "mkfifo" f) :ignore-error-status t)))
+                        f)))))
     (with-open-file (f path :direction :output :element-type '(unsigned-byte 8)
                             :if-exists :supersede)
       (let ((chunk (make-array 65536 :element-type '(unsigned-byte 8))))
@@ -449,8 +489,12 @@ request stays answerable."
                          (if (string= "/missing" (hc "REQUEST-PATH" r))
                              (progn
                                (setf missing-kind
-                                     (kind-of-signal (hc "REQUEST-RESPOND-FILE" r 200 nil
-                                                         "/nonexistent/httpd/file")))
+                                     (list (kind-of-signal (hc "REQUEST-RESPOND-FILE" r 200 nil
+                                                               "/nonexistent/httpd/file"))
+                                           (kind-of-signal (hc "REQUEST-RESPOND-FILE" r 200 (crlf-block "content-length" "1")
+                                                               (uiop:native-namestring path)))
+                                           (kind-of-signal (hc "REQUEST-RESPOND-FILE" r 200 nil
+                                                               (uiop:native-namestring (uiop:temporary-directory))))))
                                (hc "REQUEST-RESPOND" r 404 nil (utf8 "no such file")))
                              (let ((before #+sbcl (sb-ext:get-bytes-consed) #-sbcl 0))
                                (hc "REQUEST-RESPOND-FILE" r 200 nil (uiop:native-namestring path))
@@ -468,8 +512,42 @@ request stays answerable."
            #+sbcl (is (< consed (* 1024 1024)) "respond-file consed ~D bytes in Lisp" consed)
            (let ((resp (poll-until (send *httpd-server* (raw-request "GET" "/missing")))))
              (is (eql 404 (and resp (response-status resp))))
-             (is (equal "io" missing-kind))))
-      (ignore-errors (delete-file path)))))
+             (destructuring-bind (missing bad-length directory) missing-kind
+               (is (equal "io" missing))
+               (is (equal "response" bad-length) "a wrong Content-Length gave ~S" bad-length)
+               (is (equal "io" directory) "a directory gave ~S" directory))))
+      (ignore-errors (delete-file path)))
+    ;; The FIFO, on a throwaway thread: the regression this guards (open
+    ;; before stat) blocks the calling thread in open(2) for good, so it must
+    ;; not be a puller the test would then join. If the thread has not
+    ;; returned in 2 s, a shell opens the FIFO for writing to release it, and
+    ;; the test fails instead of hanging.
+    (when fifo
+      (unwind-protect
+           (let* ((id (send *httpd-server* (raw-request "GET" "/fifo")))
+                  (r (progn (loop repeat 20 until (hc "SERVER-WAIT" *httpd-server* 50))
+                            (hc "TAKE-REQUEST" *httpd-server*)))
+                  (result nil)
+                  (worker (bt:make-thread
+                           (lambda ()
+                             (let ((start (get-internal-real-time)))
+                               (setf result (list (kind-of-signal (hc "REQUEST-RESPOND-FILE" r 200 nil fifo))
+                                                  (ms-since start)))))
+                           :name "fifo probe")))
+             (loop repeat 40 until result do (sleep 0.05))
+             (let ((returned (and result t)))
+               (unless returned
+                 (uiop:run-program (list "sh" "-c" (format nil "exec 3>'~A'; exec 3>&-" fifo))
+                                   :ignore-error-status t))
+               (bt:join-thread worker)
+               (is (eq t returned) "respond-file on a writer-less FIFO did not return within 2 s (open before stat blocks)")
+               (when returned
+                 (is (equal "io" (first result)) "the FIFO gave ~S" (first result))
+                 (is (< (second result) 500) "the FIFO refusal took ~,0F ms" (second result))))
+             (hc "REQUEST-RESPOND" r 404 nil (utf8 "fifo"))
+             (rulisp:free r)
+             (is (eql 404 (response-status (poll-until id)))))
+        (ignore-errors (delete-file fifo))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; Backpressure and terminal states: every request is answered on every path
@@ -507,6 +585,35 @@ puller, six requests against a queue of two leave two parked and four
                 do (let ((r (poll-until id)))
                      (is (eql 200 (and r (response-status r))))))
         (is (= 0 (hc "SERVER-PENDING" s)))))))
+
+(test httpd.bodies-in-flight-are-bounded
+  "Request bodies being read are at most QUEUE at a time, whatever the
+protocol or the connection count: the slot is taken before the body is
+read and released once the request is parked or refused. Without it one
+HTTP/2 connection could hold 200 streams × BODY-CAP (the review measured
++113 MiB from a single client against a stated bound of 2 MiB). Here ten
+slow HTTP/1.1 bodies against a queue of two: two are read, eight are 503
+after the queue wait, and the gauge never passes two."
+  (ensure-httpd)
+  (with-httpd-server (s :queue 2 :queue-wait-ms 300 :body-ms 5000)
+    (let* ((start (get-internal-real-time))
+           (ids (loop for i below 10
+                      collect (send s (raw-request "POST" (format nil "/slow/~D" i)
+                                                   :body (utf8 "0123456789"))
+                                    "drip:60")))
+           (peak 0) (refused 0))
+      (loop while (< (ms-since start) 1500)
+            do (setf peak (max peak (hc "SERVER-READING" s)))
+               (sleep 0.02))
+      (is (<= peak 2) "~D bodies were being read at once against a queue of 2" peak)
+      (dolist (id ids)
+        (let ((r (hc "PROBE-POLL" *probe* id 10)))
+          (when (and r (eql 503 (response-status r))) (incf refused))))
+      (is (= 8 refused) "~D of 10 slow bodies were refused" refused)
+      ;; the two that got slots are parked once their bodies arrived
+      (loop repeat 40 until (= 2 (hc "SERVER-PENDING" s)) do (sleep 0.05))
+      (is (= 2 (hc "SERVER-PENDING" s)))
+      (is (= 0 (hc "SERVER-READING" s))))))
 
 (test httpd.retry-after-on-503
   "The 503 for a full queue says when to come back."
@@ -667,9 +774,80 @@ only then. A failure is a client cut off mid-handler."
       (hc "SERVER-SHUTDOWN" s 2000)
       (rulisp:free s))))
 
+(test httpd.stop-answers-a-request-waiting-for-a-slot
+  "A request waiting for a queue slot when the server stops is 503 at once
+like the parked one — not parked after the drain, to sit until shutdown or
+be answered 504 for a handler that was never allowed to take it (the
+review's race)."
+  (ensure-httpd)
+  (let ((s (hc "MAKE-SERVER" "127.0.0.1:0" 1 1 8 65536 1000 1000 3000 0)))
+    (unwind-protect
+         (let ((parked (send s (raw-request "GET" "/parked"))))
+           (loop repeat 20 until (= 1 (hc "SERVER-PENDING" s)) do (sleep 0.05))
+           (let ((waiting (send s (raw-request "GET" "/waiting"))))
+             (sleep 0.3)
+             (is (= 1 (hc "SERVER-PENDING" s)))
+             (hc "SERVER-STOP" s)
+             (let ((a (poll-until parked 1000)) (b (poll-until waiting 1000)))
+               (is (eql 503 (and a (response-status a))))
+               (is (eql 503 (and b (response-status b))) "the waiting request got ~S"
+                   (and b (response-status b))))
+             (is (= 0 (hc "SERVER-PENDING" s)))
+             (is (loop repeat 20 thereis (hc "SERVER-STOPPED" s 100))
+                 "stopped did not turn T within 2 s")))
+      (hc "SERVER-SHUTDOWN" s 2000)
+      (rulisp:free s))))
+
+(test httpd.framing-and-status-are-checked
+  "What hyper would assert on, or put on the wire wrongly, is refused as
+\"response\" with the request still answerable: a Content-Length that is
+not the body's (hyper's connection task panics on the mismatch), a
+Transfer-Encoding (framing is hyper's), a 1xx (not a final response), a
+204 with a body. A HEAD answer may announce a length over its empty body;
+an empty 204 is fine. The connection count is back to zero afterwards —
+a dying connection task must still release its permit."
+  (ensure-httpd)
+  (with-puller (*httpd-server*
+                (lambda (r)
+                  (let ((p (hc "REQUEST-PATH" r)))
+                    (cond ((string= p "/checks")
+                           (let ((kinds (list (kind-of-signal (hc "REQUEST-RESPOND" r 200 (crlf-block "content-length" "99") (utf8 "hello")))
+                                              (kind-of-signal (hc "REQUEST-RESPOND" r 200 (crlf-block "content-length" "3") (utf8 "hello")))
+                                              (kind-of-signal (hc "REQUEST-RESPOND" r 200 (crlf-block "transfer-encoding" "chunked") (utf8 "hello")))
+                                              (kind-of-signal (hc "REQUEST-RESPOND" r 100 nil (utf8 "")))
+                                              (kind-of-signal (hc "REQUEST-RESPOND" r 101 nil (utf8 "")))
+                                              (kind-of-signal (hc "REQUEST-RESPOND" r 204 nil (utf8 "body"))))))
+                             (hc "REQUEST-RESPOND" r 200 (crlf-block "content-length" "5" "x-kinds" (format nil "~{~A~^,~}" kinds))
+                                 (utf8 "hello"))))
+                          ((string= p "/empty204") (hc "REQUEST-RESPOND" r 204 nil (utf8 "")))
+                          ((string= p "/head") (hc "REQUEST-RESPOND" r 200 (crlf-block "content-length" "5") (utf8 "")))
+                          (t (echo-path r))))))
+    (let ((resp (poll-until (send *httpd-server* (raw-request "GET" "/checks")))))
+      (is (eql 200 (and resp (response-status resp))))
+      (is (equal "hello" (and resp (text (response-body resp)))))
+      (is (equal '("response,response,response,response,response,response")
+                 (and resp (response-header-values resp "x-kinds")))))
+    (let* ((id (send *httpd-server*
+                     (concatenate '(vector (unsigned-byte 8))
+                                  (raw-request "GET" "/empty204") (raw-request "GET" "/after"))
+                     "hold"))
+           (a (poll-until id)) (b (poll-until id)))
+      (is (eql 204 (and a (response-status a))))
+      (is (equal "/after" (and b (text (response-body b)))))
+      (hc "PROBE-CLOSE" *probe* id))
+    (let ((resp (poll-until (send *httpd-server*
+                                  (raw-request "HEAD" "/head" :headers '(("host" . "t") ("connection" . "close")))))))
+      (is (eql 200 (and resp (response-status resp))))
+      (is (equal '("5") (and resp (response-header-values resp "content-length"))))
+      (is (= 0 (length (response-body resp)))))
+    (loop repeat 40 until (= 0 (hc "SERVER-CONNECTIONS" *httpd-server*)) do (sleep 0.05))
+    (is (= 0 (hc "SERVER-CONNECTIONS" *httpd-server*)))))
+
 (test httpd.after-shutdown-answers-immediately
-  "Every export on a shut-down server returns within the cap with the
-typed \"usage\" — no wait on a runtime that is gone."
+  "On a shut-down server `server-wait` and `take-request` answer the typed
+\"usage\" within the cap, `server-stopped` is T, and stop and shutdown are
+idempotent — no wait on a runtime that is gone, no condition for stopping
+twice."
   (ensure-httpd)
   (let ((s (hc "MAKE-SERVER" "127.0.0.1:0" 8 1 8 65536 1000 1000 200 0)))
     (hc "SERVER-STOP" s)
