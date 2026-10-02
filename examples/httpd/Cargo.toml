@@ -14,11 +14,23 @@ rulisp = { path = "../../crates/rulisp" }
 # default-features = false is load-bearing, not hygiene (fetch's rule): it
 # keeps tokio's "signal" and "process" features out of the build. A foreign
 # signal handler destabilises SBCL's signal-driven GC — BOUNDARY.md §7.
+# "fs" is for respond-file (the bytes never cross the boundary).
 tokio = { version = "1", default-features = false, features = [
-    "rt-multi-thread", "net", "time", "sync", "macros",
+    "rt-multi-thread", "net", "time", "sync", "macros", "fs",
 ] }
 # HTTP/1.1 and h2c (HTTP/2 without TLS). No TLS in this example: the
 # deployment story is a terminating proxy in front — see docs/httpd.md.
 axum = { version = "0.8", default-features = false, features = [
     "http1", "http2", "tokio",
 ] }
+# The connection loop is ours, not axum::serve's: axum::serve sets no
+# timer, so hyper's header-read timeout is inert under it and a half-sent
+# request line holds a connection forever. hyper-util's auto builder with
+# a TokioTimer closes it at HEAD-MS; "server-graceful" drains in-flight
+# requests on stop. "client" on hyper is the suite's h2c probe.
+hyper = { version = "1", features = ["http1", "http2", "server", "client"] }
+hyper-util = { version = "0.1", features = [
+    "tokio", "server-auto", "server-graceful", "http1", "http2",
+] }
+tower-service = "0.3"
+tokio-util = { version = "0.7", default-features = false, features = ["io"] }
