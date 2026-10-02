@@ -30,7 +30,8 @@ are recreated when a dump-hook test took them down."
   (unless *httpd-crate*
     (setf *httpd-crate*
           (rulisp:use-crate (asdf:system-relative-pathname
-                             :rulisp "../examples/httpd/"))))
+                             :rulisp "../examples/httpd/")))
+    (load (asdf:system-relative-pathname :rulisp "../examples/httpd/web.lisp")))
   (when (and *httpd-server* (hc "SERVER-IS-DOWN" *httpd-server*))
     (rulisp:free *httpd-server*)
     (setf *httpd-server* nil))
@@ -992,3 +993,343 @@ server is recreated, not reused."
     (ensure-httpd)
     (with-puller (*httpd-server* #'echo-path)
       (is (equal "/after" (text (response-body (poll-until (send *httpd-server* (raw-request "GET" "/after"))))))))))
+
+;;; ---------------------------------------------------------------------------
+;;; The veneer: examples/httpd/web.lisp, what a user types
+;;; ---------------------------------------------------------------------------
+
+(defun wc (name &rest args)
+  (apply (or (find-symbol name "WEB") (error "WEB:~A missing" name)) args))
+
+(defun serve-in-thread (server handler &key (debug nil) on-error)
+  "Run WEB:SERVE on SERVER in a new thread; warnings are collected, errors
+go to ON-ERROR (a function of the condition, called in the serving thread,
+where the veneer's restarts are visible). Returns (thread . warnings-cell)."
+  (let ((warnings (list nil)))
+    (cons (bt:make-thread
+           (lambda ()
+             (catch 'out
+               (handler-bind ((warning (lambda (w) (push w (car warnings)) (muffle-warning w)))
+                              (error (lambda (e) (when on-error (funcall on-error e)))))
+                 (wc "SERVE" server handler :debug debug))))
+           :name "veneer serve")
+          warnings)))
+
+(defun stop-serving (server thread)
+  "WEB:STOP, then the serve loop sees \"usage\" and returns within a tick."
+  (wc "STOP" server)
+  (loop repeat 50 while (bt:thread-alive-p thread) do (sleep 0.05))
+  (is (not (bt:thread-alive-p thread)) "the serve loop did not return within 2.5 s of stop")
+  (rulisp:free server))
+
+(defun free-port ()
+  "A loopback port that was free a moment ago."
+  (let ((s (hc "MAKE-SERVER" "127.0.0.1:0" 1 1 1 1024 1000 1000 100 0)))
+    (prog1 (hc "SERVER-PORT" s)
+      (hc "SERVER-STOP" s)
+      (loop repeat 50 until (hc "SERVER-STOPPED" s 100))
+      (hc "SERVER-SHUTDOWN" s 2000)
+      (rulisp:free s))))
+
+(test httpd.veneer-hello
+  "The hello from the documentation, as written — WITH-SERVER around SERVE
+with a one-line handler — answers 200 text/plain with the string, and the
+whole form returns once the server is stopped from a handler, freeing the
+server on the way out."
+  (ensure-httpd)
+  (let* ((port (free-port))
+         (form (read-from-string
+                (format nil "(web:with-server (s :port ~D)
+  (web:serve s (lambda (r)
+                 (if (string= (web:request-path r) \"/quit\")
+                     (progn (web:respond r 200 \"bye\") (web:stop s))
+                     (web:respond r 200 \"Hello from Lisp!\")))
+               :debug nil))" port)))
+         (thread (bt:make-thread (lambda () (eval form)) :name "hello"))
+         (a (format nil "127.0.0.1:~D" port)))
+    (loop repeat 40 until (handler-case (hc "PROBE-POLL" *probe* (hc "PROBE-SEND" *probe* a (raw-request "GET" "/ping") "once") 100)
+                            (rulisp:rust-error () nil))
+          do (sleep 0.05))
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/") "once"))))
+      (is (eql 200 (and resp (response-status resp))))
+      (is (equal "Hello from Lisp!" (and resp (text (response-body resp)))))
+      (is (equal '("text/plain; charset=utf-8") (and resp (response-header-values resp "content-type")))))
+    (let ((bye (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/quit") "once"))))
+      (is (equal "bye" (and bye (text (response-body bye))))))
+    (loop repeat 100 while (bt:thread-alive-p thread) do (sleep 0.05))
+    (is (not (bt:thread-alive-p thread)) "WITH-SERVER did not return within 5 s of web:stop")
+    ;; the port is closed: a connection is refused
+    (is (equal "io" (handler-case (progn (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/") "once") 1000) :answered)
+                      (rulisp:rust-error (e) (err-kind e)))))))
+
+(test httpd.veneer-handler-error-is-500-and-a-warning
+  "With DEBUG NIL (START's default — production) a handler that signals is
+a warning naming the request and a bare 500; the next request is served."
+  (ensure-httpd)
+  (let* ((s (wc "SERVER"))
+         (serving (serve-in-thread s (lambda (r)
+                                       (if (string= "/boom" (wc "REQUEST-PATH" r))
+                                           (error "kaboom")
+                                           (wc "RESPOND" r 200 "fine")))))
+         (a (addr s)))
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/boom") "once"))))
+      (is (eql 500 (and resp (response-status resp))))
+      (is (= 0 (length (response-body resp))) "the 500 carried a body: ~S" (text (response-body resp))))
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/next") "once"))))
+      (is (equal "fine" (and resp (text (response-body resp))))))
+    (is (= 1 (length (car (cdr serving)))) "~D warnings" (length (car (cdr serving))))
+    (is (search "/boom" (princ-to-string (first (car (cdr serving))))))
+    (stop-serving s (car serving))))
+
+(test httpd.veneer-debug-restarts
+  "With DEBUG T (SERVE's default — the REPL) a handler error reaches the
+debugger in the handler's frame with three restarts: RETRY-HANDLER runs the
+handler again for the same request, RESPOND-500 answers it and goes on,
+SKIP-REQUEST drops it and the free answers 500. Here a handler-bind plays
+the user at the debugger."
+  (ensure-httpd)
+  (let* ((s (wc "SERVER"))
+         (calls 0)
+         (plan (list "RETRY-HANDLER" "RESPOND-500" "SKIP-REQUEST"))
+         (serving (serve-in-thread
+                   s (lambda (r) (declare (ignore r)) (incf calls) (error "always"))
+                   :debug t
+                   :on-error (lambda (e)
+                               (declare (ignore e))
+                               (let ((restart (find-restart (find-symbol (pop plan) "WEB"))))
+                                 (when restart (invoke-restart restart))))))
+         (a (addr s)))
+    ;; request 1: retry once, then respond-500 — the handler ran twice
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/one") "once"))))
+      (is (eql 500 (and resp (response-status resp))))
+      (is (= 2 calls) "the handler ran ~D times" calls))
+    ;; request 2: skip-request — the free answers 500
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/two") "once"))))
+      (is (eql 500 (and resp (response-status resp))))
+      (is (= 3 calls)))
+    (is (null plan) "restarts left unused: ~S" plan)
+    (stop-serving s (car serving))))
+
+(test httpd.veneer-throw-still-answers-500
+  "A non-local exit out of the handler — a THROW to a catch outside SERVE —
+unwinds through the loop's UNWIND-PROTECT: the request is freed and its
+client gets 500, and the serve loop is left, as the user asked."
+  (ensure-httpd)
+  (let* ((s (wc "SERVER"))
+         (serving (serve-in-thread s (lambda (r) (declare (ignore r)) (throw 'out :left))))
+         (a (addr s)))
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/throw") "once"))))
+      (is (eql 500 (and resp (response-status resp)))))
+    (loop repeat 40 while (bt:thread-alive-p (car serving)) do (sleep 0.05))
+    (is (not (bt:thread-alive-p (car serving))) "the throw did not leave the serve loop")
+    (wc "STOP" s)
+    (rulisp:free s)))
+
+(test httpd.veneer-no-response-warns-and-answers-500
+  "A handler that returns without responding is a warning naming the
+request; the client gets the 500 that freeing the request produces — never
+a client left waiting for an answer that will not come."
+  (ensure-httpd)
+  (let* ((s (wc "SERVER"))
+         (serving (serve-in-thread s (lambda (r) (declare (ignore r)) :forgot)))
+         (a (addr s)))
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/forgot") "once"))))
+      (is (eql 500 (and resp (response-status resp)))))
+    (loop repeat 20 until (car (cdr serving)) do (sleep 0.05))
+    (is (= 1 (length (car (cdr serving)))))
+    (is (search "without responding" (princ-to-string (first (car (cdr serving))))))
+    (stop-serving s (car serving))))
+
+(test httpd.veneer-request-accessors
+  "What a handler reads: the query as decoded pairs (+ and %XX), the path
+matched against a pattern with captures, the headers as an alist, the body
+as text, the peer and the version."
+  (ensure-httpd)
+  (let* ((s (wc "SERVER"))
+         (seen nil)
+         (serving (serve-in-thread
+                   s (lambda (r)
+                       (setf seen (list (wc "QUERY-PARAMS" r)
+                                        (wc "MATCH-PATH" "/users/:id/posts/:post" (wc "REQUEST-PATH" r))
+                                        (wc "MATCH-PATH" "/users/:id" (wc "REQUEST-PATH" r))
+                                        (wc "MATCH-PATH" "/users/42/posts/7" (wc "REQUEST-PATH" r))
+                                        (wc "REQUEST-HEADERS" r)
+                                        (wc "REQUEST-HEADER" r "X-Trace")
+                                        (wc "REQUEST-TEXT" r)
+                                        (wc "REQUEST-VERSION" r)
+                                        (wc "REQUEST-PEER" r)))
+                       (wc "RESPOND" r 200 (utf8 "ok") :headers '(("x-answer" . "yes"))))))
+         (a (addr s)))
+    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a
+                                (raw-request "POST" "/users/42/posts/7?a=1&b=x+y%21&c&d=%E3%81%82"
+                                             :headers '(("host" . "t") ("x-trace" . "abc") ("x-trace" . "def"))
+                                             :body (utf8 "héllo"))
+                                "once"))))
+      (is (eql 200 (and resp (response-status resp))))
+      (is (equal '("application/octet-stream") (and resp (response-header-values resp "content-type"))))
+      (is (equal '("yes") (and resp (response-header-values resp "x-answer")))))
+    (destructuring-bind (params captures no-match literal headers trace body version peer) seen
+      (is (equal '(("a" . "1") ("b" . "x y!") ("c" . "") ("d" . "あ")) params))
+      (is (equal '(("id" . "42") ("post" . "7")) captures))
+      (is (null no-match))
+      (is (eq t literal))
+      (is (equal "abc" trace))
+      (is (equal '("abc" "def") (mapcar #'cdr (remove "x-trace" headers :key #'car :test #'string/=))))
+      (is (equal "héllo" body))
+      (is (equal "HTTP/1.1" version))
+      (is (string= "127.0.0.1:" peer :end2 10)))
+    (stop-serving s (car serving))))
+
+(test httpd.veneer-respond-file
+  "RESPOND-FILE picks the content type from the extension and hands the
+file to the substrate; a missing file is HTTP-ERROR \"io\" and the handler
+may still answer."
+  (ensure-httpd)
+  (let* ((path (uiop:tmpize-pathname (merge-pathnames "httpd-veneer.json" (uiop:temporary-directory))))
+         (s (wc "SERVER"))
+         (kind nil)
+         (serving (serve-in-thread
+                   s (lambda (r)
+                       (if (string= "/missing" (wc "REQUEST-PATH" r))
+                           (progn
+                             (setf kind (handler-case (progn (wc "RESPOND-FILE" r "/nonexistent/x.json") nil)
+                                          (error (e) (ignore-errors (wc "HTTP-ERROR-KIND" e)))))
+                             (wc "RESPOND" r 404 "gone"))
+                           (wc "RESPOND-FILE" r path)))))
+         (a (addr s)))
+    (with-open-file (f path :direction :output :if-exists :supersede) (write-string "{\"a\":1}" f))
+    (unwind-protect
+         (progn
+           (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/data.json") "once"))))
+             (is (eql 200 (and resp (response-status resp))))
+             (is (equal '("application/json") (and resp (response-header-values resp "content-type"))))
+             (is (equal "{\"a\":1}" (and resp (text (response-body resp))))))
+           (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/missing") "once"))))
+             (is (eql 404 (and resp (response-status resp))))
+             (is (equal "io" kind))))
+      (ignore-errors (delete-file path))
+      (stop-serving s (car serving)))))
+
+;;; ---------------------------------------------------------------------------
+;;; Image dump (BOUNDARY §10)
+;;; ---------------------------------------------------------------------------
+
+(test httpd.dump-hook-quiesces
+  "With a request parked and a probe live, the crate's declared :on-dump
+hook must stop every server (the parked client gets 503, the port closes)
+and every probe, and leave no tokio thread behind — nothing foreign may
+survive into a dumped image half-alive. The shared server and probe are
+recreated by the next test's ENSURE-HTTPD."
+  (ensure-httpd)
+  (let ((baseline (os-thread-count))
+        (id (send *httpd-server* (raw-request "GET" "/parked") "hold")))
+    (loop repeat 20 until (= 1 (hc "SERVER-PENDING" *httpd-server*)) do (sleep 0.05))
+    ;; what uiop:dump-image will run, invoked directly
+    (rulisp::%run-crate-dump-hooks)
+    (is (hc "SERVER-IS-DOWN" *httpd-server*))
+    (is (hc "PROBE-IS-DOWN" *probe*))
+    (is (string= "usage" (kind-of-signal (hc "SERVER-WAIT" *httpd-server* 50))))
+    (let ((resp (hc "PROBE-POLL" *probe* id 100)))
+      (is (eql 503 (and resp (response-status resp))) "the parked client got ~S" (and resp (response-status resp))))
+    (is (string= "usage" (kind-of-signal (hc "PROBE-SEND" *probe* (addr *httpd-server*) (raw-request "GET" "/x") "once"))))
+    (let ((now (os-thread-count)))
+      (if (and baseline now)
+          (progn
+            (loop repeat 100 while (>= (or (os-thread-count) 0) baseline) do (sleep 0.05))
+            (is (< (or (os-thread-count) 0) baseline)
+                "~D OS threads after the hook, ~D before it (a server's workers and the probe's should be gone)"
+                (os-thread-count) baseline))
+          (pass "no /proc on this host; thread-count assertion skipped")))))
+
+(test httpd.stop-then-dump-restores
+  "The flagship end to end, in a child Lisp, in the documented order: the
+veneer's pullers are started and serve a request, WEB:STOP joins them and
+shuts the server down, the image is dumped (the hook finds nothing left to
+quiesce), and the restored image finds the pre-dump server handle stale,
+frees it, and serves from scratch with new pullers. The order is not a
+nicety: with a puller alive at dump time SBCL refuses the image or saves
+it only if the puller exited in time after the hook stopped its server,
+and CCL saved an image that faulted at exit — both measured while this
+test was written."
+  #-(or sbcl ccl)
+  (pass "skipped: no uiop:dump-image on this host (ECL ships via program-op)")
+  #+(or sbcl ccl)
+  (let* ((tmp (uiop:temporary-directory))
+         (exe (merge-pathnames (format nil "rulisp-httpd-restore-test-~A" rulisp::*process-tag*) tmp))
+         (script (merge-pathnames (format nil "rulisp-httpd-dump-phase-~A.lisp" rulisp::*process-tag*) tmp))
+         (lisp-dir (asdf:system-relative-pathname :rulisp ""))
+         (httpd-dir (asdf:system-relative-pathname :rulisp "../examples/httpd/")))
+    (uiop:delete-file-if-exists exe)
+    (with-open-file (out script :direction :output :if-exists :supersede)
+      (format out "~
+(require :asdf)
+#-quicklisp
+(let ((q (merge-pathnames \"quicklisp/setup.lisp\" (user-homedir-pathname))))
+  (when (probe-file q) (load q)))
+(push ~S asdf:*central-registry*)
+(ql:quickload '(:cffi :babel :trivial-garbage :bordeaux-threads) :silent t)
+(asdf:load-system :rulisp)
+(rulisp:use-crate ~S)
+(load ~S)
+(defun hf (name &rest args) (apply (find-symbol name \"HTTPD\") args))
+(defun ok (tag) (format t \"~~A~~%\" tag) (finish-output))
+(defun get-raw (path)
+  (babel:string-to-octets (format nil \"GET ~~A HTTP/1.1~~C~~Chost: t~~C~~C~~C~~C\" path
+                                  #\\Return #\\Linefeed #\\Return #\\Linefeed #\\Return #\\Linefeed)))
+(defun status (octets) (parse-integer (babel:octets-to-string (subseq octets 9 12))))
+(defun fetch-once (probe addr path)
+  (loop repeat 30 thereis (hf \"PROBE-POLL\" probe (hf \"PROBE-SEND\" probe addr (get-raw path) \"once\") 100)))
+(defvar *s* (web:server))
+(defvar *p* (hf \"MAKE-PROBE\"))
+(web:start *s* (lambda (r) (web:respond r 200 \"ok\")) :threads 2)
+(assert (= 200 (status (fetch-once *p* (format nil \"127.0.0.1:~~D\" (web:port *s*)) \"/hello\"))))
+(ok \"SERVED-BEFORE-DUMP\")
+(setf uiop:*image-entry-point*
+      (lambda ()
+        (handler-case
+            (progn
+              (handler-case
+                  (progn (hf \"SERVER-PORT\" *s*)
+                         (format t \"FAIL: pre-dump server did not signal~~%\")
+                         (uiop:quit 1))
+                (rulisp:stale-handle-error () t))
+              (assert (eq t (rulisp:free *s*)))
+              (let* ((s3 (web:server))
+                     (p3 (hf \"MAKE-PROBE\"))
+                     (a3 (format nil \"127.0.0.1:~~D\" (web:port s3))))
+                (web:start s3 (lambda (r) (web:respond r 200 \"restored\")) :threads 1)
+                (let ((resp (fetch-once p3 a3 \"/r\")))
+                  (assert (= 200 (status resp)))
+                  (assert (search \"restored\" (babel:octets-to-string resp))))
+                (web:stop s3) (rulisp:free s3)
+                (hf \"PROBE-SHUTDOWN\" p3 1000) (rulisp:free p3))
+              (format t \"HTTPD-RESTORE-OK~~%\")
+              (uiop:quit 0))
+          (error (e)
+            (format t \"FAIL: ~~A~~%\" e)
+            (uiop:quit 1)))))
+;; the documented order: stop (joins the pullers, shuts the server down),
+;; then dump; the probe's runtime is the hook's to quiesce
+(web:stop *s*)
+(assert (hf \"SERVER-IS-DOWN\" *s*))
+(ok \"STOPPED-BEFORE-DUMP\")
+(uiop:dump-image ~S :executable t)~%"
+              (namestring lisp-dir) (namestring httpd-dir)
+              (namestring (merge-pathnames "web.lisp" httpd-dir))
+              (namestring exe)))
+    (multiple-value-bind (out err code)
+        (uiop:run-program
+         (append #+sbcl (list "sbcl" "--non-interactive")
+                 #+ccl (list (first ccl:*command-line-argument-list*) "--batch")
+                 (list "--load" (uiop:native-namestring script)))
+         :output :string :error-output :string :ignore-error-status t)
+      (is (zerop code) "dump phase failed (~D):~%~A~%~A" code out err)
+      (is (search "SERVED-BEFORE-DUMP" out))
+      (is (search "STOPPED-BEFORE-DUMP" out)))
+    (multiple-value-bind (out err code)
+        (uiop:run-program (list (uiop:native-namestring exe))
+                          :output :string :error-output :string :ignore-error-status t)
+      (is (zerop code) "restore phase failed: out=~A err=~A" out err)
+      (is (search "HTTPD-RESTORE-OK" out)))
+    (uiop:delete-file-if-exists exe)
+    (uiop:delete-file-if-exists script)))

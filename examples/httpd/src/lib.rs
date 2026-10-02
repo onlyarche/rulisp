@@ -975,9 +975,14 @@ impl ProbeInner {
             .map(|(s, _)| s.clone())
             .ok_or_else(|| HttpError::new("usage", format!("no probe connection {id}")))
     }
+    /// Abort every connection task and take the runtime down; what each
+    /// connection had received stays readable through `poll`, so a test can
+    /// see the 503 the dump hook wrote before it reached the probe.
     fn quiesce(&self, grace: Duration) {
-        for (_, (_, task)) in self.conns.lock().unwrap().drain() {
+        for (slot, task) in self.conns.lock().unwrap().values() {
             task.abort();
+            slot.0.lock().unwrap().closed = true;
+            slot.1.notify_all();
         }
         if let Some(rt) = self.rt.lock().unwrap().take() {
             rt.shutdown_timeout(grace);

@@ -44,6 +44,9 @@ supported approach: the WASI sandbox, `wasm:make-wasi` (since 0.7).
 `wasm:make-wasm`, the plain module runner, is for modules you trust: it
 may run unmetered and bounds no memory.
 
+`examples/httpd` (since 0.8) is a server that listens on a socket: what it
+bounds, and what it does not, is listed after the sandbox's.
+
 ### What the WASI sandbox bounds, and what it does not
 
 Each line of the first list is a test in `tests/suite/wasm.lisp`
@@ -87,6 +90,84 @@ It does not bound:
   (never the file a link outside points at)
 - a filesystem that is itself slow, and a directory that changes under
   the guest while it runs
+
+### What the HTTP server bounds, and what it does not
+
+`examples/httpd` is HTTP/1.1 and h2c on hyper, in front of a Lisp pull
+loop. Each line of the first list is a test in `tests/suite/httpd.lisp`
+(`httpd.*`), found or confirmed by attacking the finished server; the
+limits are the nine arguments of `httpd:make-server`, and the veneer's
+`web:server` gives them defaults.
+
+It bounds:
+
+- **time to send a request head** — HEAD-MS from the connection's first
+  byte, and from accept for a client that sends nothing or only a prefix
+  of the HTTP/2 preface (hyper's timer arms after that sniff, which has
+  none of its own); the same timer bounds an idle keep-alive connection
+  (`httpd.slowloris-is-closed`, `httpd.keep-alive-idle-is-closed`)
+- **a request body** — BODY-CAP bytes, declared or chunked, is 413;
+  BODY-MS to arrive is 408; the body is read before anything reaches
+  Lisp (`httpd.body-cap-is-413`, `httpd.body-drip-is-408`)
+- **bodies in memory** — at most QUEUE being read at once, whatever the
+  protocol or the number of connections: an HTTP/2 client's streams share
+  the same slots, so one connection cannot hold streams × BODY-CAP; with
+  QUEUE parked and one per puller, bodies are at most (2 × QUEUE +
+  pullers) × BODY-CAP (`httpd.bodies-in-flight-are-bounded`)
+- **requests parked for Lisp** — QUEUE; one more waits QUEUE-WAIT-MS for
+  a slot, then 503 with Retry-After, so a burst costs latency before it
+  costs errors; a client that leaves while parked frees its slot
+  (`httpd.queue-full-waits-then-503`, `httpd.client-that-left-is-pruned`)
+- **open connections** — MAX-CONNECTIONS, a permit per accept; the next
+  client waits in the kernel backlog with no descriptor opened in this
+  process (`httpd.connection-cap-holds`)
+- **a handler's time** — HANDLER-MS from arrival to answer, then 504 and
+  the late answer is "gone"; 0, the REPL default, means never
+  (`httpd.handler-timeout-is-504`)
+- **every answer** — a request pulled and never answered is 500 when its
+  handle is freed, by the veneer's `unwind-protect` or by the GC; stop is
+  graceful (parked requests 503, pulled ones finish); after a crash of
+  the Lisp side nothing is left waiting (`httpd.unanswered-request-is-
+  500-on-free`, `httpd.stop-answers-parked-503-and-pulled-finish`)
+- **what Lisp can put on the wire** — a header value with CR or LF, a
+  block that is not CRLF-separated, a Transfer-Encoding, a Content-Length
+  that is not the body's, a 1xx, a 204 or 304 with a body: each is
+  refused before a byte is written, with the request still answerable
+  (`httpd.header-injection-refused`, `httpd.framing-and-status-are-
+  checked`)
+- **a file answered** — `request-respond-file` sends regular files only,
+  checked before the open, so a FIFO cannot block the Lisp thread; the
+  bytes never cross the boundary (`httpd.respond-file-streams`)
+- **hyper's own limits** — 100 request headers and a 400 KB head buffer
+  (431 or a close); HTTP/2's 200 streams per connection, 1024 local
+  resets, 16 KB frames and 1 MB windows at hyper's defaults
+  (`httpd.header-bomb-is-refused`)
+- **every wait on a Lisp thread** — 100 ms, whatever was asked for; the
+  loop is in Lisp, so Ctrl-C lands within a tick (`httpd.waits-are-capped`)
+
+It does not bound:
+
+- **TLS** — there is none; the deployment story is a terminating proxy in
+  front, which also means browsers speak HTTP/1.1 to it and HTTP/2
+  arrives only from proxies and API clients with prior knowledge
+- **a handler's work and heap** — what your Lisp does with a request is
+  yours; HANDLER-MS bounds the client's wait, not the handler, and at the
+  REPL default of 0 a debugger session holds its client until you answer
+- **an idle HTTP/2 connection** — bounded only by MAX-CONNECTIONS, since
+  the head timer is HTTP/1.1's; and hyper's HTTP/2 limits beyond their
+  defaults
+- **the kernel's backlog** — a client queued there when the server stops
+  is reset, not answered; and a connection still sending its head at stop
+  is given until HEAD-MS before `server-stopped` turns T
+- **per-connection buffers** — about 0.4 MB of head buffer per HTTP/1.1
+  connection and the 1 MB window per HTTP/2 one, times MAX-CONNECTIONS,
+  beside the bodies above
+- **an image dump with pullers alive** — the hook runs on every attempt:
+  on SBCL the dump is refused, or saved if the pullers exited in time
+  after their server stopped; on CCL an image saved with a puller alive
+  faulted at exit. Stop first (`web:stop`), then dump
+- **a bug in hyper, axum, tokio or the glue** — in-process, as every
+  crate: the crash-isolation bullet above applies
 
 ## Supported versions
 

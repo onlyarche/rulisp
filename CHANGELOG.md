@@ -7,6 +7,26 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.8 development)
 
+### Added
+
+- **`examples/httpd` — an HTTP server with Lisp handlers**, the 0.8
+  flagship: HTTP/1.1 and h2c on axum/hyper/tokio in front of a Lisp pull
+  loop (`server-wait`, `take-request`, `request-respond`,
+  `request-respond-file`), with every bound in the first feature commit —
+  a timer on every connection from its first byte, a body size and time,
+  a connection cap, a bounded queue that waits before 503, bodies in
+  memory bounded by the queue whatever the protocol, a handler timeout,
+  a graceful stop, a bounded dump hook — and the checks on what Lisp puts
+  on the wire. `web.lisp`, the veneer: `web:server` with keyword
+  defaults, `web:with-server`, `web:serve` (the debugger in the handler's
+  frame with `respond-500`, `retry-handler`, `skip-request`), `web:start`
+  / `web:stop` for background pullers, request accessors, `query-params`,
+  `match-path`, `web:respond` and `web:respond-file`. A hermetic suite of
+  41 tests on the crate's own `Probe` client; a five-lens review before
+  the merge found and closed three bounds the first cut lacked. SECURITY.md
+  lists what the server bounds and what it does not. Not in 0.8: TLS (a
+  proxy), streaming responses, a blob (item 4), a page (item 3).
+
 ## 0.7.0 — 2026-09-30
 
 **Surfaces this cycle** (docs/stability.md §8 criterion 3: a second
