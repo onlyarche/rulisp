@@ -245,7 +245,7 @@ impl Svc {
     fn drain(&self) {
         let drained: Vec<Parked> = self.q.lock().unwrap().drain(..).collect();
         for p in drained {
-            let _ = p.reply.send(status_only(503));
+            let _ = p.reply.send(retry_later());
         }
         self.slot_freed.notify_waiters();
     }
@@ -272,7 +272,7 @@ impl Drop for ConnGuard {
 
 async fn park(State(svc): State<Arc<Svc>>, req: axum::extract::Request) -> Response<Body> {
     if svc.down.load(SeqCst) {
-        return status_only(503);
+        return retry_later();
     }
     let (mut parts, body) = req.into_parts();
     // HTTP/2 carries the host as :authority, which hyper keeps in the URI:

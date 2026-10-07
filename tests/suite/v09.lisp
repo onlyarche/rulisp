@@ -101,11 +101,17 @@ collector and the debugger away from it."
 
 (test v09.inbox-free-mid-stream
   "Freeing the handle while the producer is still sending closes the
-inbox; the producer stops at its next send, and a new ticker works."
+inbox; the producer stops at its next send (within one 10 ms interval),
+and a new ticker works."
   (ensure-inbox)
+  ;; earlier tests' producers end within their own intervals (at most 1 s)
+  (loop repeat 40 until (zerop (ib-call "PRODUCERS-LIVE")) do (sleep 0.05))
   (let ((ticker (ib-call "MAKE-TICKER" 1000 10 8)))
     (is (eql 0 (loop repeat 20 thereis (ib-call "TICKER-NEXT" ticker 100))))
-    (is (eq t (rulisp:free ticker))))
+    (is (= 1 (ib-call "PRODUCERS-LIVE")))
+    (is (eq t (rulisp:free ticker)))
+    (is (loop repeat 40 thereis (zerop (ib-call "PRODUCERS-LIVE")) do (sleep 0.05))
+        "the producer was still running 2 s after its ticker was freed"))
   (let ((again (ib-call "MAKE-TICKER" 3 1 8)))
     (unwind-protect
          (is (equal '(0 1 2) (%drain-ticker again)))

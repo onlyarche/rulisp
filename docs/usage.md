@@ -45,7 +45,7 @@ the host, with a clear condition when the platform isn't covered:
 (rulisp:load-blob-crate #p"/path/to/blobs/" "mylib")
 ```
 
-The four examples ship this way: every release at
+Four of the examples ship this way (httpd ships as source): every release at
 <https://github.com/onlyarche/rulisp/releases> carries `wordbag`, `rx`,
 `wasm` and `fetch` for Linux x86-64 and aarch64, macOS arm64 and Windows
 x86-64 (aarch64 from 0.7.0),
@@ -160,6 +160,7 @@ impl Events {
 }
 // producers hold clones: inbox.try_send(v) never blocks, and hands the
 // value back when the inbox is full or closed
+rulisp::module! { name: "mylib", handles: [Events], fns: [Events::next] }
 ```
 
 ```lisp
@@ -171,7 +172,9 @@ The inbox is bounded: a consumer that falls behind costs the producer a
 refusal it can count, not memory. Each pull waits at most 100 ms, so the
 loop stays in Lisp and Ctrl-C lands within a tick. When the producer is
 done it closes the inbox, and the pull signals `rulisp:rust-error`
-"closed: …" once every event was taken. `Ticker` in tests/inbox-fixture is
+"closed: …" once every event was taken. Only `close` ends the stream, so
+a producer must call it on every exit path; a guard whose `Drop` closes
+the inbox does that. `Ticker` in tests/inbox-fixture is
 the tested example (tests/suite/v09.lisp).
 
 A stored callback (`rulisp:callback`) still works when you want Rust to

@@ -106,8 +106,25 @@ struct Shared<T> {
 /// A bounded, multi-producer queue whose consumer is Lisp. Cloning shares
 /// the same queue; give a clone to each producer and keep one in the
 /// handle Lisp holds.
+///
+/// Nothing but [`Inbox::close`] ends the stream: a producer that panics or
+/// returns without calling it leaves the consumer seeing `Ok(None)` on
+/// every pull. Close on every exit path — a guard whose `Drop` calls
+/// `close` does that.
 pub struct Inbox<T> {
     shared: Arc<Shared<T>>,
+}
+
+impl<T> std::fmt::Debug for Inbox<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut d = f.debug_struct("Inbox");
+        d.field("capacity", &self.shared.capacity);
+        // try_lock: formatting must never block on a producer
+        if let Ok(s) = self.shared.state.try_lock() {
+            d.field("len", &s.queue.len()).field("closed", &s.closed);
+        }
+        d.finish_non_exhaustive()
+    }
 }
 
 impl<T> Clone for Inbox<T> {
@@ -155,7 +172,9 @@ impl<T> Inbox<T> {
     /// thread that may block — never an async task, and never a Lisp
     /// thread (use [`Inbox::try_send`] there).
     pub fn send_timeout(&self, value: T, timeout: Duration) -> Result<(), SendError<T>> {
-        let deadline = Instant::now() + timeout;
+        // a timeout too large to add to now (Duration::MAX) waits for room
+        // without a deadline
+        let deadline = Instant::now().checked_add(timeout);
         let mut st = self.lock();
         loop {
             if st.closed {
@@ -167,16 +186,20 @@ impl<T> Inbox<T> {
                 self.shared.not_empty.notify_one();
                 return Ok(());
             }
-            let now = Instant::now();
-            if now >= deadline {
-                return Err(SendError::Full(value));
-            }
-            st = self
-                .shared
-                .not_full
-                .wait_timeout(st, deadline - now)
-                .unwrap_or_else(|p| p.into_inner())
-                .0;
+            st = match deadline {
+                None => self.shared.not_full.wait(st).unwrap_or_else(|p| p.into_inner()),
+                Some(d) => {
+                    let now = Instant::now();
+                    if now >= d {
+                        return Err(SendError::Full(value));
+                    }
+                    self.shared
+                        .not_full
+                        .wait_timeout(st, d - now)
+                        .unwrap_or_else(|p| p.into_inner())
+                        .0
+                }
+            };
         }
     }
 
@@ -302,6 +325,14 @@ mod tests {
         assert_eq!(ib.send_timeout(2, Duration::from_secs(5)), Ok(()));
         assert_eq!(h.join().unwrap(), Some(1));
         assert_eq!(ib.recv(0), Ok(Some(2)));
+    }
+
+    #[test]
+    fn send_timeout_takes_any_duration() {
+        let ib = Inbox::new(1);
+        assert_eq!(ib.send_timeout(1, Duration::MAX), Ok(()));
+        ib.close();
+        assert_eq!(ib.send_timeout(2, Duration::MAX), Err(SendError::Closed(2)));
     }
 
     #[test]

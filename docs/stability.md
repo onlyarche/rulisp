@@ -10,7 +10,7 @@ makes is enforced.
 
 | Surface | Where it lives | Breaking means |
 |---|---|---|
-| **Rust API** — `#[rulisp::export]`, `#[rulisp::handle]`, `rulisp::module!`, their attribute grammar, `Error`, `Callback`, `StoredCallback`, `HandleType`, the `prelude` | crates.io: `rulisp`, `rulisp-macros`, `rulisp-runtime` | a glue crate that compiled stops compiling, or compiles to a different manifest/shim |
+| **Rust API** — `#[rulisp::export]`, `#[rulisp::handle]`, `rulisp::module!`, their attribute grammar, `Error`, `Callback`, `StoredCallback`, `HandleType`, `Inbox`, `SendError`, `Closed`, `inbox::WAIT_CAP_MS`, the `prelude` | crates.io: `rulisp`, `rulisp-macros`, `rulisp-runtime` | a glue crate that compiled stops compiling, or compiles to a different manifest/shim |
 | **Lisp API** — the symbols `lisp/src/package.lisp` exports, pinned in `tests/golden/lisp-api.sexp` (`use-crate`, `load-crate`, `load-blob-crate`, `reload-crate`, `free`, `callback`, the condition classes and their readers, …) | ASDF system `rulisp` | a call that worked signals, returns a different type, or a documented condition class stops being signaled where it was |
 | **Manifest schema** — the s-expression a cdylib embeds (`:schema`, `:functions`, `:handles`, type tokens, `:on-dump`, …) | BOUNDARY.md §11 | a manifest a released macro emitted no longer loads, or a token's meaning changes |
 | **C ABI** — symbol naming, status codes, `last_error`, buffer ownership, handle and callback wire | BOUNDARY.md §1–§10, `abi_version()` | anything §1–§10 says, changed |
@@ -115,8 +115,10 @@ Allegro, ABCL, other architectures) is untested and unclaimed.
 **Tiers (since 0.9).** Every required job keeps running what it runs
 today; the tiers decide what a *new* feature must reach.
 
-- **SBCL is tier 1.** Every feature and every example works on it, on all
-  four platforms. Design decisions and measurements are made on SBCL.
+- **SBCL is tier 1.** Every feature works on it on all four platforms; the
+  example suites (fetch, httpd) are required on Linux x86-64, aarch64 and
+  macOS and best-effort on Windows (README §Status). Design decisions and
+  measurements are made on SBCL.
 - **CCL is tier 2.** A feature reaches CCL when it can be written with
   the portable libraries rulisp already depends on (CFFI,
   bordeaux-threads, trivial-garbage, UIOP) and standard Common Lisp. A

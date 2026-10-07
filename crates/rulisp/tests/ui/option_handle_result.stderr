@@ -1,4 +1,4 @@
-error: rulisp: Option<Handle> is not a result type — a handle result is a constructor's Handle or Result<Handle, E>; for 'the next item or none', export a bool wait and a constructor (examples/fetch: client-next-ready + make-req; examples/httpd: server-wait + take-request)
+error: rulisp: Option<T> is not a result type when T is a handle or a type rulisp does not know — a handle result is a constructor's Handle or Result<Handle, E>; for 'the next item or none', export a bool wait and a constructor (examples/fetch: client-next-ready + make-req; examples/httpd: server-wait + take-request)
   --> tests/ui/option_handle_result.rs:16:40
    |
 16 |     pub fn next(_s: &Source) -> Option<Item> {

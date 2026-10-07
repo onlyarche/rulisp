@@ -1,7 +1,25 @@
 //! rulisp::Inbox's tested example (tests/suite/v09.lisp): the queue
 //! direction of the boundary, with no Lisp callback and no adopted thread.
 
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Producer threads still running: lets v09 observe that freeing a
+/// ticker stops its producer.
+static LIVE_PRODUCERS: AtomicU64 = AtomicU64::new(0);
+
+struct LiveGuard;
+
+impl Drop for LiveGuard {
+    fn drop(&mut self) {
+        LIVE_PRODUCERS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Producer threads of every ticker that have not exited yet.
+#[rulisp::export]
+pub fn producers_live() -> u64 {
+    LIVE_PRODUCERS.load(Ordering::SeqCst)
+}
 
 use rulisp::prelude::*;
 
@@ -31,7 +49,9 @@ impl Ticker {
         let dropped = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
         let (tx, lost) = (inbox.clone(), dropped.clone());
         let interval = std::time::Duration::from_millis(interval_ms.min(1000));
+        LIVE_PRODUCERS.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
+            let _live = LiveGuard;
             for i in 0..count {
                 match tx.try_send(i) {
                     Ok(()) => {}
@@ -68,5 +88,5 @@ impl Ticker {
 rulisp::module! {
     name: "inboxfix",
     handles: [Ticker],
-    fns: [Ticker::new, Ticker::next, Ticker::dropped, Ticker::pending],
+    fns: [Ticker::new, Ticker::next, Ticker::dropped, Ticker::pending, producers_live],
 }

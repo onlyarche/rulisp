@@ -7,6 +7,16 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.8 development)
 
+**Surfaces this cycle.** *Lisp API*: no export added or removed — the
+golden's 47 rows are unchanged (`make compat PREV=v0.7.0`:
+API-SUBSET-OK); `load-crate` on a directory now signals the documented
+`crate-not-loaded-error` where a host stream error was. *Rust API*:
+additive — `rulisp::Inbox`, `SendError`, `Closed`, `rulisp::inbox` and
+its `WAIT_CAP_MS`; two diagnostics reworded; no crate that compiled stops
+compiling (an `on_dump` hook with parameters never compiled; one with a
+result still compiles and is refused by the loader as before).
+*Manifest schema*: unchanged. *ABI*: 1.
+
 ### Fixed
 
 - **`load-crate` on a crate directory** signals `crate-not-loaded-error`
@@ -30,9 +40,11 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   functions must be constructors", which is wrong on a constructor; it now
   says `Option<Handle>` is not a result type and points at the bool-wait
   plus constructor shape. `module!`'s `on_dump:` naming a function with
-  parameters or a result used to fail as a bare E0308 from a hidden
-  fn-pointer coercion; a const assertion on the export's own metadata now
-  fails with rulisp's sentence (BOUNDARY §10). `#[diagnostic::on_unimplemented]`
+  parameters used to fail as a bare E0308 from a hidden fn-pointer
+  coercion; a const assertion on the export's own metadata now fails with
+  rulisp's sentence (BOUNDARY §10). A hook with a non-unit result still
+  compiles and is refused by the loader, as in 0.7, so no crate that
+  compiled stops compiling. `#[diagnostic::on_unimplemented]`
   was probed first and is not used for an arity mismatch on MSRV 1.78. No
   Rust API item added; the manifest and the shims are unchanged. Two
   trybuild cases, `option_handle_result` and `on_dump_with_params`.
@@ -71,7 +83,8 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   41 tests on the crate's own `Probe` client; a five-lens review before
   the merge found and closed three bounds the first cut lacked. SECURITY.md
   lists what the server bounds and what it does not. Not in 0.8: TLS (a
-  proxy), streaming responses.
+  proxy), streaming responses. httpd ships as source (`use-crate`): the
+  release still carries sixteen assets, for wordbag, rx, wasm and fetch.
 - **docs/httpd.md, the web developer's page**: the hello, JSON and files,
   the loop's contract (which status on which path), errors in a handler,
   the limits table with the memory bound, testing, deploying, and when to

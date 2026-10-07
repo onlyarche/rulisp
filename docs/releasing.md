@@ -9,7 +9,10 @@ worked; each has a check, so a slip is caught before the next step.
    other two crates, the two path-dependency pins, `lisp/rulisp.asd`, the
    README status line, the `rulisp = "X.Y"` lines in docs/quickstart.md
    and docs/usage.md. `make check-versions` must pass; `cargo build`
-   refreshes `Cargo.lock`, which is committed.
+   refreshes `Cargo.lock`, which is committed. The standalone fixtures
+   pin rulisp by path in their own locks: run `cargo update -p rulisp`
+   with `--manifest-path tests/m1-handwritten/Cargo.toml` and with
+   `--manifest-path tests/inbox-fixture/Cargo.toml`, and commit both.
 2. **CHANGELOG.** Rename `## Unreleased (…)` to `## X.Y.Z — YYYY-MM-DD`.
    The release workflow takes that section, verbatim, as the GitHub
    Release body — and fails if it cannot find it.
@@ -43,7 +46,8 @@ worked; each has a check, so a slip is caught before the next step.
 
 6. **Tag, and push the tag.** `git tag vX.Y.Z && git push origin vX.Y.Z`.
    The tag push runs `.github/workflows/blobs.yml`: release-profile builds
-   of the four examples on every required host, each run through
+   of four of the examples (wordbag, rx, wasm, fetch; httpd ships as
+   source) on every required host, each run through
    `tools/rulisp-audit.sh` on its own host and again, all sixteen
    together, in the release job on Linux (BOUNDARY §7), attached to a
    GitHub Release for the tag with the CHANGELOG section as its body.

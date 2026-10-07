@@ -365,8 +365,9 @@ fn classify_result(ty: Option<&Type>, ctor: bool) -> Result<RTy, Error> {
                         )),
                         RTy::Handle(_) => Err(Error::new(
                             inner.span(),
-                            "rulisp: Option<Handle> is not a result type — a handle \
-                             result is a constructor's Handle or Result<Handle, E>; for \
+                            "rulisp: Option<T> is not a result type when T is a handle \
+                             or a type rulisp does not know — a handle result is a \
+                             constructor's Handle or Result<Handle, E>; for \
                              'the next item or none', export a bool wait and a \
                              constructor (examples/fetch: client-next-ready + make-req; \
                              examples/httpd: server-wait + take-request)",
@@ -1346,9 +1347,11 @@ pub fn module(input: TokenStream) -> TokenStream {
     // BOUNDARY §10: the on-dump export must be a zero-arg free fn declared
     // in fns (the loader independently validates params/result from the
     // manifest). A const assertion on the export's own metadata rejects
-    // parameters or a result here, in rulisp's words: a fn-pointer
-    // coercion did the same with a bare E0308, and on MSRV 1.78
+    // parameters here, in rulisp's words: a fn-pointer coercion did the
+    // same with a bare E0308, and on MSRV 1.78
     // #[diagnostic::on_unimplemented] is not used for an arity mismatch.
+    // A non-unit result is still left to the loader, as in 0.7: refusing
+    // it here would stop a crate that compiled from compiling.
     let (on_dump_meta, on_dump_guard) = match &input.on_dump {
         Some(f) => {
             let sym = f.to_string();
@@ -1366,11 +1369,10 @@ pub fn module(input: TokenStream) -> TokenStream {
                     let meta = meta_const_ident(&sym);
                     quote! {
                         const _: () = ::core::assert!(
-                            #meta.params.len() == 0
-                                && ::core::matches!(#meta.result, ::rulisp::runtime::ResultTy::Unit),
-                            "rulisp: on_dump must name a fn with no parameters and no result \
-                             (BOUNDARY §10) — a hook that needs a server reaches it through a \
-                             registry of live handles, as examples/fetch and examples/httpd do"
+                            #meta.params.len() == 0,
+                            "rulisp: on_dump must name a fn with no parameters (BOUNDARY §10) \
+                             — a hook that needs a server reaches it through a registry of \
+                             live handles, as examples/fetch and examples/httpd do"
                         );
                     }
                 },

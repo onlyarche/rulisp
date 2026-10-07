@@ -358,13 +358,17 @@ a match with no captures — and NIL when the path does not match:
 ;;; ---------------------------------------------------------------------------
 
 (defmacro %answering (req &body body)
-  "A client that left is a warning, not an error: the handler did its job."
-  `(handler-case (progn (setf %*answered* t) ,@body)
+  "A client that left is a warning, not an error: the handler did its job.
+The request counts as answered only once the answer went out (or nobody
+was left to take it); a refused answer leaves it the handler's to answer."
+  `(handler-case (multiple-value-prog1 (progn ,@body) (setf %*answered* t))
      (rulisp:rust-error (e)
        (multiple-value-bind (kind detail) (%kind e)
          (if (string= kind "gone")
-             (warn "~A ~A: the client went away before the answer (~A)"
-                   (%call "REQUEST-METHOD" ,req) (%call "REQUEST-PATH" ,req) detail)
+             (progn
+               (setf %*answered* t)
+               (warn "~A ~A: the client went away before the answer (~A)"
+                     (%call "REQUEST-METHOD" ,req) (%call "REQUEST-PATH" ,req) detail))
              (error 'http-error :kind kind :detail detail))))))
 
 (defun %with-content-type (headers content-type)

@@ -95,7 +95,8 @@ It does not bound:
 
 `examples/httpd` is HTTP/1.1 and h2c on hyper, in front of a Lisp pull
 loop. Each line of the first list is a test in `tests/suite/httpd.lisp`
-(`httpd.*`), found or confirmed by attacking the finished server; the
+(`httpd.*`), found or confirmed by the review that attacked the server
+before it merged (the planned adversarial pass was not run); the
 limits are the nine arguments of `httpd:make-server`, and the veneer's
 `web:server` gives them defaults.
 
