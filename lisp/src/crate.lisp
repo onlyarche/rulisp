@@ -247,6 +247,14 @@ PE — every section's raw data does."
   path)
 
 (defun %load-crate-locked (path crate-arg package)
+  ;; a crate directory, with or without its trailing slash, is the first
+  ;; mistake a new user makes; the shape check would open it and fail with
+  ;; the host's stream error (SBCL: SIMPLE-STREAM-ERROR "Is a directory")
+  (when (uiop:directory-exists-p path)
+    (error 'crate-not-loaded-error
+           :name (namestring path)
+           :message (format nil "~A is a directory — load-crate takes a built artifact (lib<name>.so/.dylib/.dll); use-crate builds a crate directory"
+                            path)))
   (let* ((path (or (probe-file path)
                    (error 'crate-not-loaded-error
                           :name (namestring path)

@@ -119,7 +119,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | Out for now: non-SBCL image dump | stale | **resolved** — replaced in the audit: ECL has no image dump, ship a program-op executable — CI step make test-ecl-program; CCL dump/restore is test m7.dump-restore |
 | rulisp does not auto-bind arbitrary existing crates, by design | capability | ROADMAP.md "Non-goals"; DESIGN.md §1 non-goals; lisp/src/crate.lisp %open-and-verify refuses a non-rulisp library with abi-mismatch-error |
 | License: MIT | capability | LICENSE (MIT License, 2026 arche); crates/*/Cargo.toml license = "MIT"; lisp/rulisp.asd :license "MIT" |
-| examples/httpd/ is an HTTP/1.1 and h2c server on axum, hyper and tokio whose handlers are Lisp functions | capability | tests httpd.hello-round-trip, httpd.h2c-prior-knowledge, httpd.veneer-hello (tests/suite/httpd.lisp); examples/httpd/Cargo.toml (axum, hyper, hyper-util, tokio) |
+| examples/httpd/ is the pattern for Rust events with Lisp handlers, worked through as an HTTP/1.1 and h2c server on axum, hyper and tokio | capability | tests httpd.hello-round-trip, httpd.h2c-prior-knowledge, httpd.veneer-hello (tests/suite/httpd.lisp); examples/httpd/Cargo.toml (axum, hyper, hyper-util, tokio) |
 | the head, body and connection limits hold before Lisp sees a byte | capability | tests httpd.slowloris-is-closed, httpd.body-cap-is-413, httpd.body-drip-is-408, httpd.connection-cap-holds, httpd.header-bomb-is-refused (each asserts nothing was parked) |
 | every request gets an answer, even from a handler that fails | capability | tests httpd.veneer-handler-error-is-500-and-a-warning, httpd.veneer-throw-still-answers-500, httpd.veneer-no-response-warns-and-answers-500, httpd.unanswered-request-is-500-on-free |
 | SBCL on Linux x86-64, aarch64 and macOS, and CCL on Linux, also run the HTTP server example (best-effort on Windows) | host | .github/workflows/ci.yml steps "httpd suite" (SBCL/Linux, macOS, aarch64), "httpd suite on CCL", "httpd suite (best-effort on Windows)" with continue-on-error |
@@ -271,6 +271,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | Ctrl-C stops the loop, and with-server stops and frees the server | capability | test httpd.waits-are-capped (every wait 100 ms at most, so the interrupt lands); examples/httpd/web.lisp with-server (unwind-protect: stop, then free); test httpd.veneer-hello (the port is closed after the form returns) |
 | web:start serves in its own threads and keeps the REPL; web:stop joins them | capability | examples/httpd/web.lisp start/stop; test httpd.stop-then-dump-restores (start, serve, stop, dump) |
 | Stop before you dump an image | capability | test httpd.stop-then-dump-restores; BOUNDARY.md §12 dump-hook row; commit aae54ac (SBCL refuses with a live Lisp thread, CCL faulted at exit) |
+| load-crate takes the built file; given a crate directory it signals crate-not-loaded-error pointing at use-crate | capability | test v08.load-crate-on-a-directory-is-refused (tests/suite/v08.lisp; both spellings, the message names use-crate, nothing registered or copied); lisp/src/crate.lisp %load-crate-locked |
 
 ## docs/distribution.md
 
@@ -420,12 +421,13 @@ extracted 371 entries, 24 of which were dated wording found true, so
 |---|---|---|
 | examples/httpd is an HTTP/1.1 and h2c server; axum, hyper and tokio own the sockets, the parsing and the timers | capability | tests httpd.hello-round-trip, httpd.h2c-prior-knowledge; examples/httpd/src/lib.rs accept_loop (hyper-util auto builder, TokioTimer) |
 | Your handler is a Lisp function a pull loop calls, one request at a time per thread | capability | examples/httpd/web.lisp %serve (server-wait, take-request, %handle in turn); test httpd.concurrent-pullers-exactly-once |
-| HTTP/2 without TLS (h2c) | capability | test httpd.h2c-prior-knowledge |
+| Rust holds the connections, parses HTTP, runs the timers and limits, and answers 503 when the queue is full | capability | examples/httpd/src/lib.rs accept_loop and park; tests httpd.connection-cap-holds, httpd.slowloris-is-closed, httpd.queue-full-waits-then-503 |
+| Handlers can be redefined at the REPL while the server runs; a handler error opens the debugger on the request that caused it | capability | examples/httpd/web.lisp %handle (funcall on every request, so a handler given as a symbol, or calling named functions, picks up a redefinition); test httpd.veneer-debug-restarts |
+| Rust never calls into Lisp: each request goes on a queue and a Lisp thread takes it off | capability | examples/httpd/src/lib.rs (no rulisp::callback anywhere; Svc::push / take); test httpd.no-thread-adoption |
+| A waiting Lisp thread wakes as soon as a request arrives; the 100 ms cap exists so Ctrl-C reaches the Lisp loop | capability | examples/httpd/src/lib.rs Svc::wait (Condvar notified by push); test httpd.waits-are-capped; BOUNDARY.md §7 |
+| A Lisp server (Hunchentoot, Clack) offers sessions, cookies, multipart, static files and TLS, which this example does not | capability | examples/httpd/web.lisp:22-30 (exports); examples/httpd/Cargo.toml (no TLS) |
 | The limits are enforced before Lisp sees a byte | capability | tests httpd.slowloris-is-closed, httpd.body-cap-is-413, httpd.body-drip-is-408, httpd.header-bomb-is-refused (each asserts server-pending 0) |
-| Many keep-alive connections are held by tokio tasks in front of a few Lisp threads | capability | examples/httpd/src/lib.rs accept_loop (one tokio task per connection, a semaphore permit each); tests httpd.connection-cap-holds, httpd.no-thread-adoption |
 | A bounded queue pushes back with 503 | capability | tests httpd.queue-full-waits-then-503, httpd.retry-after-on-503 |
-| No C library to install | capability | examples/httpd/audit.sh (no OpenSSL, native-tls or aws-lc in the tree); examples/httpd/Cargo.toml has no -sys TLS crate |
-| Sessions, cookies, multipart, static-file middleware, streaming responses, uploads past the cap and TLS are not provided | capability | examples/httpd/web.lisp:22-30 (the WEB package exports none of them); test httpd.body-cap-is-413 (past the cap is 413) |
 | Hello transcript: 200, text/plain; charset=utf-8, content-length 16, "Hello from Lisp!" | capability | test httpd.veneer-hello (reads the form from docs/usage.md and asserts docs/httpd.md prints the same text; asserts status, body and content-type) |
 | serve runs on the calling thread and returns when the server stops | capability | test httpd.veneer-hello (the form returns after its server stops) |
 | Ctrl-C lands within 100 ms because every wait inside the loop is capped | capability | test httpd.waits-are-capped; examples/httpd/web.lisp serve :wait-ms 100; examples/httpd/src/lib.rs WAIT_CAP_MS |
@@ -468,4 +470,4 @@ extracted 371 entries, 24 of which were dated wording found true, so
 
 ---
 
-418 rows: 370 cited as they stand, 48 resolved by the audit, 0 unverified.
+420 rows: 372 cited as they stand, 48 resolved by the audit, 0 unverified.

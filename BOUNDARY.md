@@ -210,7 +210,9 @@ Differences from the borrowed form:
   artifact is not one: `strip = true`, `strip --strip-all`, and a tool
   that removes the section headers and clears the header's fields with
   them (`llvm-objcopy --strip-sections`) all still load. Formats not
-  recognized pass through to `dlopen` as before.
+  recognized pass through to `dlopen` as before. A directory, with or
+  without its trailing slash, is refused the same way, naming
+  `use-crate` (test `v08.load-crate-on-a-directory-is-refused`).
 
 ## 10. Image dump / restore
 

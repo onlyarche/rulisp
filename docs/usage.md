@@ -32,6 +32,10 @@ committed in a library's repo (see [distribution.md](distribution.md)).
 (mylib:do-something "input")
 ```
 
+`load-crate` takes the built file. Given a crate directory it signals
+`rulisp:crate-not-loaded-error` pointing at `use-crate`, which builds one
+(Case B).
+
 When the artifacts follow the blob naming convention
 (`lib<name>-<os>-<arch>.<ext>`, e.g. `libwordbag-linux-x86_64.so`; on
 Windows `<name>-windows-x86_64.dll`), one call picks the right file for
