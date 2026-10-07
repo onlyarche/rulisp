@@ -115,11 +115,12 @@ suite runs on every CI host.
 [`examples/fetch/`](examples/fetch/) is an async HTTPS client
 on tokio and rustls: the pattern for a crate that owns threads (capped
 waits, no signal handlers, a declared dump hook), with its own suite in
-CI. [`examples/httpd/`](examples/httpd/) is an HTTP/1.1 and h2c server on
-axum, hyper and tokio whose handlers are Lisp functions: the head, body
-and connection limits hold before Lisp sees a byte, and every request
-gets an answer, even from a handler that fails —
-[docs/httpd.md](docs/httpd.md) is the web developer's page. The full contract is in [BOUNDARY.md](BOUNDARY.md);
+CI. [`examples/httpd/`](examples/httpd/) is the pattern for Rust events with
+Lisp handlers, worked through as an HTTP/1.1 and h2c server: axum, hyper
+and tokio hold the connections and enforce the limits before Lisp sees a
+byte, Lisp threads take requests off a queue, and every request gets an
+answer, even from a handler that fails — [docs/httpd.md](docs/httpd.md)
+explains the split. The full contract is in [BOUNDARY.md](BOUNDARY.md);
 architecture and rationale in [DESIGN.md](DESIGN.md) (Korean). Measured boundary costs, with the method:
 [docs/benchmarks.md](docs/benchmarks.md). What is stable, what 1.0 will
 promise, and how hosts are supported: [docs/stability.md](docs/stability.md). Release

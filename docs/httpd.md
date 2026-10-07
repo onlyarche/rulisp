@@ -1,17 +1,35 @@
-# A web server with Lisp handlers
+# Rust events, Lisp handlers: the HTTP server example
 
-`examples/httpd` is an HTTP/1.1 and h2c server. axum, hyper and tokio own
-the sockets, the parsing and the timers. Your handler is a Lisp function
-that a pull loop calls, one request at a time per thread. `web.lisp`, the
-veneer beside the crate, is what you type.
+`examples/httpd` is an HTTP/1.1 and h2c server whose handlers are Lisp
+functions. Read it as the worked example of a pattern, not as a reason to
+move a web app off a Lisp server: **Rust produces events, Lisp handles
+them, and a queue sits between the two.**
 
-**Choose it over Hunchentoot when** you want HTTP/2 without TLS (h2c), the
-limits enforced before Lisp sees a byte, many keep-alive connections held
-by tokio tasks in front of a few Lisp threads, a bounded queue that pushes
-back with 503, and no C library to install. **Stay on Hunchentoot or
-Clack when** you need sessions, cookies, multipart, static-file
-middleware, streaming responses, uploads larger than the body cap, or TLS
-without a proxy in front.
+Each side does what it is good at:
+
+- **Rust** holds the connections, parses HTTP, runs the timers and the
+  limits, and answers 503 when the queue is full. axum, hyper and tokio do
+  this work; it has to be fast and memory-safe.
+- **Lisp** runs the handlers. You redefine them at the REPL while the
+  server runs, and a handler error opens the debugger on the request that
+  caused it.
+- **rulisp** keeps the seam safe. Rust never calls into Lisp: it puts each
+  request on a queue, and a Lisp thread takes it off.
+
+Why not let Rust call the handler directly? A tokio thread is not a Lisp
+thread. Running Lisp on it means registering it with the Lisp, making it
+cooperate with the Lisp's garbage collector, opening a debugger on a
+thread that also serves thousands of connections, and unwinding a Ctrl-C
+through Rust frames. With a queue, Lisp code only ever runs on threads
+Lisp made, exactly as in a pure Lisp server. The cost is small: a waiting
+Lisp thread wakes as soon as a request arrives. Every wait is capped at
+100 ms only so that Ctrl-C reaches the loop, which lives in Lisp.
+
+**For a plain web application, a Lisp server is the simpler choice.**
+Hunchentoot or Clack have no seam to cross, and they offer sessions,
+cookies, multipart, static files and TLS, which this example does not.
+Reach for this shape when the events come from Rust in the first place,
+or when you want hyper's limits and HTTP/2 in front of Lisp handlers.
 
 ## Hello
 
