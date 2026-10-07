@@ -278,7 +278,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | The inbox is bounded: a consumer that falls behind costs the producer a refusal it can count, not memory | capability | test v09.inbox-full-is-backpressure (capacity 4, 200 events: received + dropped = 200); mutation: the capacity check removed fails exactly this test |
 | Each pull waits at most 100 ms, so the loop stays in Lisp | capability | crates/rulisp/src/inbox.rs WAIT_CAP_MS; test v09.inbox-wait-is-capped (600000 ms asked, under 500 ms taken); mutation: the cap at 2000 fails exactly this test |
 | After the producer closes, the pull signals rulisp:rust-error "closed: …" once every event was taken | capability | test v09.inbox-delivers-in-order-then-closed; unit test inbox::tests::recv_wakes_on_send_and_on_close |
-| examples/wordbag's Ticker is the tested example | capability | examples/wordbag/src/lib.rs Ticker; tests/suite/v09.lisp (run by run-m4 on every host) |
+| tests/inbox-fixture's Ticker is the tested example | capability | tests/inbox-fixture/src/lib.rs Ticker; tests/suite/v09.lisp (run by run-m4 on every host) |
 | A stored callback still works; on SBCL and CCL the Lisp adopts the calling thread | capability | test v02.stored-callback-cross-thread (tests/suite/v02.lisp); BOUNDARY.md §6 |
 
 ## docs/distribution.md

@@ -153,6 +153,7 @@ test-ccl:
 #   */target-abort-check            m1's panic=abort probe
 #   tests/m1-handwritten/target     the ABI oracle (test-m2)
 #   tests/abi-fixture/target        v06.abi-mismatch-refused
+#   tests/inbox-fixture/target      the v09 suite (rulisp::Inbox)
 #   tests/wasm-guests/rust-guest/target   only if you rebuilt the Rust guest
 #   tools/audit-fixture/target      the audit self-test
 #   tests/ecl-program/…             the program-op executable, its generated
@@ -162,7 +163,7 @@ clean:
 	$(CARGO) clean
 	rm -rf examples/*/target examples/*/target-abort-check \
 	       tests/m1-handwritten/target tests/m1-handwritten/target-abort-check \
-	       tests/abi-fixture/target tools/audit-fixture/target \
+	       tests/abi-fixture/target tests/inbox-fixture/target tools/audit-fixture/target \
 	       tests/wasm-guests/rust-guest/target \
 	       tests/ecl-program/rulisp-ecl-smoke tests/ecl-program/rulisp-ecl-smoke.asd \
 	       ecl-program-*.log

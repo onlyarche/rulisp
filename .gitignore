@@ -19,3 +19,4 @@ ecl-program-*.log
 tools/audit-fixture/target/
 tests/abi-fixture/target/
 tests/wasm-guests/rust-guest/target/
+tests/inbox-fixture/target/

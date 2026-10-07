@@ -354,69 +354,9 @@ impl Grenade {
     }
 }
 
-/// Numbered events produced on a thread of its own and delivered through
-/// a `rulisp::Inbox` (v0.9): the queue direction of the boundary, with no
-/// Lisp callback and no adopted thread. The producer sends `count` values,
-/// one every `interval_ms` (at most 1000), counts the ones the full inbox
-/// refused, and closes the inbox when done or when the ticker is freed.
-#[rulisp::handle]
-pub struct Ticker {
-    inbox: rulisp::Inbox<u64>,
-    dropped: std::sync::Arc<std::sync::atomic::AtomicU64>,
-}
-
-impl Drop for Ticker {
-    fn drop(&mut self) {
-        // the producer sees the close at its next send and exits
-        self.inbox.close();
-    }
-}
-
-#[rulisp::export]
-impl Ticker {
-    #[rulisp(constructor)]
-    pub fn new(count: u64, interval_ms: u64, capacity: u64) -> Ticker {
-        let inbox = rulisp::Inbox::new(capacity.min(1 << 20) as usize);
-        let dropped = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let (tx, lost) = (inbox.clone(), dropped.clone());
-        let interval = std::time::Duration::from_millis(interval_ms.min(1000));
-        std::thread::spawn(move || {
-            for i in 0..count {
-                match tx.try_send(i) {
-                    Ok(()) => {}
-                    Err(rulisp::SendError::Full(_)) => {
-                        lost.fetch_add(1, Ordering::SeqCst);
-                    }
-                    Err(rulisp::SendError::Closed(_)) => return,
-                }
-                std::thread::sleep(interval);
-            }
-            tx.close();
-        });
-        Ticker { inbox, dropped }
-    }
-
-    /// The next event, or NIL when none arrived within WAIT-MS (capped at
-    /// 100 ms). Signals `rulisp:rust-error` "closed: …" once the producer
-    /// finished and every event was taken.
-    pub fn next(&self, wait_ms: u64) -> Result<Option<u64>, Error> {
-        Ok(self.inbox.recv(wait_ms)?)
-    }
-
-    /// Events the producer could not deliver because the inbox was full.
-    pub fn dropped(&self) -> u64 {
-        self.dropped.load(Ordering::SeqCst)
-    }
-
-    /// Events waiting to be taken.
-    pub fn pending(&self) -> u64 {
-        self.inbox.len() as u64
-    }
-}
-
 rulisp::module! {
     name: "wordbag",
-    handles: [WordBag, Grenade, Ticker],
+    handles: [WordBag, Grenade],
     fns: [
         add, always_panic, parse_number, greet, echo, sum, rev,
         find, greet_opt, deltas, scale,
@@ -429,7 +369,6 @@ rulisp::module! {
         WordBag::from_csv,
         slow_sum, slow_dot,
         opt_scale, opt_scale32,
-        Ticker::new, Ticker::next, Ticker::dropped, Ticker::pending,
     ],
     on_dump: dump_prep,
 }

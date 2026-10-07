@@ -48,8 +48,9 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   adopted and no Lisp code runs on the producer, so it works on every
   tier. *Rust API*: additive (`rulisp::inbox`, `Inbox`, `SendError`,
   `Closed`, `WAIT_CAP_MS`). *Lisp API*, manifest schema, ABI: unchanged.
-  `examples/wordbag` gains `Ticker` as the tested example (its manifest
-  golden regenerated for it) and tests/suite/v09.lisp pins order, the
+  `Ticker` in a new fixture crate, tests/inbox-fixture, is the tested
+  example (wordbag stays byte-identical to the hand-written oracle), and
+  tests/suite/v09.lisp pins order, the
   cap, backpressure, no adoption and free mid-stream on SBCL, CCL and
   ECL; a mutation of the cap and one of the capacity check each fail
   exactly their test. docs/usage.md's event section now leads with the

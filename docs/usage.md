@@ -171,7 +171,7 @@ The inbox is bounded: a consumer that falls behind costs the producer a
 refusal it can count, not memory. Each pull waits at most 100 ms, so the
 loop stays in Lisp and Ctrl-C lands within a tick. When the producer is
 done it closes the inbox, and the pull signals `rulisp:rust-error`
-"closed: …" once every event was taken. `examples/wordbag`'s `Ticker` is
+"closed: …" once every event was taken. `Ticker` in tests/inbox-fixture is
 the tested example (tests/suite/v09.lisp).
 
 A stored callback (`rulisp:callback`) still works when you want Rust to

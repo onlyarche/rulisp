@@ -1,0 +1,17 @@
+[package]
+name = "inboxfix"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "rulisp::Inbox's tested example: a producer thread delivering numbered events to Lisp (tests/suite/v09.lisp)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rulisp = { path = "../../crates/rulisp" }
+
+# standalone, like tests/abi-fixture: wordbag must stay byte-identical to
+# the hand-written oracle (tests/m1-handwritten), so a new example export
+# cannot live there
+[workspace]
