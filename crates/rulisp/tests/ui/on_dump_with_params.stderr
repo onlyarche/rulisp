@@ -1,0 +1,10 @@
+error[E0080]: evaluation panicked: rulisp: on_dump must name a fn with no parameters and no result (BOUNDARY §10) — a hook that needs a server reaches it through a registry of live handles, as examples/fetch and examples/httpd do
+  --> tests/ui/on_dump_with_params.rs:13:1
+   |
+13 | / rulisp::module! {
+14 | |     name: "rulisp-tests",
+15 | |     handles: [],
+16 | |     fns: [ping, shutdown_server],
+17 | |     on_dump: shutdown_server,
+18 | | }
+   | |_^ evaluation of `_` failed here

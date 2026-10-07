@@ -352,7 +352,9 @@ fn classify_result(ty: Option<&Type>, ctor: bool) -> Result<RTy, Error> {
                     let Some(GenericArgument::Type(inner)) = args.args.first() else {
                         return Err(unsupported(ty.span()));
                     };
-                    match classify_result(Some(inner), false)? {
+                    // ctor = true so a handle inner type reaches the arm
+                    // below, which names the real rule
+                    match classify_result(Some(inner), true)? {
                         RTy::Scalar { tok, ty } => Ok(RTy::OptionScalar { tok, ty }),
                         RTy::Str => Ok(RTy::OptionStr),
                         RTy::Bytes => Ok(RTy::OptionBytes),
@@ -360,6 +362,14 @@ fn classify_result(ty: Option<&Type>, ctor: bool) -> Result<RTy, Error> {
                             inner.span(),
                             "rulisp: Option<bool> is rejected — Lisp nil cannot \
                              distinguish None from Some(false); use Option<i8>",
+                        )),
+                        RTy::Handle(_) => Err(Error::new(
+                            inner.span(),
+                            "rulisp: Option<Handle> is not a result type — a handle \
+                             result is a constructor's Handle or Result<Handle, E>; for \
+                             'the next item or none', export a bool wait and a \
+                             constructor (examples/fetch: client-next-ready + make-req; \
+                             examples/httpd: server-wait + take-request)",
                         )),
                         _ => Err(unsupported(inner.span())),
                     }
@@ -1335,7 +1345,10 @@ pub fn module(input: TokenStream) -> TokenStream {
 
     // BOUNDARY §10: the on-dump export must be a zero-arg free fn declared
     // in fns (the loader independently validates params/result from the
-    // manifest). The fn-pointer coercion rejects any parameters here.
+    // manifest). A const assertion on the export's own metadata rejects
+    // parameters or a result here, in rulisp's words: a fn-pointer
+    // coercion did the same with a bare E0308, and on MSRV 1.78
+    // #[diagnostic::on_unimplemented] is not used for an arity mismatch.
     let (on_dump_meta, on_dump_guard) = match &input.on_dump {
         Some(f) => {
             let sym = f.to_string();
@@ -1349,11 +1362,17 @@ pub fn module(input: TokenStream) -> TokenStream {
             }
             (
                 quote! { ::core::option::Option::Some(#sym) },
-                quote! {
-                    const _: () = {
-                        fn __rulisp_assert_zero_arg<R>(_: fn() -> R) {}
-                        fn __rulisp_on_dump_shape() { __rulisp_assert_zero_arg(#f); }
-                    };
+                {
+                    let meta = meta_const_ident(&sym);
+                    quote! {
+                        const _: () = ::core::assert!(
+                            #meta.params.len() == 0
+                                && ::core::matches!(#meta.result, ::rulisp::runtime::ResultTy::Unit),
+                            "rulisp: on_dump must name a fn with no parameters and no result \
+                             (BOUNDARY §10) — a hook that needs a server reaches it through a \
+                             registry of live handles, as examples/fetch and examples/httpd do"
+                        );
+                    }
                 },
             )
         }

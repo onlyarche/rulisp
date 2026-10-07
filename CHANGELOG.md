@@ -7,6 +7,29 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.8 development)
 
+### Fixed
+
+- **`load-crate` on a crate directory** signals `crate-not-loaded-error`
+  saying "is a directory" and naming `use-crate`, before anything is
+  copied. It used to fail inside the artifact check with the host's
+  stream error (SBCL: `SIMPLE-STREAM-ERROR … Is a directory`), naming
+  neither function. Test `v08.load-crate-on-a-directory-is-refused`, on
+  every host through run-m4.
+
+### Changed
+
+- **Two macro diagnostics name their real rule.** `Option<Handle>` as a
+  result, on a method or a constructor, used to say "handle-returning
+  functions must be constructors", which is wrong on a constructor; it now
+  says `Option<Handle>` is not a result type and points at the bool-wait
+  plus constructor shape. `module!`'s `on_dump:` naming a function with
+  parameters or a result used to fail as a bare E0308 from a hidden
+  fn-pointer coercion; a const assertion on the export's own metadata now
+  fails with rulisp's sentence (BOUNDARY §10). `#[diagnostic::on_unimplemented]`
+  was probed first and is not used for an arity mismatch on MSRV 1.78. No
+  Rust API item added; the manifest and the shims are unchanged. Two
+  trybuild cases, `option_handle_result` and `on_dump_with_params`.
+
 ### Added
 
 - **`examples/httpd` — an HTTP server with Lisp handlers**, the 0.8
