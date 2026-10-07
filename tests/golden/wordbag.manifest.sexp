@@ -13,7 +13,13 @@
   (:handle :rust-name "Grenade" :lisp-name "grenade" :free "grenade_free"
    :doc "Drop panics when armed: BOUNDARY §2's exception — a panic inside a
 `*_free` shim is caught, logged to stderr and swallowed, never crossing
-the boundary."))
+the boundary.")
+  (:handle :rust-name "Ticker" :lisp-name "ticker" :free "ticker_free"
+   :doc "Numbered events produced on a thread of its own and delivered through
+a `rulisp::Inbox` (v0.9): the queue direction of the boundary, with no
+Lisp callback and no adopted thread. The producer sends `count` values,
+one every `interval_ms` (at most 1000), counts the ones the full inbox
+refused, and closes the inbox when done or when the ticker is freed."))
  :functions
  ((:fn :rust-name "add" :lisp-name "add" :symbol "add"
    :params ((:name "a" :type :i64) (:name "b" :type :i64)) :result :i64 :error nil)
@@ -121,4 +127,23 @@ slot carried a fixnum 0 that SBCL and CCL refuse for :double).")
   (:fn :rust-name "opt_scale32" :lisp-name "opt-scale32" :symbol "opt_scale32"
    :params ((:name "k" :type (:option :f32)))
    :result :f32 :error nil
-   :doc "The f32 twin of opt_scale.")))
+   :doc "The f32 twin of opt_scale.")
+  (:fn :rust-name "Ticker::new" :lisp-name "make-ticker" :symbol "ticker_new"
+   :params ((:name "count" :type :u64)
+            (:name "interval_ms" :type :u64)
+            (:name "capacity" :type :u64))
+   :result (:handle "Ticker") :error nil)
+  (:fn :rust-name "Ticker::next" :lisp-name "ticker-next" :symbol "ticker_next"
+   :params ((:name "self" :type (:handle "Ticker")) (:name "wait_ms" :type :u64))
+   :result (:option :u64) :error "Error"
+   :doc "The next event, or NIL when none arrived within WAIT-MS (capped at
+100 ms). Signals `rulisp:rust-error` \"closed: …\" once the producer
+finished and every event was taken.")
+  (:fn :rust-name "Ticker::dropped" :lisp-name "ticker-dropped" :symbol "ticker_dropped"
+   :params ((:name "self" :type (:handle "Ticker")))
+   :result :u64 :error nil
+   :doc "Events the producer could not deliver because the inbox was full.")
+  (:fn :rust-name "Ticker::pending" :lisp-name "ticker-pending" :symbol "ticker_pending"
+   :params ((:name "self" :type (:handle "Ticker")))
+   :result :u64 :error nil
+   :doc "Events waiting to be taken.")))

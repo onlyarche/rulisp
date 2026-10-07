@@ -139,30 +139,45 @@ Stop before you dump an image: `web:stop`, then `uiop:dump-image`.
 [docs/httpd.md](httpd.md) has the handler contract, the limits and
 deployment.
 
-## High-frequency events: the queue-polling pattern
+## Events from Rust threads: `rulisp::Inbox`
 
-Stored callbacks run your closure on whatever thread Rust invokes from.
-For high-frequency event streams (async runtimes, watchers), keep the
-callback body minimal — push into a queue, process from a Lisp thread:
+When Rust produces events on its own threads — a tokio task, a file
+watcher, a C library's callback — let Rust put them in a `rulisp::Inbox`
+and let Lisp pull them out. The producer never runs Lisp code, so no
+thread is adopted, and the garbage collector and the debugger only ever
+meet threads Lisp made.
 
-```lisp
-(defvar *events* '())
-(defvar *events-lock* (bt:make-lock))
+```rust
+#[rulisp::handle]
+pub struct Events { inbox: rulisp::Inbox<u64> }
 
-(mylib:on-event (rulisp:callback
-                  (lambda (x)
-                    (bt:with-lock-held (*events-lock*)
-                      (push x *events*)))))
-
-;; drain from any Lisp thread, at your own pace
-(defun drain-events ()
-  (bt:with-lock-held (*events-lock*)
-    (shiftf *events* '())))
+#[rulisp::export]
+impl Events {
+    /// The next event, or NIL after WAIT-MS (capped at 100 ms).
+    pub fn next(&self, wait_ms: u64) -> Result<Option<u64>, rulisp::Error> {
+        Ok(self.inbox.recv(wait_ms)?)
+    }
+}
+// producers hold clones: inbox.try_send(v) never blocks, and hands the
+// value back when the inbox is full or closed
 ```
 
-This keeps foreign-thread time short and moves real work onto threads you
-control. (A dedicated helper was considered and skipped — the pattern is
-five lines of user code.)
+```lisp
+(loop (let ((e (mylib:events-next src 100)))   ; NIL on an idle tick
+        (when e (handle-event e))))            ; signals "closed" at the end
+```
+
+The inbox is bounded: a consumer that falls behind costs the producer a
+refusal it can count, not memory. Each pull waits at most 100 ms, so the
+loop stays in Lisp and Ctrl-C lands within a tick. When the producer is
+done it closes the inbox, and the pull signals `rulisp:rust-error`
+"closed: …" once every event was taken. `examples/wordbag`'s `Ticker` is
+the tested example (tests/suite/v09.lisp).
+
+A stored callback (`rulisp:callback`) still works when you want Rust to
+call a Lisp closure directly; on SBCL and CCL the Lisp adopts the calling
+thread. Keep such a callback short — pushing into a Lisp queue is enough
+— because the closure runs on a thread Rust chose.
 
 ## Why rulisp lives in two package registries
 

@@ -52,6 +52,9 @@
 pub use rulisp_macros::{export, handle, module};
 pub use rulisp_runtime as runtime;
 
+pub mod inbox;
+pub use inbox::{Closed, Inbox, SendError};
+
 use std::marker::PhantomData;
 
 /// Everything a glue crate normally needs: the three macros, [`Error`],

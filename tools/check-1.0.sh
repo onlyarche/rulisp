@@ -20,7 +20,7 @@ for needle in 'cargo-semver-checks-action' 'make compat PREV=v[0-9]' 'gh release
     if grep -qE -- "$needle" .github/workflows/ci.yml; then ok "criterion 3: ci.yml runs $needle"
     else bad "criterion 3: ci.yml lost $needle"; fi
 done
-for suite in ':rulisp-v06' ':rulisp-v07' ':rulisp-v08'; do
+for suite in ':rulisp-v06' ':rulisp-v07' ':rulisp-v08' ':rulisp-v09'; do
     if grep -q "$suite" tests/run-m4.lisp; then ok "criterion 3: run-m4 runs $suite"
     else bad "criterion 3: tests/run-m4.lisp does not run $suite"; fi
 done

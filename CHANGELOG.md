@@ -18,6 +18,13 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ### Changed
 
+- **Host tiers (0.9 policy, docs/stability.md §5).** SBCL is tier 1:
+  every feature and example. CCL is tier 2: what CFFI, bordeaux-threads,
+  trivial-garbage, UIOP and standard Common Lisp can express; a feature
+  that needs CCL-specific code ships for SBCL only and says so. ECL is
+  tier 3: the core (loading, calls, handles, conditions, reload,
+  `program-op`). Every required CI job is unchanged; the tiers decide
+  what a new feature must reach.
 - **Two macro diagnostics name their real rule.** `Option<Handle>` as a
   result, on a method or a constructor, used to say "handle-returning
   functions must be constructors", which is wrong on a constructor; it now
@@ -32,6 +39,21 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ### Added
 
+- **`rulisp::Inbox<T>` (0.9)**: the queue direction of the boundary as a
+  library type. Producers on any Rust thread `try_send` (never blocks;
+  the value comes back when the inbox is full or closed) or
+  `send_timeout`; the export Lisp loops on calls `recv(wait_ms)`, capped
+  at `WAIT_CAP_MS` = 100 ms; `close` lets the remaining values drain and
+  then reports `Closed`, which converts into `rulisp::Error`. No thread is
+  adopted and no Lisp code runs on the producer, so it works on every
+  tier. *Rust API*: additive (`rulisp::inbox`, `Inbox`, `SendError`,
+  `Closed`, `WAIT_CAP_MS`). *Lisp API*, manifest schema, ABI: unchanged.
+  `examples/wordbag` gains `Ticker` as the tested example (its manifest
+  golden regenerated for it) and tests/suite/v09.lisp pins order, the
+  cap, backpressure, no adoption and free mid-stream on SBCL, CCL and
+  ECL; a mutation of the cap and one of the capacity check each fail
+  exactly their test. docs/usage.md's event section now leads with the
+  inbox.
 - **`examples/httpd` — an HTTP server with Lisp handlers**, the 0.8
   flagship: HTTP/1.1 and h2c on axum/hyper/tokio in front of a Lisp pull
   loop (`server-wait`, `take-request`, `request-respond`,

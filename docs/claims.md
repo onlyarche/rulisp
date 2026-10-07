@@ -123,6 +123,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | the head, body and connection limits hold before Lisp sees a byte | capability | tests httpd.slowloris-is-closed, httpd.body-cap-is-413, httpd.body-drip-is-408, httpd.connection-cap-holds, httpd.header-bomb-is-refused (each asserts nothing was parked) |
 | every request gets an answer, even from a handler that fails | capability | tests httpd.veneer-handler-error-is-500-and-a-warning, httpd.veneer-throw-still-answers-500, httpd.veneer-no-response-warns-and-answers-500, httpd.unanswered-request-is-500-on-free |
 | SBCL on Linux x86-64, aarch64 and macOS, and CCL on Linux, also run the HTTP server example (best-effort on Windows) | host | .github/workflows/ci.yml steps "httpd suite" (SBCL/Linux, macOS, aarch64), "httpd suite on CCL", "httpd suite (best-effort on Windows)" with continue-on-error |
+| Since 0.9 the hosts have tiers: SBCL gets every feature, CCL what portable libraries can express, ECL the core | host | docs/stability.md §5 (Tiers); every required job in .github/workflows/ci.yml unchanged |
 
 ## docs/installation.md
 
@@ -272,6 +273,13 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | web:start serves in its own threads and keeps the REPL; web:stop joins them | capability | examples/httpd/web.lisp start/stop; test httpd.stop-then-dump-restores (start, serve, stop, dump) |
 | Stop before you dump an image | capability | test httpd.stop-then-dump-restores; BOUNDARY.md §12 dump-hook row; commit aae54ac (SBCL refuses with a live Lisp thread, CCL faulted at exit) |
 | load-crate takes the built file; given a crate directory it signals crate-not-loaded-error pointing at use-crate | capability | test v08.load-crate-on-a-directory-is-refused (tests/suite/v08.lisp; both spellings, the message names use-crate, nothing registered or copied); lisp/src/crate.lisp %load-crate-locked |
+| rulisp::Inbox: a producer on a Rust thread never runs Lisp code and no thread is adopted | capability | crates/rulisp/src/inbox.rs; test v09.inbox-adopts-no-thread (tests/suite/v09.lisp: the Lisp thread list is unchanged while the producer runs) |
+| try_send never blocks and hands the value back when the inbox is full or closed | capability | crates/rulisp/src/inbox.rs try_send; unit test inbox::tests::order_full_and_closed (cargo test -p rulisp) |
+| The inbox is bounded: a consumer that falls behind costs the producer a refusal it can count, not memory | capability | test v09.inbox-full-is-backpressure (capacity 4, 200 events: received + dropped = 200); mutation: the capacity check removed fails exactly this test |
+| Each pull waits at most 100 ms, so the loop stays in Lisp | capability | crates/rulisp/src/inbox.rs WAIT_CAP_MS; test v09.inbox-wait-is-capped (600000 ms asked, under 500 ms taken); mutation: the cap at 2000 fails exactly this test |
+| After the producer closes, the pull signals rulisp:rust-error "closed: …" once every event was taken | capability | test v09.inbox-delivers-in-order-then-closed; unit test inbox::tests::recv_wakes_on_send_and_on_close |
+| examples/wordbag's Ticker is the tested example | capability | examples/wordbag/src/lib.rs Ticker; tests/suite/v09.lisp (run by run-m4 on every host) |
+| A stored callback still works; on SBCL and CCL the Lisp adopts the calling thread | capability | test v02.stored-callback-cross-thread (tests/suite/v02.lisp); BOUNDARY.md §6 |
 
 ## docs/distribution.md
 
@@ -470,4 +478,4 @@ extracted 371 entries, 24 of which were dated wording found true, so
 
 ---
 
-420 rows: 372 cited as they stand, 48 resolved by the audit, 0 unverified.
+428 rows: 380 cited as they stand, 48 resolved by the audit, 0 unverified.
