@@ -143,7 +143,9 @@ Every required job runs the full gate (races, nested callbacks, reload,
 the 10k-op fuzzers, and dump/restore where the host dumps images); SBCL on
 Linux x86-64, aarch64 and macOS, and CCL on Linux, also run the async HTTPS
 example and the HTTP server example (both best-effort on Windows), and the ECL job
-builds and runs a `program-op` executable. ECL notes: a C toolchain is required for callbacks (rulisp
+builds and runs a `program-op` executable. Since 0.9 the hosts have
+tiers (docs/stability.md §5): SBCL gets every feature, CCL gets what
+portable libraries can express, and ECL keeps the core. ECL notes: a C toolchain is required for callbacks (rulisp
 natively compiles trampolines to dodge an upstream GC bug we root-caused
 — docs/upstream/ecl-dynamic-callback-gc.md), and foreign-thread stored
 callbacks are unsupported there.

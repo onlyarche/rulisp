@@ -112,6 +112,24 @@ runs on every push without being required and is not a supported host
 until promoted. Everything else (LispWorks,
 Allegro, ABCL, other architectures) is untested and unclaimed.
 
+**Tiers (since 0.9).** Every required job keeps running what it runs
+today; the tiers decide what a *new* feature must reach.
+
+- **SBCL is tier 1.** Every feature and every example works on it, on all
+  four platforms. Design decisions and measurements are made on SBCL.
+- **CCL is tier 2.** A feature reaches CCL when it can be written with
+  the portable libraries rulisp already depends on (CFFI,
+  bordeaux-threads, trivial-garbage, UIOP) and standard Common Lisp. A
+  feature that would need CCL-specific code ships for SBCL only, and its
+  documentation says so.
+- **ECL is tier 3.** It keeps the core: loading, calls, handles,
+  conditions, reload, and `program-op` delivery. New features are not
+  promised there. Foreign-thread stored callbacks are already
+  unsupported on ECL (BOUNDARY.md §6).
+
+A feature that is tier 1 only is named in CHANGELOG.md and on its page,
+and its tests skip the other hosts with a reason.
+
 Promotion and demotion follow the procedure written into
 `.github/workflows/ci.yml`: a job becomes required after a documented
 green streak with the platform's deployment path exercised; it is demoted
