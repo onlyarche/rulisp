@@ -144,6 +144,7 @@ Full test gates, from the repository root:
 make test-m4                          # everything, on SBCL
 make test-ccl CCL=~/ccl/lx86cl64      # same suites on Clozure CL (Linux)
 make test-fetch                       # the async HTTP example (hermetic)
+make test-httpd                       # the HTTP server example (hermetic)
 make bench                            # boundary throughput
 cargo test --workspace                # manifest golden + compile-fail tests
 ```

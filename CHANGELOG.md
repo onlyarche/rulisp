@@ -25,7 +25,12 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
   41 tests on the crate's own `Probe` client; a five-lens review before
   the merge found and closed three bounds the first cut lacked. SECURITY.md
   lists what the server bounds and what it does not. Not in 0.8: TLS (a
-  proxy), streaming responses, a blob (item 4), a page (item 3).
+  proxy), streaming responses.
+- **docs/httpd.md, the web developer's page**: the hello, JSON and files,
+  the loop's contract (which status on which path), errors in a handler,
+  the limits table with the memory bound, testing, deploying, and when to
+  stay on Hunchentoot. docs/usage.md gains "A web server from the REPL,
+  ten lines"; the suite's hello test reads that form from the page.
 
 ## 0.7.0 — 2026-09-30
 

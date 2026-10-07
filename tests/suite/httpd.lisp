@@ -1031,36 +1031,47 @@ where the veneer's restarts are visible). Returns (thread . warnings-cell)."
       (hc "SERVER-SHUTDOWN" s 2000)
       (rulisp:free s))))
 
+(defun doc-hello-form (page)
+  "The hello as PAGE prints it: the first form that starts with
+(web:with-server, read from the file itself, so the page and this test
+cannot drift apart."
+  (let* ((text (uiop:read-file-string (asdf:system-relative-pathname :rulisp (format nil "../docs/~A" page))))
+         (at (search "(web:with-server" text)))
+    (values (read-from-string text t nil :start at)
+            (subseq text at (nth-value 1 (read-from-string text t nil :start at))))))
+
 (test httpd.veneer-hello
-  "The hello from the documentation, as written — WITH-SERVER around SERVE
-with a one-line handler — answers 200 text/plain with the string, and the
-whole form returns once the server is stopped from a handler, freeing the
-server on the way out."
+  "The hello in docs/usage.md, read from the file and evaluated as written
+(only its port is swapped for a free one): WITH-SERVER around SERVE with
+a one-line handler answers 200 text/plain with the string. docs/httpd.md
+prints the same text. The form returns once its server is stopped — here
+by the crate's dump hook, the one way to stop a server the form keeps to
+itself — and frees the server on the way out. A failure means the page
+shows a hello that does not work."
   (ensure-httpd)
-  (let* ((port (free-port))
-         (form (read-from-string
-                (format nil "(web:with-server (s :port ~D)
-  (web:serve s (lambda (r)
-                 (if (string= (web:request-path r) \"/quit\")
-                     (progn (web:respond r 200 \"bye\") (web:stop s))
-                     (web:respond r 200 \"Hello from Lisp!\")))
-               :debug nil))" port)))
-         (thread (bt:make-thread (lambda () (eval form)) :name "hello"))
-         (a (format nil "127.0.0.1:~D" port)))
-    (loop repeat 40 until (handler-case (hc "PROBE-POLL" *probe* (hc "PROBE-SEND" *probe* a (raw-request "GET" "/ping") "once") 100)
-                            (rulisp:rust-error () nil))
-          do (sleep 0.05))
-    (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/") "once"))))
-      (is (eql 200 (and resp (response-status resp))))
-      (is (equal "Hello from Lisp!" (and resp (text (response-body resp)))))
-      (is (equal '("text/plain; charset=utf-8") (and resp (response-header-values resp "content-type")))))
-    (let ((bye (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/quit") "once"))))
-      (is (equal "bye" (and bye (text (response-body bye))))))
-    (loop repeat 100 while (bt:thread-alive-p thread) do (sleep 0.05))
-    (is (not (bt:thread-alive-p thread)) "WITH-SERVER did not return within 5 s of web:stop")
-    ;; the port is closed: a connection is refused
-    (is (equal "io" (handler-case (progn (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/") "once") 1000) :answered)
-                      (rulisp:rust-error (e) (err-kind e)))))))
+  (multiple-value-bind (form text) (doc-hello-form "usage.md")
+    (is (equal text (nth-value 1 (doc-hello-form "httpd.md")))
+        "docs/httpd.md's hello differs from docs/usage.md's")
+    (is (= 1 (count 8080 (alexandria:flatten form))) "the hello names port 8080 once")
+    (let* ((port (free-port))
+           (thread (bt:make-thread (lambda () (eval (subst port 8080 form))) :name "hello"))
+           (a (format nil "127.0.0.1:~D" port)))
+      (loop repeat 40 until (handler-case (hc "PROBE-POLL" *probe* (hc "PROBE-SEND" *probe* a (raw-request "GET" "/ping") "once") 100)
+                              (rulisp:rust-error () nil))
+            do (sleep 0.05))
+      (let ((resp (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/") "once"))))
+        (is (eql 200 (and resp (response-status resp))))
+        (is (equal "Hello from Lisp!" (and resp (text (response-body resp)))))
+        (is (equal '("text/plain; charset=utf-8") (and resp (response-header-values resp "content-type")))))
+      ;; stop it the way the dump does; the shared server and probe go too,
+      ;; and the next test's ENSURE-HTTPD recreates them
+      (rulisp::%run-crate-dump-hooks)
+      (loop repeat 100 while (bt:thread-alive-p thread) do (sleep 0.05))
+      (is (not (bt:thread-alive-p thread)) "WITH-SERVER did not return within 5 s of its server stopping")
+      (ensure-httpd)
+      (is (equal "io" (handler-case (progn (poll-until (hc "PROBE-SEND" *probe* a (raw-request "GET" "/") "once") 1000) :answered)
+                        (rulisp:rust-error (e) (err-kind e))))
+          "the port was still open after WITH-SERVER returned"))))
 
 (test httpd.veneer-handler-error-is-500-and-a-warning
   "With DEBUG NIL (START's default — production) a handler that signals is

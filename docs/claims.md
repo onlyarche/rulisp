@@ -1,6 +1,6 @@
 # Claims register
 
-Every capability, host and performance claim in README.md and the six
+Every capability, host and performance claim in README.md and the seven
 docs/ pages, with what enforces or demonstrates it: a suite test by name
 (`tests/suite/*.lisp`), a trybuild case (`crates/rulisp/tests/ui/`), a CI
 job or step (`.github/workflows/`), a bench row (docs/benchmarks.md) or a
@@ -34,7 +34,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | An s-expression manifest is embedded in the cdylib | capability | test fx.golden-manifest (tests/suite/m2.lisp:125); cargo test examples/wordbag/tests/manifest_golden.rs (CI job "cargo tests (golden manifest + trybuild)") |
 | The CL side dlopens a unique copy of the library | capability | lisp/src/crate.lisp:80-88 (%cache-copy-name), :151 (uiop:copy-file then dlopen*); test v04.cache-copy-names-are-process-unique (tests/suite/v04.lisp:277) |
 | Reads the manifest and generates wrappers at load time: defuns, CLOS handle classes, typed conditions from Rust error types, trivial-garbage finalizers | capability | lisp/src/crate.lisp prepare-bindings/commit-bindings; tests m3.typed-conditions (m3.lisp:11), m4.gc-finalization (m1.lisp:136); handle.lisp:111 tg:finalize |
-| No C headers, no hand-written FFI on either side | capability | grep: no `extern "C"`/`unsafe` in examples/{wordbag,rx,wasm,fetch}/src; Lisp wrappers are compiled from the manifest (lisp/src/codegen.lisp wrapper-form) |
+| No C headers, no hand-written FFI on either side | capability | grep: no `extern "C"`/`unsafe` in examples/{wordbag,rx,wasm,fetch,httpd}/src; Lisp wrappers are compiled from the manifest (lisp/src/codegen.lisp wrapper-form) |
 | Bindings are derived by construction from the exact library that was just loaded | capability | lisp/src/ffi.lisp dlsym-ptr resolves against the specific handle; test m6.captured-wrapper-gate (tests/suite/m1.lisp:248); BOUNDARY §12 row "Loader resolves every symbol against the specific dlopen handle" |
 | Panics become rulisp:rust-panic conditions | capability | test m1.panic (tests/suite/m1.lisp:57) |
 | panic = "abort" builds fail to compile | capability | test m1.panic-abort-guard (tests/suite/m1.lisp:65); crates/rulisp-runtime/src/lib.rs:11-17 compile_error! |
@@ -119,6 +119,10 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | Out for now: non-SBCL image dump | stale | **resolved** — replaced in the audit: ECL has no image dump, ship a program-op executable — CI step make test-ecl-program; CCL dump/restore is test m7.dump-restore |
 | rulisp does not auto-bind arbitrary existing crates, by design | capability | ROADMAP.md "Non-goals"; DESIGN.md §1 non-goals; lisp/src/crate.lisp %open-and-verify refuses a non-rulisp library with abi-mismatch-error |
 | License: MIT | capability | LICENSE (MIT License, 2026 arche); crates/*/Cargo.toml license = "MIT"; lisp/rulisp.asd :license "MIT" |
+| examples/httpd/ is an HTTP/1.1 and h2c server on axum, hyper and tokio whose handlers are Lisp functions | capability | tests httpd.hello-round-trip, httpd.h2c-prior-knowledge, httpd.veneer-hello (tests/suite/httpd.lisp); examples/httpd/Cargo.toml (axum, hyper, hyper-util, tokio) |
+| the head, body and connection limits hold before Lisp sees a byte | capability | tests httpd.slowloris-is-closed, httpd.body-cap-is-413, httpd.body-drip-is-408, httpd.connection-cap-holds, httpd.header-bomb-is-refused (each asserts nothing was parked) |
+| every request gets an answer, even from a handler that fails | capability | tests httpd.veneer-handler-error-is-500-and-a-warning, httpd.veneer-throw-still-answers-500, httpd.veneer-no-response-warns-and-answers-500, httpd.unanswered-request-is-500-on-free |
+| SBCL on Linux x86-64, aarch64 and macOS, and CCL on Linux, also run the HTTP server example (best-effort on Windows) | host | .github/workflows/ci.yml steps "httpd suite" (SBCL/Linux, macOS, aarch64), "httpd suite on CCL", "httpd suite (best-effort on Windows)" with continue-on-error |
 
 ## docs/installation.md
 
@@ -174,6 +178,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | rulisp:abi-mismatch-error "different target" means the artifact was built for another arch/OS | capability | lisp/src/crate.lisp:187-193 ("artifact was built for a different target"); lisp/src/manifest.lisp:106-118 (target-compatible-p); test fx.target-check (tests/suite/m2.lisp:71-78) |
 | A Cargo profile with panic = "abort" fails to compile with `rulisp requires panic = "unwind"`; removing it is the fix, since abort would let a panic kill the Lisp image | capability | crates/rulisp-runtime/src/lib.rs:11-17 (compile_error!, exact text); test m1.panic-abort-guard (tests/suite/m1.lisp:65-81, asserts 'rulisp requires panic' in cargo's stderr); BOUNDARY.md §12 §8 row |
 | A `; note: ... unknown type` on first use (SBCL) is a harmless forward-reference compiler note | capability | Reproduced 2026-09-03: `; note: can't open-code test of unknown type RX::REGEX` printed by SBCL during use-crate of examples/rx, once per wrapper taking the handle (5×); cause lisp/src/crate.lisp:281-297 (wrappers compiled before commit-bindings defines the class at :312-315; only `warning`s are muffled, sb-ext:compiler-note is not); the call then returns 3 |
+| make test-httpd runs the HTTP server example's suite, hermetic | capability | Makefile target test-httpd; tests/suite/httpd.lisp binds only 127.0.0.1:0 and uses the crate's own Probe client |
 
 ## docs/quickstart.md
 
@@ -262,6 +267,10 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | describe lists each export as its signature, first `(rx:make-regex pattern)` | capability | **resolved** — loader fixed in the audit: describe prints the call shape (%call-shape) for every export — test v05.describe-crate |
 | A `///` comment on an exported fn or a #[rulisp::handle] struct leads its docstring; the macros carry it in the manifest as `:doc` | capability | tests v05.docstrings-present (tests/suite/v05.lisp:141-147: SLOW-SUM and GRENADE `///` text found) and v05.doc-escaping (v05.lisp:149); crates/rulisp-macros/src/lib.rs:53 (doc_of), 761, 877, 1059, 1179; tests/golden/wordbag.manifest.sexp carries 9 :doc keys; rx manifest read live shows :doc on three fns |
 | A download or copy that stopped short is refused before dlopen as crate-not-loaded-error "artifact is truncated or corrupt", naming the segment or section that overruns | capability | lisp/src/crate.lisp (%check-artifact-shape, called by %load-crate-locked before uiop:copy-file); tests v07.truncated-artifact-is-refused and v07.header-only-artifact-is-refused-without-a-fault (tests/suite/v07.lisp); BOUNDARY.md §9 and its §12 row |
+| The ten-line hello: use-crate the httpd example, load web.lisp, with-server around serve answers "Hello from Lisp!" on port 8080 | capability | test httpd.veneer-hello reads the form from docs/usage.md and evaluates it (port swapped for a free one); the load forms match tests/suite/httpd.lisp ensure-httpd |
+| Ctrl-C stops the loop, and with-server stops and frees the server | capability | test httpd.waits-are-capped (every wait 100 ms at most, so the interrupt lands); examples/httpd/web.lisp with-server (unwind-protect: stop, then free); test httpd.veneer-hello (the port is closed after the form returns) |
+| web:start serves in its own threads and keeps the REPL; web:stop joins them | capability | examples/httpd/web.lisp start/stop; test httpd.stop-then-dump-restores (start, serve, stop, dump) |
+| Stop before you dump an image | capability | test httpd.stop-then-dump-restores; BOUNDARY.md §12 dump-hook row; commit aae54ac (SBCL refuses with a live Lisp thread, CCL faulted at exit) |
 
 ## docs/distribution.md
 
@@ -405,6 +414,58 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | The cross-thread stored path adds foreign-thread adoption, not measured here. | capability | tests/bench.lisp has only "stored callback (same thread)" (NOTIFY, not NOTIFY-FROM-THREAD); adoption: BOUNDARY §6 (:136) and §12 row citing v02.stored-callback-cross-thread (tests/suite/v02.lisp:118); lisp/src/stored-callback.lisp:22; examples/wordbag/src/lib.rs:149 `notify_from_thread` |
 | To refresh: run the bench on each host on an idle machine, replace the table, update the date and commit, keep the previous baseline in git history rather than in this file. | capability | c260f03 did exactly this (rewrote the table; the 2026-09-02 baseline lives only at e91f54d) |
 
+## docs/httpd.md
+
+| Claim | Kind | Citation |
+|---|---|---|
+| examples/httpd is an HTTP/1.1 and h2c server; axum, hyper and tokio own the sockets, the parsing and the timers | capability | tests httpd.hello-round-trip, httpd.h2c-prior-knowledge; examples/httpd/src/lib.rs accept_loop (hyper-util auto builder, TokioTimer) |
+| Your handler is a Lisp function a pull loop calls, one request at a time per thread | capability | examples/httpd/web.lisp %serve (server-wait, take-request, %handle in turn); test httpd.concurrent-pullers-exactly-once |
+| HTTP/2 without TLS (h2c) | capability | test httpd.h2c-prior-knowledge |
+| The limits are enforced before Lisp sees a byte | capability | tests httpd.slowloris-is-closed, httpd.body-cap-is-413, httpd.body-drip-is-408, httpd.header-bomb-is-refused (each asserts server-pending 0) |
+| Many keep-alive connections are held by tokio tasks in front of a few Lisp threads | capability | examples/httpd/src/lib.rs accept_loop (one tokio task per connection, a semaphore permit each); tests httpd.connection-cap-holds, httpd.no-thread-adoption |
+| A bounded queue pushes back with 503 | capability | tests httpd.queue-full-waits-then-503, httpd.retry-after-on-503 |
+| No C library to install | capability | examples/httpd/audit.sh (no OpenSSL, native-tls or aws-lc in the tree); examples/httpd/Cargo.toml has no -sys TLS crate |
+| Sessions, cookies, multipart, static-file middleware, streaming responses, uploads past the cap and TLS are not provided | capability | examples/httpd/web.lisp:22-30 (the WEB package exports none of them); test httpd.body-cap-is-413 (past the cap is 413) |
+| Hello transcript: 200, text/plain; charset=utf-8, content-length 16, "Hello from Lisp!" | capability | test httpd.veneer-hello (reads the form from docs/usage.md and asserts docs/httpd.md prints the same text; asserts status, body and content-type) |
+| serve runs on the calling thread and returns when the server stops | capability | test httpd.veneer-hello (the form returns after its server stops) |
+| Ctrl-C lands within 100 ms because every wait inside the loop is capped | capability | test httpd.waits-are-capped; examples/httpd/web.lisp serve :wait-ms 100; examples/httpd/src/lib.rs WAIT_CAP_MS |
+| with-server stops and frees the server on the way out | capability | examples/httpd/web.lisp with-server; test httpd.veneer-hello (port closed after return) |
+| start runs pullers in their own threads; stop joins them | capability | examples/httpd/web.lisp start/stop; test httpd.stop-then-dump-restores |
+| rulisp ships no JSON reader | capability | grep -ri json lisp/src lisp/*.asd: no hit |
+| The JSON and routing transcript (users/42, echo, h2c 2 200) | capability | the page's Lisp blocks were evaluated verbatim and their curl output diffed against the page (item 3 commit message); the pieces: test httpd.veneer-request-accessors (match-path captures, request-text), httpd.h2c-prior-knowledge |
+| respond-file streams the file; the bytes never enter Lisp | capability | test httpd.respond-file-streams (5 MiB answered, Lisp consing bounded on SBCL) |
+| respond-file takes the content type from the extension | capability | test httpd.veneer-respond-file (.json gives application/json); examples/httpd/web.lisp %*types* |
+| A missing file, a directory or a FIFO signals web:http-error kind "io" and the request is still answerable | capability | tests httpd.respond-file-streams (missing, directory, FIFO, then a 404 on the same request), httpd.veneer-respond-file (web:http-error kind "io") |
+| The request accessors, query-params as decoded pairs, request-headers as an alist | capability | test httpd.veneer-request-accessors |
+| match-path returns the :name captures, T for a match without captures, or NIL | capability | test httpd.veneer-request-accessors |
+| Every request is answered on every path | capability | the status rows below; tests httpd.unanswered-request-is-500-on-free, httpd.abandoned-request-is-500-after-gc |
+| 500 when the handler signalled or returned without answering | capability | tests httpd.veneer-handler-error-is-500-and-a-warning, httpd.veneer-no-response-warns-and-answers-500 |
+| 503 with Retry-After: 1 when the queue stayed full for QUEUE-WAIT-MS or the server stopped before a handler took the request | capability | tests httpd.queue-full-waits-then-503, httpd.retry-after-on-503, httpd.stop-answers-parked-503-and-pulled-finish, httpd.stop-answers-a-request-waiting-for-a-slot |
+| 504 when HANDLER-MS passed after the whole request arrived | capability | test httpd.handler-timeout-is-504; examples/httpd/src/lib.rs park (the timer starts after the push) |
+| 413 past BODY-CAP; 408 past BODY-MS | capability | tests httpd.body-cap-is-413, httpd.body-drip-is-408 |
+| 431 for more than 100 request headers | capability | test httpd.header-bomb-is-refused (101 headers give 431) |
+| A dropped request answers 500 when its handle is freed, not when the GC gets to it; serve frees every request in unwind-protect | capability | test httpd.unanswered-request-is-500-on-free; examples/httpd/web.lisp %handle (unwind-protect ... free) |
+| A handler that throws out of the loop still answers | capability | test httpd.veneer-throw-still-answers-500 |
+| A client that left before the answer is a warning, not an error | capability | examples/httpd/web.lisp %answering (kind "gone" becomes a warning) |
+| serve defaults to :debug t; an error enters the debugger in the handler frame with the client waiting, with respond-500, retry-handler and skip-request | capability | test httpd.veneer-debug-restarts (retry runs the handler again, respond-500 answers, skip-request lets the free answer 500); examples/httpd/web.lisp serve lambda list |
+| With :debug nil, the default for start, an error is a warning naming the request and a bare 500; returning without answering is also a warning | capability | tests httpd.veneer-handler-error-is-500-and-a-warning, httpd.veneer-no-response-warns-and-answers-500; examples/httpd/web.lisp start lambda list |
+| The limits table's defaults: queue 256, queue-wait-ms 1000, max-connections 512, body-cap 1048576, head-ms 10000, body-ms 10000, handler-ms 0, workers 2 | capability | examples/httpd/web.lisp server lambda list |
+| Every limit is enforced by the Rust side | capability | examples/httpd/src/lib.rs Server::bind (the nine arguments become Svc fields read by accept_loop and park) |
+| :max-connections: the next client waits in the kernel's backlog | capability | test httpd.connection-cap-holds |
+| head-ms closes an unfinished head and bounds an idle HTTP/1.1 keep-alive connection | capability | tests httpd.slowloris-is-closed, httpd.keep-alive-idle-is-closed |
+| handler-ms 0 means never | capability | examples/httpd/src/lib.rs Server::bind ((handler_ms > 0).then(...)); test httpd.handler-timeout-is-504 sets it non-zero |
+| :workers are tokio threads, not Lisp threads | capability | test httpd.no-thread-adoption |
+| Request body memory is bounded by the queue whatever the protocol: QUEUE being read, QUEUE parked, one per handler, each at most BODY-CAP | capability | test httpd.bodies-in-flight-are-bounded; examples/httpd/src/lib.rs park (body permit before the read) |
+| Up to about 0.4 MB of head buffer per HTTP/1.1 connection; a 1 MB window per HTTP/2 connection | capability | hyper-1.11 src/proto/h1/io.rs:23 DEFAULT_MAX_BUFFER_SIZE = 8192 + 4096 * 100; src/proto/h2/server.rs:36-37 DEFAULT_CONN_WINDOW / DEFAULT_STREAM_WINDOW = 1 MiB |
+| A server on port 0 in the same image; web:port tells which port | capability | examples/httpd/web.lisp server/port; tests/suite/httpd.lisp binds 127.0.0.1:0 throughout |
+| httpd:make-probe is the raw client rulisp's suite uses; it can send half a request or hold a connection open | capability | tests/suite/httpd.lisp ensure-httpd (MAKE-PROBE); examples/httpd/src/lib.rs Probe::send modes once/hold/drip; test httpd.slowloris-is-closed |
+| use-crate from a checkout, or load-blob-crate from a directory of per-platform builds | capability | lisp/src/build.lisp:90-112 (use-crate), :93-104 (load-blob-crate); docs/distribution.md |
+| Browsers speak HTTP/1.1 to a TLS proxy; h2c reaches the server only with prior knowledge, there is no ALPN without TLS | capability | examples/httpd/Cargo.toml (no TLS dependency); test httpd.h2c-prior-knowledge (prior knowledge) |
+| Call web:stop before uiop:dump-image; the crate's dump hook stops every server either way | capability | tests httpd.dump-hook-quiesces, httpd.stop-then-dump-restores; examples/httpd/src/lib.rs shutdown_all |
+| A puller thread alive at dump time makes SBCL refuse the image; on CCL an image saved that way faulted at exit | host | BOUNDARY.md (SBCL refuses to dump with Lisp threads); commit aae54ac message (both measured while writing httpd.stop-then-dump-restores) |
+| In the restored image a server from before the dump is stale; start a fresh one in the entry point | capability | test httpd.stop-then-dump-restores (stale-handle-error, then a fresh server serves) |
+| Not in this example: TLS, sessions and cookies, multipart, static middleware, a Clack adapter, streaming, server-sent events | capability | examples/httpd/web.lisp:22-30 (exports); examples/httpd/Cargo.toml (no TLS) |
+
 ---
 
-362 rows: 314 cited as they stand, 48 resolved by the audit, 0 unverified.
+418 rows: 370 cited as they stand, 48 resolved by the audit, 0 unverified.

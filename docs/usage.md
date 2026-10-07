@@ -107,6 +107,34 @@ without restarting the REPL:
 A failed build signals `rulisp:build-error` carrying cargo's stderr, with
 a `retry-build` restart.
 
+## A web server from the REPL, ten lines
+
+`examples/httpd` is an HTTP server whose handlers are Lisp functions. From
+a checkout:
+
+```lisp
+(ql:quickload :rulisp)
+(rulisp:use-crate (asdf:system-relative-pathname :rulisp "../examples/httpd/"))
+(load (asdf:system-relative-pathname :rulisp "../examples/httpd/web.lisp"))
+
+(web:with-server (s :port 8080)
+  (web:serve s (lambda (r) (web:respond r 200 "Hello from Lisp!"))))
+```
+
+`curl http://127.0.0.1:8080/` answers `Hello from Lisp!`. Ctrl-C stops the
+loop, and `with-server` stops and frees the server. To keep the REPL,
+start the pullers in their own threads instead:
+
+```lisp
+(defvar *s* (web:server :port 8080))
+(web:start *s* (lambda (r) (web:respond r 200 "Hello from Lisp!")))
+(web:stop *s*)
+```
+
+Stop before you dump an image: `web:stop`, then `uiop:dump-image`.
+[docs/httpd.md](httpd.md) has the handler contract, the limits and
+deployment.
+
 ## High-frequency events: the queue-polling pattern
 
 Stored callbacks run your closure on whatever thread Rust invokes from.
