@@ -154,7 +154,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | On Windows artifacts are <name>.dll (cargo drops the lib prefix) and load-blob-crate looks for <name>-windows-x86_64.dll | capability | lisp/src/ffi.lisp:110-114 (artifact-file-name), lisp/src/build.lisp:58-75 (host-blob-suffix/blob-file-name); .github/workflows/blobs.yml matrix (windows: lib '' , suffix windows-x86_64, ext dll); test v02.blob-loading (tests/suite/v02.lisp:87, runs on the Windows job via test-m4) |
 | A loaded DLL is locked, so an artifact cannot be overwritten in place | capability | lisp/src/ffi.lisp:63-66 and lisp/src/crate.lisp:146-149,364-365 (design comments relying on it) |
 | rulisp loads a uniquely named copy per generation, so use-crate/reload-crate work on Windows anyway | capability | lisp/src/crate.lisp:80-89 (%cache-copy-name: process tag + counter + time), :146-151; test m6.reload (tests/suite/m1.lisp:234, unguarded, runs in the Windows job's make test-m4); BOUNDARY.md §12 §9 'unique copy' row |
-| Stale cache copies are swept on a later run | capability | lisp/src/crate.lisp:358-377 (%sweep-crate-cache, called at :245); tests v04.cache-copy-names-are-process-unique, v04.cache-sweep-spares-other-processes-fresh-copies (tests/suite/v04.lisp:277,287) |
+| Stale cache copies are swept on a later run | capability | lisp/src/crate.lisp:544-571 (%sweep-crate-cache, called at :379); tests v04.cache-copy-names-are-process-unique, v04.cache-sweep-spares-other-processes-fresh-copies (tests/suite/v04.lisp:277,287), v08.cache-sweep-removes-copies-of-exited-processes (tests/suite/v08.lisp) |
 | The repository must be checked out with LF endings (shipped .gitattributes does this): manifest fixtures are byte-compared and a CR inside a Lisp format string breaks its line continuations | capability | .gitattributes:10-13 (`* text=auto eol=lf`); test fx.golden-manifest (tests/suite/m2.lisp:125) + examples/wordbag/tests/manifest_golden.rs; CHANGELOG 0.3.0 Fixed (CRLF broke the golden fixture and FORMAT-ERROR) |
 | rulisp is on Ultralisp | capability | CI step "Quicklisp dist dry run (every system in every .asd, no cargo)" proves every system of the tarball loads with no cargo reachable (v0.6); External: https://ultralisp.org/projects/onlyarche/rulisp lists systems rulisp and rulisp/test (source v3, 2026-08-15); docs/distribution.md 'Publishing rulisp itself' |
 | Cloning into Quicklisp's local-projects lets ASDF find lisp/rulisp.asd automatically | capability | **resolved** — CI step "load :rulisp from quicklisp local-projects" (SBCL / Linux job), added in the audit |
@@ -336,7 +336,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | Load the glue artifact from main with rulisp:load-crate / rulisp:load-blob-crate | capability | tests/ecl-program/main.lisp:19 (load-crate); CI make test-ecl-program |
 | The crate's package (WORDBAG — the manifest crate name, upcased) exists only after that call, so main.lisp cannot name wordbag:greet literally; reach the bindings late-bound with find-symbol (or uiop:symbol-call) | capability | lisp/src/crate.lisp:164-169 (ensure-crate-package (string-upcase canonical)); tests/ecl-program/main.lisp:20-23 (find-symbol) |
 | There is no pre-dump state, so rulisp's image-restore hook has nothing to invalidate | capability | tests/ecl-program/main.lisp:19 loads the crate at run time (the linked image holds no crate, *crates* is empty); lisp/src/crate.lisp:391-407 iterates *crates*, :431 |
-| Several instances may share one cache: each copy is named with a per-process tag, and the sweep leaves other processes' fresh copies alone | capability | v04.cache-copy-names-are-process-unique (tests/suite/v04.lisp:277), v04.cache-sweep-spares-other-processes-fresh-copies (:287); lisp/src/crate.lisp:62-90, :358-375; CHANGELOG.md:159 |
+| Several instances may share one cache: each copy is named with a per-process tag, and the sweep leaves other processes' fresh copies alone | capability | v04.cache-copy-names-are-process-unique (tests/suite/v04.lisp:277), v04.cache-sweep-spares-other-processes-fresh-copies (:287); lisp/src/crate.lisp:71-102, :544-571; CHANGELOG.md:159 |
 | an error that reaches its debugger with stdin at EOF exits 0 | host | probe: a program-op executable built with the same .asd shape whose main signals an unhandled error, run </dev/null, exits 0; `echo '(error "boom")' \| ecl --norc` exits 0; Makefile:44-46 and ci.yml:181-185 gate on markers for this reason |
 | a memory fault instead aborts with exit 134 and a core dump | host | **resolved** — observed by hand on ECL 21.2.1 (Debian); not reproduced by CI (Makefile gates on the printed marker for this reason) |
 | a wrapper script or CI step must gate on a printed marker, never on the exit code alone | capability | Makefile:52,46 (BUILD-DONE / ECL-PROGRAM-OK greps); .github/workflows/ci.yml:184-185 ('Pass: ' grep) |
@@ -349,6 +349,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | cargo publish order: rulisp-runtime, rulisp-macros, rulisp (dependencies first) | capability | crates/rulisp/Cargo.toml:14-15 (depends on both); crates/rulisp-macros/Cargo.toml:16-19 and crates/rulisp-runtime/Cargo.toml:13 (no intra-workspace deps); docs/releasing.md:29-31 (same order) |
 | The ASDF system (lisp/rulisp.asd) goes to Ultralisp (GitHub app or manual project registration) | capability | docs/installation.md:97 ('rulisp is on Ultralisp'); docs/releasing.md:44 (step 8, checked with ql:update-dist) |
 | and/or ocicl | stale | **resolved** — ocicl removed in the audit |
+| A copy whose process has exited is removed once it is a minute old (POSIX) | capability | test v08.cache-sweep-removes-copies-of-exited-processes (tests/suite/v08.lisp; fails on the 0.7 sweep); lisp/src/crate.lisp %process-gone-p (kill(pid, 0) through CFFI), %sweep-crate-cache |
 
 ## docs/benchmarks.md
 
@@ -478,4 +479,4 @@ extracted 371 entries, 24 of which were dated wording found true, so
 
 ---
 
-428 rows: 380 cited as they stand, 48 resolved by the audit, 0 unverified.
+429 rows: 381 cited as they stand, 48 resolved by the audit, 0 unverified.

@@ -19,6 +19,16 @@ result still compiles and is refused by the loader as before).
 
 ### Fixed
 
+- **The cache no longer grows without bound.** The sweep removed other
+  processes' copies only for the crate being loaded and only after an
+  hour, so copies of crates no later process loaded again stayed for
+  good: one development week left 180 of them, 3.4 GB in
+  `~/.cache/rulisp`. On POSIX a copy whose process has exited
+  (`kill(pid, 0)` fails) is now removed for any crate once it is a minute
+  old; the minute covers a process in another pid namespace sharing the
+  cache. Windows keeps the hour rule. Test
+  `v08.cache-sweep-removes-copies-of-exited-processes`, failing first on
+  the 0.7 sweep.
 - **`load-crate` on a crate directory** signals `crate-not-loaded-error`
   saying "is a directory" and naming `use-crate`, before anything is
   copied. It used to fail inside the artifact check with the host's

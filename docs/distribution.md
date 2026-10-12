@@ -217,7 +217,8 @@ name `wordbag:greet` literally; reach the bindings late-bound, as
 `uiop:symbol-call`). There is no pre-dump state, so rulisp's image-restore
 hook has nothing to invalidate. Several instances may share one cache:
 each copy is named with a per-process tag, and the sweep leaves other
-processes' fresh copies alone. One more ECL habit: an error that reaches
+processes' fresh copies alone; a copy whose process has exited is removed
+once it is a minute old (POSIX). One more ECL habit: an error that reaches
 its debugger with stdin at EOF exits 0 (a memory fault instead aborts
 with exit 134 and a core dump), so a wrapper script or CI step must gate
 on a printed marker, never on the exit code alone.

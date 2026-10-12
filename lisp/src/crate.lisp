@@ -523,25 +523,51 @@ from, which generation, what it exports and with which signatures."
       (dolist (f (manifest-functions m))
         (format stream "    ~A~%" (%call-shape f pkg))))))
 
+(defun %copy-pid (fname)
+  "The pid in a cache copy's name (<crate>-p<pid>-c<n>-<time>.<ext>), or
+NIL for a name without one (a host that tags with a random string, or a
+file that is not a copy). Crate names have their hyphens replaced, so the
+second hyphen-separated field is the tag."
+  (let ((tag (second (uiop:split-string fname :separator "-"))))
+    (and tag (> (length tag) 1) (char= (char tag 0) #\p)
+         (every #'digit-char-p (subseq tag 1))
+         (parse-integer tag :start 1))))
+
+(defun %process-gone-p (pid)
+  "True when no process PID exists — kill(PID, 0) fails. POSIX only: on
+Windows nothing is known to be gone. A pid reused by another user's
+process also answers -1 (EPERM); the copy's own process is gone then."
+  (and (not (uiop:os-windows-p))
+       (ignore-errors
+        (= -1 (cffi:foreign-funcall "kill" :int pid :int 0 :int)))))
+
 (defun %sweep-crate-cache (name current-copy)
-  "Delete this crate's older cache copies: this process's own previous
-generations right away, and other processes' copies only once they are an
-hour old. The age rule closes the window between another process copying
-its artifact and dlopening it — unlinking a still-MAPPED file is safe on
-POSIX (the mapping keeps the inode alive), but an unlinked not-yet-mapped
-copy makes that process's dlopen fail. On Windows a loaded DLL cannot be
-deleted at all, so the delete simply fails and is ignored."
+  "Delete cache copies nobody needs. This crate's: this process's own
+previous generations right away, other processes' once they are an hour
+old. Any crate's: a copy whose process is gone (POSIX), once it is a
+minute old. The age rules close the window between another process
+copying its artifact and dlopening it — unlinking a still-MAPPED file is
+safe on POSIX (the mapping keeps the inode alive), but an unlinked
+not-yet-mapped copy makes that process's dlopen fail; the minute covers a
+process whose pid this one cannot see (another pid namespace sharing the
+cache). Before the dead-process rule, copies of crates a later process
+did not load again were never swept: one development week left 180 of
+them, 3.4 GB. On Windows a loaded DLL cannot be deleted at all, so the
+delete simply fails and is ignored."
   (let* ((base (substitute #\_ #\- name))
          (any (format nil "~A-" base))
          (own (format nil "~A-~A-c" base *process-tag*))
          (now (get-universal-time)))
     (dolist (f (uiop:directory-files (cache-directory)))
-      (let ((fname (file-namestring f)))
-        (when (and (uiop:string-prefix-p any fname)
-                   (not (equal (namestring f) (namestring current-copy)))
-                   (or (uiop:string-prefix-p own fname)
-                       (let ((written (ignore-errors (file-write-date f))))
-                         (and written (> (- now written) 3600)))))
+      (let* ((fname (file-namestring f))
+             (written (ignore-errors (file-write-date f)))
+             (age (and written (- now written))))
+        (when (and (not (equal (namestring f) (namestring current-copy)))
+                   (or (and (uiop:string-prefix-p any fname)
+                            (or (uiop:string-prefix-p own fname)
+                                (and age (> age 3600))))
+                       (let ((pid (%copy-pid fname)))
+                         (and pid age (> age 60) (%process-gone-p pid)))))
           (ignore-errors (delete-file f)))))))
 
 ;;; ---------------------------------------------------------------------------
