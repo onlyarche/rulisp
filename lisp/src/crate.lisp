@@ -534,9 +534,11 @@ second hyphen-separated field is the tag."
          (parse-integer tag :start 1))))
 
 (defun %process-gone-p (pid)
-  "True when no process PID exists — kill(PID, 0) fails. POSIX only: on
-Windows nothing is known to be gone. A pid reused by another user's
-process also answers -1 (EPERM); the copy's own process is gone then."
+  "True when kill(PID, 0) fails. POSIX only: on Windows nothing is known
+to be gone. -1 also comes back as EPERM for another user's process: with
+the per-user cache (XDG) that means the pid was reused and the copy's own
+process is gone; a cache shared between users would lose a live user's
+copies, which is one reason the cache is per user and host-local."
   (and (not (uiop:os-windows-p))
        (ignore-errors
         (= -1 (cffi:foreign-funcall "kill" :int pid :int 0 :int)))))
@@ -549,8 +551,10 @@ minute old. The age rules close the window between another process
 copying its artifact and dlopening it — unlinking a still-MAPPED file is
 safe on POSIX (the mapping keeps the inode alive), but an unlinked
 not-yet-mapped copy makes that process's dlopen fail; the minute covers a
-process whose pid this one cannot see (another pid namespace sharing the
-cache). Before the dead-process rule, copies of crates a later process
+process whose pid this one cannot see (another pid namespace on the same
+kernel sharing the cache). Copies written by another host are not
+covered — a pid means nothing across hosts — so the cache must be
+host-local (BOUNDARY §9). Before the dead-process rule, copies of crates a later process
 did not load again were never swept: one development week left 180 of
 them, 3.4 GB. On Windows a loaded DLL cannot be deleted at all, so the
 delete simply fails and is ignored."

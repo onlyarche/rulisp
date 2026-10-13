@@ -34,7 +34,10 @@ worked; each has a check, so a slip is caught before the next step.
    and their audits on macOS and Windows run nowhere else: Actions →
    `blobs` → Run workflow with `tag` = `main` and `publish` unchecked
    builds and audits all sixteen assets, runs the CI gate and the
-   re-audit, and publishes nothing.
+   re-audit, and publishes nothing. The release notes are checked only
+   when publishing, so check them here too: after step 2,
+   `awk -v v=X.Y.Z '$1=="##" && $2==v {p=1; next} $1=="##" {p=0} p' CHANGELOG.md | grep -q .`
+   must succeed.
 5. **Publish to crates.io, in dependency order** — each waits for the
    previous one to be indexed:
 
@@ -64,9 +67,10 @@ worked; each has a check, so a slip is caught before the next step.
    tree. Users then get it with `(ql:update-dist "ultralisp")`. Quicklisp
    is a 1.0 decision (docs/stability.md §9).
 9. **Open the next cycle.** Add `## Unreleased (X.Y+1 development)` at
-   the top of CHANGELOG.md, and move the previous-release pins in
-   `.github/workflows/ci.yml` to the release just made: `make compat
-   PREV=vX.Y.Z` and `gh release download vX.Y.Z` — they compare every
+   the top of CHANGELOG.md, and move the previous-release pins to the
+   release just made: the Makefile's `PREV ?=`, and in
+   `.github/workflows/ci.yml` `make compat PREV=vX.Y.Z` and both
+   `gh release download vX.Y.Z` lines (x86-64 and aarch64) — they compare every
    push against the last release, so they cannot be moved at step 1.
 
 **Yanking.** A release found unsound is yanked from crates.io

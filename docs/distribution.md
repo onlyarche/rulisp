@@ -192,7 +192,10 @@ packaged by Debian/Ubuntu (bundled ASDF 3.1.8.8):
    `HOME` unset, as under many service managers and containers, that
    resolves to `/.cache` and the program fails with
    `Could not create directory "/.cache" … Permission denied`; setting
-   `XDG_CACHE_HOME` alone is enough. rulisp keeps a successful run quiet
+   `XDG_CACHE_HOME` alone is enough. Keep the cache host-local: the sweep
+   removes copies whose process has exited on this host, so a home
+   directory shared between hosts (NFS) needs `XDG_CACHE_HOME` pointed at
+   a local directory. rulisp keeps a successful run quiet
    (`*compile-verbose*` is bound off around its own compiles); when `gcc`
    is missing, ECL itself prints `;;; Internal error: ** Error code 1 when
    executing (EXT:RUN-PROGRAM "gcc" …)` before `load-crate` signals — that

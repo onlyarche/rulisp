@@ -331,8 +331,16 @@ mod tests {
     fn send_timeout_takes_any_duration() {
         let ib = Inbox::new(1);
         assert_eq!(ib.send_timeout(1, Duration::MAX), Ok(()));
+        // full: the no-deadline branch waits until a recv makes room
+        let c = ib.clone();
+        let h = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(20));
+            c.recv(100).unwrap()
+        });
+        assert_eq!(ib.send_timeout(2, Duration::MAX), Ok(()));
+        assert_eq!(h.join().unwrap(), Some(1));
         ib.close();
-        assert_eq!(ib.send_timeout(2, Duration::MAX), Err(SendError::Closed(2)));
+        assert_eq!(ib.send_timeout(3, Duration::MAX), Err(SendError::Closed(3)));
     }
 
     #[test]

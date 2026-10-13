@@ -167,6 +167,10 @@ It does not bound:
   on SBCL the dump is refused, or saved if the pullers exited in time
   after their server stopped; on CCL an image saved with a puller alive
   faulted at exit. Stop first (`web:stop`), then dump
+- **attacks nobody ran** — floods past the queue, huge or lying lengths,
+  HTTP/2 SETTINGS floods and rapid reset, a handler that frees or stops
+  its own server, descriptor exhaustion, a GC storm under load: the
+  planned adversarial pass was not run (ROADMAP v0.8 item 2)
 - **a bug in hyper, axum, tokio or the glue** — in-process, as every
   crate: the crash-isolation bullet above applies
 

@@ -15,7 +15,9 @@ additive — `rulisp::Inbox`, `SendError`, `Closed`, `rulisp::inbox` and
 its `WAIT_CAP_MS`; two diagnostics reworded; no crate that compiled stops
 compiling (an `on_dump` hook with parameters never compiled; one with a
 result still compiles and is refused by the loader as before).
-*Manifest schema*: unchanged. *ABI*: 1.
+*Manifest schema*: unchanged. *ABI*: 1. *Loader behaviour*: the cache
+sweep now also removes copies of exited processes (POSIX), so the crate
+cache must be host-local.
 
 ### Fixed
 
@@ -56,7 +58,8 @@ result still compiles and is refused by the loader as before).
   compiles and is refused by the loader, as in 0.7, so no crate that
   compiled stops compiling. `#[diagnostic::on_unimplemented]`
   was probed first and is not used for an arity mismatch on MSRV 1.78. No
-  Rust API item added; the manifest and the shims are unchanged. Two
+  Rust API item comes with this change; the manifest and the shims are
+  unchanged. Two
   trybuild cases, `option_handle_result` and `on_dump_with_params`.
 
 ### Added
@@ -93,7 +96,9 @@ result still compiles and is refused by the loader as before).
   41 tests on the crate's own `Probe` client; a five-lens review before
   the merge found and closed three bounds the first cut lacked. SECURITY.md
   lists what the server bounds and what it does not. Not in 0.8: TLS (a
-  proxy), streaming responses. httpd ships as source (`use-crate`): the
+  proxy), streaming responses. The planned adversarial pass against the
+  finished server was not run; SECURITY.md lists what stays unattacked.
+  httpd ships as source (`use-crate`): the
   release still carries sixteen assets, for wordbag, rx, wasm and fetch.
 - **docs/httpd.md, the web developer's page**: the hello, JSON and files,
   the loop's contract (which status on which path), errors in a handler,

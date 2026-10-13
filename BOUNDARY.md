@@ -204,7 +204,11 @@ Differences from the borrowed form:
   alive): this process's previous generations at once, another
   process's copies of the same crate after an hour, and on POSIX any
   crate's copy whose process has exited once it is a minute old
-  (`v08.cache-sweep-removes-copies-of-exited-processes`).
+  (`v08.cache-sweep-removes-copies-of-exited-processes`; a copy tagged
+  without a pid falls under the hour rule only). The cache must be
+  host-local: a pid names a process on this host only, so on a home
+  directory several hosts share (NFS) set `XDG_CACHE_HOME` to a local
+  directory.
 - Before the copy, the artifact's own headers are checked against its
   size — ELF: the section header table and every `PT_LOAD`; Mach-O:
   every `LC_SEGMENT_64`; PE: every section's raw data — and a file they
@@ -306,18 +310,18 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Claim | Enforcement | Where |
 |---|---|---|
 | **§1 preamble — ABI discipline** | | |
-| Breaking the contract requires bumping `abi_version()`; loader requires exact match | runtime-check | `lisp/src/crate.lisp:203-205` (`abi-mismatch-error` unless `= +abi-version+`) |
+| Breaking the contract requires bumping `abi_version()`; loader requires exact match | runtime-check | `lisp/src/crate.lisp:314-315` (`abi-mismatch-error` unless `= +abi-version+`) |
 | Adding manifest keys is NOT a break — unknown keys are ignored | test | `fx.unknown-keys-ignored` (`tests/suite/m2.lisp:57-61`) |
 | `tests/golden/` pins the manifest bytes (macro output byte-identical) | test | `fx.golden-manifest` (`tests/suite/m2.lisp:125-146`) |
 | **§1 — Symbols and per-library resolution** | | |
-| Every export is prefixed `<crate>_rulisp_` (crate `-` → `_`) | runtime-check | `lisp/src/crate.lisp:236-241` (`manifest-error` if prefixed symbol absent); prefix minted `crates/rulisp-macros/src/lib.rs:23-29` |
+| Every export is prefixed `<crate>_rulisp_` (crate `-` → `_`) | runtime-check | `lisp/src/crate.lisp:346-351` (`manifest-error` if prefixed symbol absent); prefix minted `crates/rulisp-macros/src/lib.rs:23-29` |
 | Loader resolves every symbol against the specific dlopen handle, never the global namespace | runtime-check | `lisp/src/ffi.lisp:95-98` (`dlsym-ptr`); `%find-symbol-in` `ffi.lisp:58-59` |
 | After a reload two generations export identical names yet stay distinct per wrapper/handle | test | `m6.reload` + `m6.captured-wrapper-gate` (`tests/suite/m1.lisp:245,259`) |
 | Each cdylib statically links its own rulisp-runtime copy: last-error TLS and allocator pairing per library | test | `v04.last-error-is-per-library` (`tests/suite/v04.lisp`): concurrent failures in wordbag and rx never cross |
-| `abi_version()` is checked first, before the manifest is read; must equal 1 | runtime-check | `lisp/src/crate.lisp:194-205` (`%open-and-verify`) |
+| `abi_version()` is checked first, before the manifest is read; must equal 1 | runtime-check | `lisp/src/crate.lisp:304-315` (`%open-and-verify`) |
 | `manifest()` is a static permanent borrow (`'static str` behind OnceLock/static) | compile-error | `crates/rulisp-macros/src/lib.rs:1401-1428`; oracle `tests/m1-handwritten/src/lib.rs:18,38-43` |
-| Caller copies the manifest and never frees it | runtime-check | `lisp/src/crate.lisp:219-228` (`%read-library-manifest`: copies, no dealloc) |
-| `last_error` and `dealloc` entry points exist per library (resolved at load) | runtime-check | `lisp/src/crate.lisp:242-243` (resolve signals `manifest-error` if missing) |
+| Caller copies the manifest and never frees it | runtime-check | `lisp/src/crate.lisp:329-338` (`%read-library-manifest`: copies, no dealloc) |
+| `last_error` and `dealloc` entry points exist per library (resolved at load) | runtime-check | `lisp/src/crate.lisp:352-353` (resolve signals `manifest-error` if missing) |
 | **§2 — Status codes** | | |
 | Every function shim returns `int32_t` | compile-error | `crates/rulisp-macros/src/lib.rs:757-767` (generated shim signature `-> i32`) |
 | Out-params are written only on OK | test | `v04.out-params-untouched-on-err` (`tests/suite/v04.lisp:117-147`) |
@@ -331,7 +335,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | **§3 — last_error** | | |
 | `last_error` is thread-local | test | `v04.last-error-is-thread-local` (`tests/suite/v04.lisp:96-110`) |
 | `last_error` is per library (each cdylib its own TLS slot; errors never cross libraries) | test | `v04.last-error-is-per-library` (`tests/suite/v04.lisp`) |
-| CL reads `last_error` through the owning generation's resolved pointer | runtime-check | `lisp/src/codegen.lisp:574-593` (`gen-ctx-last-error-ptr`); resolved `lisp/src/crate.lisp:242` |
+| CL reads `last_error` through the owning generation's resolved pointer | runtime-check | `lisp/src/codegen.lisp:574-593` (`gen-ctx-last-error-ptr`); resolved `lisp/src/crate.lisp:352` |
 | Borrowed until next call into same library on same thread; CL copies both strings immediately | runtime-check | `lisp/src/ffi.lisp:315-326` (`read-crate-last-error` copies; called from `codegen.lisp:577-590`) |
 | `type` is the Rust error type name; `msg` is the Display output | test | `m2.fallible` (`tests/suite/m1.lisp:94-96`: `"ParseError"` + exact Display text) |
 | Panics: type `"panic"`, msg is the payload when `&str`/`String` | test | `m1.panic` (`tests/suite/m1.lisp:57-62`); `crates/rulisp-runtime/src/lib.rs:111-126` |
@@ -345,7 +349,7 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Rust validates UTF-8; failure → status 3 | runtime-check | `crates/rulisp-runtime/src/lib.rs:154-168` (`str_arg`) |
 | Retention layer 1: macro rejects any explicit lifetime in an export signature | compile-error | `crates/rulisp-macros/src/lib.rs:123-164,1014-1022`; pinned by `crates/rulisp/tests/ui/static_lifetime.rs` (trybuild) |
 | Retention layer 2: borrowing helpers pin the returned lifetime to a per-call ShimFrame | compile-error | `crates/rulisp-runtime/src/lib.rs:136-168` (`ShimFrame` + `str_arg<'a>(&'a ShimFrame)`) |
-| Both layers cover byte buffers, scalar slices, handle references and borrowed callbacks | compile-error | `crates/rulisp-runtime/src/lib.rs:208-261`; `crates/rulisp/src/lib.rs:225-235`; `ui/static_lifetime.rs:22-56` |
+| Both layers cover byte buffers, scalar slices, handle references and borrowed callbacks | compile-error | `crates/rulisp-runtime/src/lib.rs:208-261`; `crates/rulisp/src/lib.rs:220-235`; `ui/static_lifetime.rs:22-56` |
 | Rust→Lisp: Lisp copies then releases exactly once via the owning library's `dealloc(ptr,len,1)` | test | `m3.string-allocations` (`tests/suite/m1.lisp:110-117`); `v02.bytes-alloc-pairing` (`tests/suite/v02.lisp:33-39`) |
 | Strings have align 1; `len == capacity` guaranteed by construction | runtime-check | `crates/rulisp-runtime/src/lib.rs:174-187` (`into_boxed_slice`); align-1 dealloc `lisp/src/ffi.lisp:337-339` |
 | Empty transfer: len 0 carries no allocation and dealloc is skipped | test | `v02.bytes-roundtrip` + `v02.bytes-alloc-pairing` (`tests/suite/v02.lisp:20,33`); `m3.strings` ECHO `""` |
@@ -384,44 +388,44 @@ Legend: **compile-error** = macro check or type-system mechanism · **runtime-ch
 | Blocking exports must cap their wait in Rust; the loop belongs in Lisp (glue-author norm) | test | `fetch.waits-are-capped` (`tests/suite/fetch.lisp`) and `httpd.waits-are-capped`, `httpd.after-shutdown-answers-immediately` (`tests/suite/httpd.lisp`; CI: the `make test-fetch` and `make test-httpd` steps of the SBCL/Linux, CCL/Linux, SBCL/macOS and SBCL/aarch64 required jobs; Windows best-effort); caps `examples/fetch/src/lib.rs:42-47` and `WAIT_CAP_MS` in `examples/httpd/src/lib.rs` — reference crates only, unenforceable for third-party glue |
 | Blocking export must refuse re-entry from its own runtime's worker thread, reported as an error | runtime-check | `examples/fetch/src/lib.rs:52-59` (`refuse_reentry`; call sites 331,347,612,650) — reference crate only; no test can trigger it from Lisp |
 | ECL: callback trampolines natively compiled at load time; missing C toolchain fails via named `manifest-error` | runtime-check | `lisp/src/codegen.lisp:105-124` (`#+ecl` compile-file branch); test `v04.ecl-toolchain-failure-is-named` (`tests/suite/v04.lisp:156-166`, non-vacuous on ECL only) |
-| ECL: foreign-thread invocation of stored callbacks UNSUPPORTED (cannot adopt foreign threads) | UB-by-design | `BOUNDARY.md:165-171`; `docs/upstream/ecl-dynamic-callback-gc.md`; `#+ecl` skip `tests/suite/v02.lisp:118-124` |
+| ECL: foreign-thread invocation of stored callbacks UNSUPPORTED (cannot adopt foreign threads) | UB-by-design | `BOUNDARY.md:169-173`; `docs/upstream/ecl-dynamic-callback-gc.md`; `#+ecl` skip `tests/suite/v02.lisp:118-124` |
 | Plain Rust cdylib installs no signal handlers; audit glue-crate deps for sigaction | test | `tools/rulisp-audit.sh` (signal-symbol sweep on the artifact by format — ELF via nm, Mach-O via nm/llvm-nm, PE via llvm-readobj; tokio signal/process features; `block_on`), run over all examples by `make audit` in the `cargo tests` job and the `SBCL / Windows x86-64` job; every release asset re-audited as downloaded by blobs.yml's release job; self-tested against `tools/audit-fixture` on Linux, macOS and Windows (v0.6 closed the last of this table's gaps here) |
 | Lisp side owns SIGINT/SIGTERM; a glue crate's artifact imports no signal-disposition symbol | test | `tools/rulisp-audit.sh` over every example (`make audit`, CI), with `tools/rulisp-audit-selftest.sh` proving the gate rejects a signal-importing fixture | fetch demonstrates the pattern (`Client::shutdown` `examples/fetch/src/lib.rs:346`; audit.sh bans signal symbols) but nothing enforces the norm generally |
 | **§8 — Panics and non-local exits** | | |
 | Every shim body runs under `catch_unwind`; a panic maps to status 2 | runtime-check | `crates/rulisp-runtime/src/lib.rs:111-126` (`rt::shim`); every generated shim wrapped `crates/rulisp-macros/src/lib.rs:757-767`; test `m1.panic` |
 | `panic = "abort"` builds are rejected at compile time (`compile_error!` in rulisp-runtime) | compile-error | `crates/rulisp-runtime/src/lib.rs:11-17`; proven non-vacuous by `m1.panic-abort-guard` (`tests/suite/m1.lisp:65-81`) |
 | Shims are `extern "C"` not `"C-unwind"`: an escaped panic aborts rather than corrupting the caller | runtime-check | `crates/rulisp-macros/src/lib.rs:759,926,1418-1441` (all shims/entry points `extern "C"`; abort-on-escape is rustc's extern-C backstop) |
-| Poisoned mutexes after a caught panic are the glue crate's own concern (rulisp adds no mitigation) | UB-by-design | `BOUNDARY.md:190-192` |
+| Poisoned mutexes after a caught panic are the glue crate's own concern (rulisp adds no mitigation) | UB-by-design | `BOUNDARY.md:192-194` |
 | Subsequent `.lock().unwrap()` on a poisoned mutex panics, is caught, reported as status 2 | test | `v04.poisoned-mutex-reports-panic` (`tests/suite/v04.lisp:74-89`; oracle `word_bag_poison` `tests/m1-handwritten/src/lib.rs:475-482`) |
 | **§9 — Reload and unloading** | | |
 | The loader never calls dlclose; old generations stay mapped forever | test | `m6.captured-wrapper-gate` (`tests/suite/m1.lisp:259-279`): old-gen wrapper+handle callable post-reload (`:273`); no dlclose/FreeLibrary anywhere in `lisp/src` |
-| One leaked mapping per reload (zero in production) — a deliberate, accepted leak | UB-by-design | `BOUNDARY.md:196-198`; `lisp/src/crate.lisp:3-6` |
+| One leaked mapping per reload (zero in production) — a deliberate, accepted leak | UB-by-design | `BOUNDARY.md:198-200`; `lisp/src/crate.lisp:3-6` |
 | Persisting mappings make TLS destructors, `std::thread`, and stale-generation frees safe | test | `m6.reload` (`tests/suite/m1.lisp:254`: stale handle freed via birth-gen shim); TLS-destructor half rides on no-dlclose, untested directly |
-| Every load dlopens a unique copy of the artifact, defeating dlopen path caching | runtime-check | `lisp/src/crate.lisp:91-100,157-162` (counter+timestamp copy name, `uiop:copy-file`), `:194-195` (dlopen the copy) |
+| Every load dlopens a unique copy of the artifact, defeating dlopen path caching | runtime-check | `lisp/src/crate.lisp:91-100,268-272` (counter+timestamp copy name, `uiop:copy-file`), `:305` (dlopen the copy) |
 | Older cache copies are unlinked; live mappings keep the inodes alive | test | `v04.cache-sweep-spares-other-processes-fresh-copies` (`tests/suite/v04.lisp`), `v08.cache-sweep-removes-copies-of-exited-processes` (`tests/suite/v08.lisp`, POSIX); mechanism `lisp/src/crate.lisp` (`%sweep-crate-cache`, invoked from `%commit-generation`); a load that does not commit deletes its own copy (`v06.failed-load-leaves-no-cache-copy`) |
 | A truncated or corrupt artifact is refused before `dlopen`, on the load and the restore path | test | `v07.truncated-artifact-is-refused` (`tests/suite/v07.lisp`: a 60 % cut — every `PT_LOAD` present, the section table missing — is refused as "truncated", the registered crate and the cache untouched, the real artifact loads afterwards), `v07.header-only-artifact-is-refused-without-a-fault` (a 4,096-byte head in a subprocess; the log carries no `Signal 7`, `CORRUPTION WARNING` or bus error); mechanism `%check-artifact-shape` (`lisp/src/crate.lisp`), called by `%load-crate-locked` before `uiop:copy-file`, which `%restore-all-crates` also goes through; all twelve v0.6.0 release assets accepted, 36 cuts of them refused (v0.7 item 2); a stripped artifact is not a cut one — `v07.section-stripped-artifact-still-loads` clears the section table of the wordbag ELF as `llvm-objcopy --strip-sections` does and loads it |
 | **§10 — Image dump / restore** | | |
-| On restore the loader bumps the global session counter FIRST, before any reload | runtime-check | `lisp/src/crate.lisp:464-471` (`incf *session*` precedes the reload loop; hook registered `:507`) |
+| On restore the loader bumps the global session counter FIRST, before any reload | runtime-check | `lisp/src/crate.lisp:604-611` (`incf *session*` precedes the reload loop; hook registered `:647`) |
 | Every pre-dump handle cell is invalid: signals `stale-handle-error`, never dereferences | runtime-check | `lisp/src/handle.lisp:37-52` (session gate in `cell-begin-call`); pinned by `m7.dump-restore` (`tests/suite/m1.lisp:328-332`) |
 | Every captured wrapper closure of a dead session refuses (`crate-not-loaded-error`) | runtime-check | `lisp/src/codegen.lisp:566-571`; pinned by `m7.dump-restore` (`tests/suite/m1.lisp:335-339`) |
-| Then each crate reloads from its recorded artifact path and all bindings regenerate | test | `m7.dump-restore` (`tests/suite/m1.lisp:326-327`: post-restore GREET works); mechanism `lisp/src/crate.lisp:472-483` |
+| Then each crate reloads from its recorded artifact path and all bindings regenerate | test | `m7.dump-restore` (`tests/suite/m1.lisp:326-327`: post-restore GREET works); mechanism `lisp/src/crate.lisp:612-623` |
 | A crate whose reload failed on restore keeps no pointer into the dead mapping; its dump hook is not run | test | `v06.restore-failure-leaves-no-live-foreign-pointer` (`tests/suite/v06.lisp`: restore without the artifact, then run the dump hooks; the log must carry no memory fault); mechanism `%stub-crate` (`lisp/src/crate.lisp`) |
 | Freeing a dead-session handle performs no foreign call | runtime-check | `lisp/src/handle.lisp:69-75` (`%maybe-foreign-free` session gate); m7 exercises explicit free + GC-finalizer path (`m1.lisp:333,340-345`) |
-| No guardrail against dumping with live foreign threads; they vanish on restore, their state gone | UB-by-design | `BOUNDARY.md:216-221` |
+| No guardrail against dumping with live foreign threads; they vanish on restore, their state gone | UB-by-design | `BOUNDARY.md:238-243` |
 | Thread-owning crates quiesce before a dump via the declared `:on-dump` hook (or the manual pattern) | runtime-check | `%run-crate-dump-hooks` + `%validate-on-dump`; tests `v04.on-dump-*` (every suite host), `fetch.dump-hook-quiesces`, `fetch.dump-restore-refuses`, `httpd.dump-hook-quiesces`, `httpd.stop-then-dump-restores` (CI: the `make test-fetch` and `make test-httpd` steps of the SBCL/Linux, CCL/Linux, SBCL/macOS and SBCL/aarch64 required jobs; Windows best-effort). The hook runs on every dump attempt, including one the host then refuses — a Lisp thread still serving at dump time (SBCL refuses; CCL saved an image that faulted at exit) finds every server already stopped, so the order is: stop your pullers, then dump |
 | **§11 — Manifest** | | |
 | Manifest read hardened: `*read-eval*` nil, symbols land in a scratch package | runtime-check | `lisp/src/manifest.lisp:8-10,24-33`; test `fx.read-eval-blocked` (`tests/suite/m2.lisp:26-29`) |
 | Grammar closed: keywords, strings, integers, lists, nil only — anything else rejected | runtime-check | `lisp/src/manifest.lisp:35-49` (`%sanitize`); test `fx.unknown-symbols-rejected` (`tests/suite/m2.lisp:31-33`) |
 | `:schema` accepted only when <= supported form version (1) | runtime-check | `lisp/src/manifest.lisp:128-131`; test `fx.newer-schema-refused` (`tests/suite/m2.lisp:35-37`) |
 | `:abi` must equal `abi_version()` exactly (loader exact-match + manifest/entry-point agreement) | test | `v06.abi-mismatch-refused` (`tests/suite/v06.lisp`; `tests/abi-fixture` answers 2 and is refused with expected 1, actual 2, nothing registered); mechanism `%open-and-verify` (`lisp/src/crate.lisp`) |
-| `:target` checked against the host; unknown tokens pass | runtime-check | `lisp/src/manifest.lisp:106-121` + `lisp/src/crate.lisp:210-216`; test `fx.target-check` (`tests/suite/m2.lisp:71-78`) |
+| `:target` checked against the host; unknown tokens pass | runtime-check | `lisp/src/manifest.lisp:106-121` + `lisp/src/crate.lisp:320-326`; test `fx.target-check` (`tests/suite/m2.lisp:71-78`) |
 | Required keys and well-formed specs; any corruption signals a named `manifest-error` | runtime-check | `lisp/src/manifest.lisp:51-61,123-152`; tests `fx.missing-required-keys`, `fx.not-a-manifest`, `fx.bad-param-form` (`tests/suite/m2.lisp`) |
-| `:errors` names become condition classes, subclasses of `rulisp:rust-error` | test | `m3.typed-conditions` (`tests/suite/m3.lisp:11-28`); mechanism `lisp/src/crate.lisp:249-251,333-335` |
+| `:errors` names become condition classes, subclasses of `rulisp:rust-error` | test | `m3.typed-conditions` (`tests/suite/m3.lisp:11-28`); mechanism `lisp/src/crate.lisp:359-361,443-445` |
 | Load-bearing keys raise `:schema`; enhancement keys ride the ignore rule; a newer crate warns `rulisp-version-skew` on an older loader | test | `v05.newer-rulisp-warns` (`tests/suite/v05.lisp`); `%check-rulisp-version` (`lisp/src/manifest.lisp`); rule text §11 |
 | Unknown keys are ignored everywhere; additive evolution is free | test | `fx.unknown-keys-ignored` (`tests/suite/m2.lisp:57-61`); getf-based parsing ignores by construction |
 | Type vocabulary is closed: tokens outside it signal `manifest-error` at binding generation | runtime-check | `lisp/src/codegen.lisp:40-42,80-86,167-175`; test `fx.partial-generation-ban` (`m2.lisp:96-118`); macro side: trybuild `ui/bad_type.rs` |
 | `(:option T)`: leading uint8 present flag; value meaningful only when present; Lisp NIL ↔ None | test | `v02.option-result` + `v02.option-param` (`tests/suite/v02.lisp:52-62`); mechanism `codegen.lisp:274-295,456-476`, `ffi.lisp:275-285` |
-| `(:option T)` with `:bool` inner is rejected (nil ambiguity) | compile-error | `crates/rulisp-macros/src/lib.rs:226-230` (param), `359-363` (result) |
+| `(:option T)` with `:bool` inner is rejected (nil ambiguity) | compile-error | `crates/rulisp-macros/src/lib.rs:226-230` (param), `361-365` (result) |
 | `(:option :bool)` rejected by the loader too (hand-written manifests) | runtime-check | `option-inner` (`lisp/src/codegen.lisp`), both param and result branches; test `v04.option-bool-rejected-by-the-loader` |
 | `(:vec S)`: S scalar only; len counts ELEMENTS; freed via `dealloc(ptr, len*sizeof(S), alignof(S))` | runtime-check | `lisp/src/codegen.lisp:80-86,326-340`; `crates/rulisp-runtime/src/lib.rs:189-200`; test `v02.vec-roundtrip` (`v02.lisp:69-81`) |
 | `:bytes` = exact `:string` convention minus UTF-8 validation; empty transfer at len 0 | test | `v02.bytes-in`/`bytes-roundtrip`/`bytes-alloc-pairing` (`tests/suite/v02.lisp:10-45`); no-validation path `crates/rulisp-runtime/src/lib.rs:216-228` |

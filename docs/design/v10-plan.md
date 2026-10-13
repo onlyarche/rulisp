@@ -57,7 +57,8 @@ What follows from the table:
   test stays green with both hides"; measured again at the cycle's close,
   it does not.)
 - **The pins must become exact.** `crates/rulisp/Cargo.toml` pins
-  `rulisp-macros` and `rulisp-runtime` as `"0.6.0"` — a caret
+  `rulisp-macros` and `rulisp-runtime` as the release's version (e.g.
+  `"0.8.0"`) — a caret
   requirement, which within 0.x means that one minor, but `^1.0.0` means
   every 1.x. "The helpers may change in any minor" would then be
   falsifiable by `cargo update -p rulisp-runtime` in a consumer: a
