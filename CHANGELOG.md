@@ -104,7 +104,7 @@ cache must be host-local.
   the loop's contract (which status on which path), errors in a handler,
   the limits table with the memory bound, testing, deploying, and when to
   stay on Hunchentoot. docs/usage.md gains "A web server from the REPL,
-  ten lines"; the suite's hello test reads that form from the page.
+  six lines"; the suite's hello test reads that form from the page.
 
 ## 0.7.0 — 2026-09-30
 

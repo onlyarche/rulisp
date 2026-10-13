@@ -85,13 +85,13 @@ The hard problems are handled structurally, not by convention:
 - **Image dump/restore** (`save-lisp-and-die`) invalidates every pre-dump
   handle via a session counter and regenerates all bindings on startup.
 
-**Start here:** [docs/installation.md](docs/installation.md)
+**Start here:** [docs/installation.md](https://github.com/onlyarche/rulisp/blob/main/docs/installation.md)
 (Linux/macOS/Windows setup, dependencies), then
-[docs/quickstart.md](docs/quickstart.md) — wrapping the real `regex`
-crate (the finished example is [`examples/rx/`](examples/rx/)). [docs/usage.md](docs/usage.md) explains
+[docs/quickstart.md](https://github.com/onlyarche/rulisp/blob/main/docs/quickstart.md) — wrapping the real `regex`
+crate (the finished example is [`examples/rx/`](https://github.com/onlyarche/rulisp/tree/main/examples/rx)). [docs/usage.md](https://github.com/onlyarche/rulisp/blob/main/docs/usage.md) explains
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
 toolchain needed) vs building your own. For something bigger,
-[`examples/wasm/`](examples/wasm/) gives Common Lisp a WebAssembly runtime
+[`examples/wasm/`](https://github.com/onlyarche/rulisp/tree/main/examples/wasm) gives Common Lisp a WebAssembly runtime
 in a few hundred lines of glue: load `.wat`/`.wasm` modules from the REPL, call
 their exports under a fuel-metered CPU budget (runaway guest code traps as
 a condition instead of hanging the image), move byte buffers in and out of
@@ -112,20 +112,20 @@ way to sleep or wait, and a budget for the time spent inside host calls,
 which fuel does not meter (a second plus a microsecond per unit of
 fuel). SECURITY.md lists what that bounds and what it does not. The
 suite runs on every CI host.
-[`examples/fetch/`](examples/fetch/) is an async HTTPS client
+[`examples/fetch/`](https://github.com/onlyarche/rulisp/tree/main/examples/fetch) is an async HTTPS client
 on tokio and rustls: the pattern for a crate that owns threads (capped
 waits, no signal handlers, a declared dump hook), with its own suite in
-CI. [`examples/httpd/`](examples/httpd/) is the pattern for Rust events with
+CI. [`examples/httpd/`](https://github.com/onlyarche/rulisp/tree/main/examples/httpd) is the pattern for Rust events with
 Lisp handlers, worked through as an HTTP/1.1 and h2c server: axum, hyper
 and tokio hold the connections and enforce the limits before Lisp sees a
 byte, Lisp threads take requests off a queue, and every request gets an
-answer, even from a handler that fails — [docs/httpd.md](docs/httpd.md)
-explains the split. The full contract is in [BOUNDARY.md](BOUNDARY.md);
-architecture and rationale in [DESIGN.md](DESIGN.md) (Korean). Measured boundary costs, with the method:
-[docs/benchmarks.md](docs/benchmarks.md). What is stable, what 1.0 will
-promise, and how hosts are supported: [docs/stability.md](docs/stability.md). Release
-history: [CHANGELOG.md](CHANGELOG.md). Reporting a vulnerability and the
-threat model: [SECURITY.md](SECURITY.md).
+answer, even from a handler that fails — [docs/httpd.md](https://github.com/onlyarche/rulisp/blob/main/docs/httpd.md)
+explains the split. The full contract is in [BOUNDARY.md](https://github.com/onlyarche/rulisp/blob/main/BOUNDARY.md);
+architecture and rationale in [DESIGN.md](https://github.com/onlyarche/rulisp/blob/main/DESIGN.md) (Korean). Measured boundary costs, with the method:
+[docs/benchmarks.md](https://github.com/onlyarche/rulisp/blob/main/docs/benchmarks.md). What is stable, what 1.0 will
+promise, and how hosts are supported: [docs/stability.md](https://github.com/onlyarche/rulisp/blob/main/docs/stability.md). Release
+history: [CHANGELOG.md](https://github.com/onlyarche/rulisp/blob/main/CHANGELOG.md). Reporting a vulnerability and the
+threat model: [SECURITY.md](https://github.com/onlyarche/rulisp/blob/main/SECURITY.md).
 
 ## Status
 
@@ -178,7 +178,7 @@ image dump — ship a `program-op` executable, docs/distribution.md),
 token, is BOUNDARY.md §11; every claim on this page has a citation in
 docs/claims.md, the claims register.
 
-Out — see [ROADMAP.md](ROADMAP.md): `Vec<String>`/nested containers,
+Out — see [ROADMAP.md](https://github.com/onlyarche/rulisp/blob/main/ROADMAP.md): `Vec<String>`/nested containers,
 multiple return values.
 
 rulisp is for writing glue crates — it does not auto-bind arbitrary

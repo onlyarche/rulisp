@@ -111,7 +111,7 @@ without restarting the REPL:
 A failed build signals `rulisp:build-error` carrying cargo's stderr, with
 a `retry-build` restart.
 
-## A web server from the REPL, ten lines
+## A web server from the REPL, six lines
 
 `examples/httpd` is an HTTP server whose handlers are Lisp functions. From
 a checkout:

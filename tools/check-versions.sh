@@ -25,5 +25,6 @@ need README.md         "^$V\. "            "status line starting \"$V.\""
 need docs/quickstart.md "^rulisp = \"$MM\"" "rulisp = \"$MM\""
 need docs/usage.md      "^rulisp = \"$MM\"" "rulisp = \"$MM\""
 need docs/usage.md      "rulisp $V [(]this loader: $V[)]" "describe transcript 'rulisp $V (this loader: $V)'"
+need docs/stability.md  "[(]$V everywhere today[)]" "§2 shared version $V"
 [ $fail -eq 0 ] && echo "versions consistent: $V (rust-version $RV)"
 exit $fail
