@@ -71,15 +71,20 @@ which stops being true in the compat tree at every version bump.
 
 ## 3. Deprecation
 
-Policy only — nothing is deprecated today. Reviewed for 0.6 and again
-for 0.7: no rename or removal found necessary — every export is used by
-README, BOUNDARY §2, the quickstart, the suite or the fetch veneer;
+Policy only — nothing is deprecated today. Reviewed for 0.6, for 0.7 and
+again for 0.8: no rename or removal found necessary — 33 of the 47
+exports are used by README, BOUNDARY, the quickstart, the suite or the
+fetch and httpd veneers; the other fourteen (`rulisp-error`,
+`invalid-handle-error`, the eleven condition readers and `crate-name`)
+are the condition protocol and one accessor, pinned by the golden and
+otherwise named only in DESIGN.md or the CHANGELOG — the 0.8 review
+counted them where the earlier reviews had written "every export";
 argument conventions are consistent (paths positional, `:package`
 keyword throughout); and a class name in a `handler-case` cannot be
 staged by a style-warning anyway. 0.6's one tightening, the undocumented
-`(setf crate-generation)`, was a §4 soundness fix; 0.7 added and removed
-no export (`lisp/src/package.lisp` and its golden are unchanged since
-the 0.6.0 tag).
+`(setf crate-generation)`, was a §4 soundness fix; 0.7 and 0.8 added and
+removed no export (`lisp/src/package.lisp` and its golden are unchanged
+since the 0.6.0 tag).
 
 - Rust: `#[deprecated]` for at least one minor before removal, with the
   replacement in the note.
@@ -189,9 +194,10 @@ change. Exit criteria, all checkable:
 the mechanical part of criteria 1, 3, 4 and 5 — the ABI constants, the
 gates by name, the export count against the golden, the GAP count, the
 register's footer, the dry-run step — so a criterion cannot lapse
-quietly. Status as of 0.7.0: 1 holds; 2 shipped; 3 holds — two cycles
-(0.6, 0.7) with no break on any surface, and 0.7 moved none at all
-(CHANGELOG's surfaces paragraph); 4 holds; 5 mechanical part holds — the
+quietly. Status as of 0.8.0: 1 holds; 2 shipped; 3 holds — three
+cycles (0.6, 0.7, 0.8) with no break on any surface; 0.7 moved none at
+all and 0.8 moved one, additively — the Rust API gained `rulisp::Inbox`
+(CHANGELOG's surfaces paragraphs); 4 holds; 5 mechanical part holds — the
 tarball is down to one `.asd` — and the submission waits for 1.0, which
 follows 0.8. What the 1.0.0 commit contains is written down and measured:
 docs/design/v10-plan.md.

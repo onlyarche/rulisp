@@ -129,7 +129,7 @@ threat model: [SECURITY.md](SECURITY.md).
 
 ## Status
 
-0.7.0. A host is supported exactly when it is a **required** CI job
+0.8.0. A host is supported exactly when it is a **required** CI job
 (docs/stability.md §5); this table is that matrix, and nothing else is
 claimed:
 

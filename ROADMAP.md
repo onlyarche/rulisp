@@ -7,7 +7,7 @@ cargo-semver-checks, the release-day sequence, the commit that opens
 1.1 and the Quicklisp issue text:
 [docs/design/v10-plan.md](docs/design/v10-plan.md).
 
-## v0.8 — the server that owns a listener (next)
+## v0.8 — the server that owns a listener
 
 The first example that owns a listening socket: `examples/httpd`, an
 HTTP/1.1 + h2c server on axum/hyper/tokio whose handlers are Lisp
@@ -24,8 +24,9 @@ packages, four new over fetch's tree; 2.03 MB stripped with h2;
 `audit ok`) and measured it from SBCL: two OS threads and no Lisp thread
 per server, 14k req/s with two pullers, h2c answered, 413/503/500 where
 they belong, the dump hook quiescing and the restored image serving.
-No surface moves: ABI 1, `:schema` 1, the Lisp API golden's 47 rows
-(no export added), the Rust API checked as a minor against 0.7.0. Every
+One surface moves, additively: the Rust API gains `rulisp::Inbox`
+(item 11), checked as a minor against 0.7.0; ABI 1, `:schema` 1 and the
+Lisp API golden's 47 rows (no export added) stand. Every
 bound a server cannot ship without — a head timer, a body timer, a
 handler timeout, a connection cap, a bounded queue that waits before
 503, dead-slot pruning, a bounded dump drain — is in the first feature
@@ -42,11 +43,23 @@ acceptance criteria and cut order:
 [docs/design/v08-plan.md](docs/design/v08-plan.md).
 Budget 1 L + 1 M + 7 S, one S reserved for what the review and the pass find.
 
+**Released as 0.8.0** (2026-10-13): eight items ✅ (1, 2, 3, 6, 7, 9, 10,
+11); item 4 cut (httpd ships source-only, sixteen assets); item 5
+carried (the Windows fetch count passed 24 only at the release — see the
+item); item 8 closed by the release commit and the one that opens the
+next cycle. One surface moved, additively: the Rust API gained
+`rulisp::Inbox`; ABI 1, `:schema` 1 and the 47 Lisp exports are as 0.7.0
+left them. CI cost at the close, run 38351565952 (bc5e7ac, 2026-10-13):
+6 min 8 s wall, Lisp jobs 166–365 s, against 0.7's baseline of 6 min
+42 s and 134–397 s — SBCL/Linux grew most, 168 → 286 s, with the httpd,
+v08 and v09 suites; CCL 134 → 166 s, aarch64 173 → 202 s, macOS 234 →
+238 s; ECL (291 → 288 s) and Windows (397 → 365 s) got shorter.
+
 1. ✅ Open the cycle on true documents: BOUNDARY §12's fetch rows name the four hosts that run them, README and claims.md add aarch64, ROADMAP's missing ✅ and stale v0.2 sentences, stability.md's "0.6.0 suite" (S). Done 2026-10-01: the three §12 rows cite the `make test-fetch` steps of the four required jobs and the best-effort Windows step; README's job paragraph and claims row 162 add aarch64 (required since 2026-09-30); v0.5 item 1 ✅ with c58ff38; the v0.2 Windows and WASI sentences are records now; stability §1 says "the previous release's suite". Found on the way: two claims rows cited ROADMAP by line numbers that had been stale since v0.3 — they cite by section now, which does not rot; `check-1.0.sh` holds and the footer still reads 362 rows.
 2. ✅ The flagship: `examples/httpd` — the pull-based server with every bound in the first feature commit, the `web` veneer with the debugger-in-the-handler-frame discipline, an in-crate `Probe` client, ≈ 33 tests on fetch's route (required on SBCL/Linux, CCL, macOS, aarch64; best-effort on Windows), the cross-host compile dispatched first, the five-lens review and the adversarial pass before any blob ships (L). Progress (2026-10-02): commits 0, 1 and the review's fixes merged to main at 58d4765 — the fifth crate compiled and loaded on every host from the first dispatch; the review (five lenses, 16 skeptics, a critic) found three bounds the first cut lacked — hyper-util's protocol sniff has no timer, one h2c connection could hold 200 streams × BODY-CAP, `respond-file` opened before it stat'ed — and the framing hyper would have asserted on, all closed with a test each (41 tests, 229 checks); commit 2 adds `web.lisp`, the dump tests, BOUNDARY §12's rows and SECURITY's list; the planned adversarial pass was not run, and the maintainer chose to ship httpd as a source-only pattern example instead (2026-10-07). What stands in for it is the pre-merge review's attack lens and the tests it left (slowloris and silent connections, unanswered handlers, a client that left while parked, CRLF/NUL in Lisp headers, racing pullers, double respond, port reuse, reload and dump while serving, the h2 body bound); floods past the queue, huge or lying lengths, h2 SETTINGS floods and rapid reset, a handler that frees or stops its server, descriptor exhaustion and a GC storm under load remain unattacked, and SECURITY.md says the pass was not run. Reframed 2026-10-07 (043da14): docs/httpd.md opens on the split — Rust events, Lisp handlers, a queue between.
 3. ✅ The web developer's page: docs/httpd.md (transcripts, the loop's contract, the error discipline, the limits table, testing, deployment), the ten-line hello in docs/usage.md evaluated byte-identically by a test, the README sentence, and a claims row per sentence with the footer recounted (S). Done 2026-10-07: docs/httpd.md (168 lines; the JSON transcript uses jzon as the user's choice, and the page's Lisp blocks were evaluated verbatim with their curl output diffed against the page); `httpd.veneer-hello` reads the hello from docs/usage.md (only the port swapped) and asserts docs/httpd.md prints the same text — changing the page's response text alone fails it; README's sentence and job paragraph; installation's `make test-httpd`; 56 claims rows (47 for the page), footer 418 / 370 / 48 / 0. Deferred to item 4: usage.md:44's "four examples ship this way", which becomes true for httpd only when blobs.yml builds it.
 4. ✂ The fifth crate across every count site (blobs.yml 16 → 20, releasing, usage, distribution, claims, v10-plan, installation) and the release path rehearsed from a branch with `publish=false` and twenty assets before the tag (M). Cut 2026-10-07 by the plan's own clause: httpd ships source-only, blobs.yml stays at sixteen assets for four of the examples, and docs/releasing.md, docs/distribution.md, docs/usage.md and the CHANGELOG say so. The pass it waited on was not run (item 2).
-5. ☐ Windows: the fetch step promoted at ECL's count of 24 green runs; the httpd step starts best-effort on the same procedure (S). Not promoted: 19 consecutive green Windows fetch executions on main from 36388353221 (729b888) to 37575345718 (da4e5d2), short of 24; the step stays best-effort and the count carries into the next cycle, never by calendar.
+5. ☐ Windows: the fetch step promoted at ECL's count of 24 green runs; the httpd step starts best-effort on the same procedure (S). Not promoted: 19 consecutive green Windows fetch executions on main from 36388353221 (729b888) to 37575345718 (da4e5d2), short of 24; the step stays best-effort and the count carries into the next cycle, never by calendar. At the 0.8.0 release the count is 26: seven more green executions, 37588981465 (877ff03) through 38351565952 (bc5e7ac), so the threshold is met; 0.8.0 ships with the step still best-effort — the promotion is a change of its own (ci.yml's `continue-on-error`, stability §5, README's table, BOUNDARY §12's fetch rows, claims) and is pending.
 6. ✅ `load-crate` on a directory signals `crate-not-loaded-error` naming `use-crate`, not the host's stream error (reproduced on SBCL: `SIMPLE-STREAM-ERROR … Is a directory`); tests/suite/v08.lisp on all six Lisp jobs (S). Done 2026-10-07 (942be6e): failing first on SBCL 2.1.11 with SB-INT:SIMPLE-STREAM-ERROR for both spellings (6 of 8 checks); green on SBCL, CCL and ECL through run-m4.
 7. ✅ Two macro diagnostics the flagship's author hit: `Option<Handle>` as a result names its real rule, and `on_dump` naming a function with parameters is a rulisp-worded error, not a raw E0308; two trybuild cases (S). Done 2026-10-07 (877ff03, narrowed in the review fixes): `#[diagnostic::on_unimplemented]` was probed on MSRV 1.78 and is not used for an arity mismatch (E0593) or a non-unit result (E0271); the guard is a const assertion on the export's own metadata, on parameters only, so a hook with a result still compiles and is refused by the loader as in 0.7. No Rust API item added; trybuild option_handle_result and on_dump_with_params.
 8. ☐ Close the cycle: the pre-release review of v0.7.0..HEAD, the write-up with its falsification evidence and the measured CI cost, stability §3/§8 "as of 0.8", 0.8.0 with sixteen assets (httpd source-only, item 4 cut), and the commit that opens the next cycle with the pins at v0.8.0 (S).

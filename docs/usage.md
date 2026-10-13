@@ -84,7 +84,7 @@ Rust side:
 crate-type = ["cdylib"]
 
 [dependencies]
-rulisp = "0.7"          # from crates.io
+rulisp = "0.8"          # from crates.io
 regex = "1"             # whatever you're wrapping
 ```
 
@@ -215,7 +215,7 @@ CL-USER> (describe (rulisp:use-crate #p"examples/rx/"))
   Package:        RX
   Generation:     1 (session 0)
   Artifact:       .../examples/rx/target/debug/librx.so
-  Built with:     rulisp 0.7.0 (this loader: 0.7.0)
+  Built with:     rulisp 0.8.0 (this loader: 0.8.0)
   ...
   Exports (7):
     (rx:make-regex pattern)
