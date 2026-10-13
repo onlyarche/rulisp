@@ -38,7 +38,7 @@ result still compiles and is refused by the loader as before).
 
 ### Changed
 
-- **Host tiers (0.9 policy, docs/stability.md §5).** SBCL is tier 1:
+- **Host tiers (docs/stability.md §5).** SBCL is tier 1:
   every feature and example. CCL is tier 2: what CFFI, bordeaux-threads,
   trivial-garbage, UIOP and standard Common Lisp can express; a feature
   that needs CCL-specific code ships for SBCL only and says so. ECL is
@@ -61,7 +61,7 @@ result still compiles and is refused by the loader as before).
 
 ### Added
 
-- **`rulisp::Inbox<T>` (0.9)**: the queue direction of the boundary as a
+- **`rulisp::Inbox<T>`**: the queue direction of the boundary as a
   library type. Producers on any Rust thread `try_send` (never blocks;
   the value comes back when the inbox is full or closed) or
   `send_timeout`; the export Lisp loops on calls `recv(wait_ms)`, capped

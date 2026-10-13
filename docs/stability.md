@@ -112,7 +112,7 @@ runs on every push without being required and is not a supported host
 until promoted. Everything else (LispWorks,
 Allegro, ABCL, other architectures) is untested and unclaimed.
 
-**Tiers (since 0.9).** Every required job keeps running what it runs
+**Tiers (since 0.8).** Every required job keeps running what it runs
 today; the tiers decide what a *new* feature must reach.
 
 - **SBCL is tier 1.** Every feature works on it on all four platforms; the

@@ -123,7 +123,7 @@ extracted 371 entries, 24 of which were dated wording found true, so
 | the head, body and connection limits hold before Lisp sees a byte | capability | tests httpd.slowloris-is-closed, httpd.body-cap-is-413, httpd.body-drip-is-408, httpd.connection-cap-holds, httpd.header-bomb-is-refused (each asserts nothing was parked) |
 | every request gets an answer, even from a handler that fails | capability | tests httpd.veneer-handler-error-is-500-and-a-warning, httpd.veneer-throw-still-answers-500, httpd.veneer-no-response-warns-and-answers-500, httpd.unanswered-request-is-500-on-free |
 | SBCL on Linux x86-64, aarch64 and macOS, and CCL on Linux, also run the HTTP server example (best-effort on Windows) | host | .github/workflows/ci.yml steps "httpd suite" (SBCL/Linux, macOS, aarch64), "httpd suite on CCL", "httpd suite (best-effort on Windows)" with continue-on-error |
-| Since 0.9 the hosts have tiers: SBCL gets every feature, CCL what portable libraries can express, ECL the core | host | docs/stability.md §5 (Tiers); every required job in .github/workflows/ci.yml unchanged |
+| Since 0.8 the hosts have tiers: SBCL gets every feature, CCL what portable libraries can express, ECL the core | host | docs/stability.md §5 (Tiers); every required job in .github/workflows/ci.yml unchanged |
 
 ## docs/installation.md
 

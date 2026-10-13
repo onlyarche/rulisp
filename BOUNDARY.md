@@ -158,7 +158,7 @@ Differences from the borrowed form:
   waits without a bound makes the image unkillable. Take a `wait_ms`
   parameter, cap it (100 ms is a good default), return a "not ready yet"
   answer, and let the caller loop in Lisp where interrupts and restarts
-  work. Since 0.9 the library does this for event streams:
+  work. Since 0.8 the library does this for event streams:
   `rulisp::Inbox::recv` caps every wait at `rulisp::inbox::WAIT_CAP_MS`
   (100 ms), whatever it is asked (test `v09.inbox-wait-is-capped`).
 - **A blocking export must refuse re-entry from its own runtime's worker

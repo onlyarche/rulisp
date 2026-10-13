@@ -1,4 +1,5 @@
-;;; v0.9 suite: rulisp::Inbox, the queue direction of the boundary as a
+;;; rulisp::Inbox (shipped in 0.8; the suite keeps the name of the cycle it
+;;; was planned for): the queue direction of the boundary as a
 ;;; library type. tests/inbox-fixture's Ticker produces numbered events on a
 ;;; Rust thread of its own; Lisp pulls them through a capped wait. Nothing
 ;;; here needs a callback or an adopted thread, so the suite runs on every
