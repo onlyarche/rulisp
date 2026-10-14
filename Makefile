@@ -82,7 +82,7 @@ doc:
 # recorded in tests/compat/skipped-internal.txt, with its reason, and not
 # counted; a failure through an exported symbol is a break and does not
 # land (tests/compat/old-suite-verdict.sh decides, by name).
-PREV ?= v0.7.0
+PREV ?= v0.8.0
 COMPAT := $(CURDIR)/target/compat
 compat:
 	$(CARGO) build -p wordbag

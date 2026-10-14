@@ -59,19 +59,26 @@ worked; each has a check, so a slip is caught before the next step.
    `lib<crate>-darwin-arm64.dylib` and `<crate>-windows-x86_64.dll` for
    `wordbag`, `rx`, `wasm`, `fetch`. A
    host that flaked is re-run for the same tag from the Actions tab
-   (`blobs` → Run workflow → the tag); existing assets are replaced.
+   (`blobs` → Run workflow → the tag); existing assets are replaced. A
+   release job that failed on a GitHub API error (`gh: Server Error` in
+   the gate step, seen in the 0.8.0 rehearsal) is re-run in place, the
+   build jobs' results standing:
+   `gh api -X POST repos/onlyarche/rulisp/actions/runs/<run id>/rerun-failed-jobs`
+   (gh 2.4.0 has no `gh run rerun --failed`).
 8. **Ultralisp.** The dist polls GitHub on its own schedule and has
    lagged a tag by days. Run `sh tools/check-dist.sh` until it prints
    the new version; if it has not within a day, the place to look is the
    Ultralisp project page — its sources and its check queue — not the
    tree. Users then get it with `(ql:update-dist "ultralisp")`. Quicklisp
    is a 1.0 decision (docs/stability.md §9).
-9. **Open the next cycle.** Add `## Unreleased (X.Y+1 development)` at
-   the top of CHANGELOG.md, and move the previous-release pins to the
+9. **Open the next cycle.** Add `## Unreleased (<next version> development)`
+   at the top of CHANGELOG.md, and move the previous-release pins to the
    release just made: the Makefile's `PREV ?=`, and in
-   `.github/workflows/ci.yml` `make compat PREV=vX.Y.Z` and both
-   `gh release download vX.Y.Z` lines (x86-64 and aarch64) — they compare every
-   push against the last release, so they cannot be moved at step 1.
+   `.github/workflows/ci.yml` `make compat PREV=vX.Y.Z` with the step
+   name above it, and both `gh release download vX.Y.Z` lines (x86-64
+   and aarch64) — they compare every push against the last release, so
+   they cannot be moved at step 1. ROADMAP's stub for the next cycle
+   says the cycle is open.
 
 **Yanking.** A release found unsound is yanked from crates.io
 (`cargo yank --vers X.Y.Z -p <crate>`, all three crates) and the GitHub

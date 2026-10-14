@@ -5,7 +5,9 @@ Notable changes per release. Versions are shared by the Rust crates
 system. The C ABI has its own version, checked at load time: **ABI 1 since
 0.1.0, unbroken** — every type added since is wire-additive.
 
-## 0.8.0 — 2026-10-13
+## Unreleased (1.0 development)
+
+## 0.8.0 — 2026-10-14
 
 **Surfaces this cycle.** *Lisp API*: no export added or removed — the
 golden's 47 rows are unchanged (`make compat PREV=v0.7.0`:

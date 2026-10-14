@@ -1,11 +1,13 @@
 # Roadmap
 
-## 1.0 — the freeze (after 0.8)
+## 1.0 — the freeze (next)
 
 What the 1.0.0 commit contains, measured in advance with
 cargo-semver-checks, the release-day sequence, the commit that opens
 1.1 and the Quicklisp issue text:
-[docs/design/v10-plan.md](docs/design/v10-plan.md).
+[docs/design/v10-plan.md](docs/design/v10-plan.md). The cycle is open
+(2026-10-14): the gates compare against v0.8.0, and the x86-64 and
+aarch64 jobs load its `wordbag` assets with `load-blob-crate`.
 
 ## v0.8 — the server that owns a listener
 
@@ -35,15 +37,15 @@ timer; the cross-host compile is dispatched from a branch before any
 feature; the suite's client is an in-crate `Probe`; a web developer
 reads docs/httpd.md first. CI is budgeted on the measured baseline —
 run 36690864696 (2026-09-30): 6 min 42 s wall, Lisp jobs 134-397 s; the
-0.7 flagship cost +30-50 s per Lisp job — and 0.8's cost is measured the
-same way at its close. The cycle is open: the gates compare against
-v0.7.0, and the aarch64 job loads its own release asset with
+0.7 flagship cost +30-50 s per Lisp job — and 0.8's cost was measured the
+same way at its close (below). The cycle's gates compared against
+v0.7.0, and the aarch64 job loaded its own release asset with
 `load-blob-crate`, as the x86-64 job does. Full plan with demand cases,
 acceptance criteria and cut order:
 [docs/design/v08-plan.md](docs/design/v08-plan.md).
 Budget 1 L + 1 M + 7 S, one S reserved for what the review and the pass find.
 
-**Released as 0.8.0** (2026-10-13): eight items ✅ (1, 2, 3, 6, 7, 9, 10,
+**Released as 0.8.0** (2026-10-14): eight items ✅ (1, 2, 3, 6, 7, 9, 10,
 11); item 4 cut (httpd ships source-only, sixteen assets); item 5
 carried (the Windows fetch count passed 24 only at the release — see the
 item); item 8 closed by the release commit and the one that opens the
@@ -62,7 +64,7 @@ v08 and v09 suites; CCL 134 → 166 s, aarch64 173 → 202 s, macOS 234 →
 5. ☐ Windows: the fetch step promoted at ECL's count of 24 green runs; the httpd step starts best-effort on the same procedure (S). Not promoted: 19 consecutive green Windows fetch executions on main from 36388353221 (729b888) to 37575345718 (da4e5d2), short of 24; the step stays best-effort and the count carries into the next cycle, never by calendar. At the 0.8.0 release the count is 26: seven more green executions, 37588981465 (877ff03) through 38351565952 (bc5e7ac), so the threshold is met; 0.8.0 ships with the step still best-effort — the promotion is a change of its own (ci.yml's `continue-on-error`, stability §5, README's table, BOUNDARY §12's fetch rows, claims) and is pending.
 6. ✅ `load-crate` on a directory signals `crate-not-loaded-error` naming `use-crate`, not the host's stream error (reproduced on SBCL: `SIMPLE-STREAM-ERROR … Is a directory`); tests/suite/v08.lisp on all six Lisp jobs (S). Done 2026-10-07 (942be6e): failing first on SBCL 2.1.11 with SB-INT:SIMPLE-STREAM-ERROR for both spellings (6 of 8 checks); green on SBCL, CCL and ECL through run-m4.
 7. ✅ Two macro diagnostics the flagship's author hit: `Option<Handle>` as a result names its real rule, and `on_dump` naming a function with parameters is a rulisp-worded error, not a raw E0308; two trybuild cases (S). Done 2026-10-07 (877ff03, narrowed in the review fixes): `#[diagnostic::on_unimplemented]` was probed on MSRV 1.78 and is not used for an arity mismatch (E0593) or a non-unit result (E0271); the guard is a const assertion on the export's own metadata, on parameters only, so a hook with a result still compiles and is refused by the loader as in 0.7. No Rust API item added; trybuild option_handle_result and on_dump_with_params.
-8. ☐ Close the cycle: the pre-release review of v0.7.0..HEAD, the write-up with its falsification evidence and the measured CI cost, stability §3/§8 "as of 0.8", 0.8.0 with sixteen assets (httpd source-only, item 4 cut), and the commit that opens the next cycle with the pins at v0.8.0 (S).
+8. ✅ Close the cycle: the pre-release review of v0.7.0..HEAD, the write-up with its falsification evidence and the measured CI cost, stability §3/§8 "as of 0.8", 0.8.0 with sixteen assets (httpd source-only, item 4 cut), and the commit that opens the next cycle with the pins at v0.8.0 (S). Done 2026-10-14: three passes reviewed the cycle — the whole-diff review that is item 9's record (722fd07, 2026-10-07); bc5e7ac's final review of 2268804..HEAD (three lenses — code, documents, release readiness — and a skeptic per finding; four findings confirmed, no code defect: citations re-anchored by hand, the cache stated host-local, the release notes completed, send_timeout's no-deadline branch exercised); and the pre-publish check on 1b89247 (three lenses, a skeptic per finding), which found three older document slips, fixed in 5fe4655 before `cargo publish` (README's fifteen relative links, dead on crates.io since 0.7.0 because cargo records the crate's directory as the README's path, made absolute; stability §2's shared version, stale through two releases and a check-versions site now; the hello's line count). The write-up is the paragraph above, and stability §3 is reviewed for 0.8 and §8 reads as of 0.8.0 (1b89247). Release day as docs/releasing.md: the workflow rehearsed twice from main with `publish=false` — 38468233245 on 1b89247, whose release job failed in the gate step on a GitHub API 502 and passed when the failed job was re-run in place (step 7 says how now), and 38471288870 on 5fe4655, clean — then the three crates published in order (crates.io 0.8.0 ×3), the tag on 5fe4655, and its run 38490986425 green at the first attempt: sixteen assets, `audit ok` on their own hosts and `re-audited 16 assets` on Linux, the Release body the CHANGELOG section. Ultralisp still served 0.7.0 minutes after the tag (`tools/check-dist.sh`; it polls on its own schedule). This commit opens 1.0 with the pins at v0.8.0 — locally `make compat PREV=v0.8.0` is green (the 0.8.0 loader loads this tree's wordbag; API-SUBSET-OK, all 47 entries; the 0.8.0 suite's 716 checks pass with nothing skipped, the versions agreeing again) and v0.8.0's `libwordbag-linux-x86_64.so` loads with `load-blob-crate`, cargo out of reach. The release is dated 2026-10-14 here and in the CHANGELOG: the release commits were made on the 13th UTC, the crates, the tag and the Release went out after midnight.
 9. ✅ Reserved: one S for what the review and the pass find; if nothing claims it, the three WASI behaviours 0.7 probed but did not pin (ROADMAP v0.7 item 7's "probed, not pinned") (S). Claimed by the pre-release review (2026-10-07, five lenses' worth in four: inbox, macros, docs, tests; 12 findings verified, all confirmed, plus a critic): send_timeout's overflow on a huge timeout, the on_dump assertion narrowed to parameters, the 503 at stop now carries Retry-After (pinned in httpd.stop-answers-parked-503-and-pulled-finish), every lib.rs citation in BOUNDARY.md and docs/claims.md re-anchored after the diff moved them, the tier-1 sentence matched to the Windows example steps, the free-mid-stream test now observes the producer stop, a refused answer no longer counts as answered in web.lisp. The WASI behaviours stay unpinned.
 10. ✅ Added 2026-10-07 by the maintainer, after the httpd discussion: **host tiers** (docs/stability.md §5) — SBCL gets every feature, CCL what CFFI, bordeaux-threads, trivial-garbage, UIOP and standard CL express, ECL the core; no required job demoted (d92a4a0).
 11. ✅ Added 2026-10-07 by the maintainer: **`rulisp::Inbox<T>`**, the queue direction of the boundary as a library type (2268804; moved to tests/inbox-fixture in 2c949b3 because wordbag must stay identical to the hand-written oracle). Falsification: tests/suite/v09.lisp; WAIT_CAP_MS at 2000 fails exactly v09.inbox-wait-is-capped, the capacity check removed fails exactly v09.inbox-full-is-backpressure. The cache sweep fix (7e5055e) came from the same week: 180 copies of exited processes, 3.4 GB.
