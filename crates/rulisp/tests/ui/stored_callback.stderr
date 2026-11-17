@@ -41,7 +41,7 @@ error[E0521]: borrowed data escapes outside of function
 10 | pub fn keep(f: Callback<(&str,), ()>) {
    |             -
    |             |
-   |             `f` is a reference that is only valid in the function body
+   |             `f` is only valid in the function body
    |             has type `rulisp::Callback<'1, (&str,), ()>`
 11 |     *STASH.lock().unwrap() = Some(f);
    |      ^^^^^^^^^^^^
