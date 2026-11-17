@@ -16,17 +16,17 @@ pub enum ParamTy {
     Handle(&'static str),
     Callback {
         params: &'static [ParamTy],
-        /// result token, ":unit" in v1
+        /// result token, always ":unit"
         result: &'static str,
     },
-    /// v0.2: registered callback — storable, cloneable, any-thread.
+    /// Registered callback — storable, cloneable, any-thread.
     StoredCallback {
         params: &'static [ParamTy],
         result: &'static str,
     },
-    /// v0.2: `Option<inner>` — inner is Scalar/Str/Bytes.
+    /// `Option<inner>` — inner is Scalar/Str/Bytes.
     Option(&'static ParamTy),
-    /// v0.2: `&[scalar]` — the token is the element's, e.g. ":i64".
+    /// `&[scalar]` — the token is the element's, e.g. ":i64".
     Vec(&'static str),
 }
 
@@ -37,9 +37,9 @@ pub enum ResultTy {
     Str,
     Bytes,
     Handle(&'static str),
-    /// v0.2: `Option<inner>` — inner is Scalar/Str/Bytes.
+    /// `Option<inner>` — inner is Scalar/Str/Bytes.
     Option(&'static ResultTy),
-    /// v0.2: `Vec<scalar>` — the token is the element's.
+    /// `Vec<scalar>` — the token is the element's.
     Vec(&'static str),
 }
 

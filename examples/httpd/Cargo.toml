@@ -16,7 +16,7 @@ rulisp = { path = "../../crates/rulisp" }
 # signal handler destabilises SBCL's signal-driven GC — BOUNDARY.md §7.
 # "fs" is for respond-file (the bytes never cross the boundary).
 tokio = { version = "1", default-features = false, features = [
-    "rt-multi-thread", "net", "time", "sync", "macros", "fs",
+    "rt-multi-thread", "net", "time", "sync", "macros", "fs", "io-util",
 ] }
 # HTTP/1.1 and h2c (HTTP/2 without TLS). No TLS in this example: the
 # deployment story is a terminating proxy in front — see docs/httpd.md.

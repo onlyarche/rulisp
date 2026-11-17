@@ -120,8 +120,8 @@ hooks to run in load order.")
 
 (defun load-crate (path &key crate package)
   "Load a built rulisp cdylib artifact as a Lisp package.
-PATH: the .so/.dylib produced by cargo. Copies it under a unique name in the
-rulisp cache, dlopens the copy, verifies the ABI, reads the embedded
+PATH: the .so/.dylib/.dll produced by cargo. Copies it under a unique name in
+the rulisp cache, dlopens the copy, verifies the ABI, reads the embedded
 manifest, and generates bindings into PACKAGE (default: the manifest's crate
 name, upcased). The manifest's :crate is the canonical name; :CRATE, when
 given, is checked against it. Loading an already-loaded crate bumps its

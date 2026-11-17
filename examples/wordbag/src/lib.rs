@@ -1,6 +1,10 @@
 //! The macro-based twin of tests/m1-handwritten: plain Rust + rulisp macros,
 //! zero hand-written `extern "C"`. Must be observably identical to the
 //! oracle — same exported surface, same manifest bytes (tests/golden/).
+//!
+//! README.md's hero snippet is this crate's greet/WordBag::{new, add, len}
+//! corner (greet reads GREETING, which the live-reload test flips); the
+//! rest is the fixture tests/suite/ drives.
 
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;
@@ -117,8 +121,8 @@ pub fn scale(xs: &[f64], k: f64) -> Vec<f64> {
     xs.iter().map(|x| x * k).collect()
 }
 
-/// An optional float parameter: NIL must cross as None (v0.6 — the value
-/// slot carried a fixnum 0 that SBCL and CCL refuse for :double).
+/// An optional float parameter: NIL crosses as None; the value slot carries
+/// a double even when the argument is absent.
 #[rulisp::export]
 pub fn opt_scale(k: Option<f64>) -> f64 {
     k.unwrap_or(-1.0)
@@ -131,7 +135,7 @@ pub fn opt_scale32(k: Option<f32>) -> f32 {
 }
 
 // ---------------------------------------------------------------------------
-// Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
+// Stored callback: Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).
 // ---------------------------------------------------------------------------
 
@@ -301,8 +305,7 @@ pub fn test_cb_guard_drops() -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Module registry: entries are const paths — a typo is a compile error.
-// The fns order is the manifest order (byte-pinned by tests/golden/).
+// Dump hook (BOUNDARY §10): the hook, its failure switch and its counter
 // ---------------------------------------------------------------------------
 
 static DUMP_PREPS: AtomicI64 = AtomicI64::new(0);
@@ -330,6 +333,10 @@ pub fn test_dump_preps() -> i64 {
     DUMP_PREPS.load(Ordering::SeqCst)
 }
 
+// ---------------------------------------------------------------------------
+// Grenade: a handle whose Drop panics when armed
+// ---------------------------------------------------------------------------
+
 /// Drop panics when armed: BOUNDARY §2's exception — a panic inside a
 /// `*_free` shim is caught, logged to stderr and swallowed, never crossing
 /// the boundary.
@@ -353,6 +360,11 @@ impl Grenade {
         Grenade { armed }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Module registry: entries are const paths — a typo is a compile error.
+// The fns order is the manifest order (byte-pinned by tests/golden/).
+// ---------------------------------------------------------------------------
 
 rulisp::module! {
     name: "wordbag",

@@ -91,9 +91,9 @@ program to exercise the failure path without touching the environment.")
         (format nil "lib~A.~A" base (shared-library-type)))))
 
 (defun load-blob-crate (directory name &key package)
-  "Load the prebuilt per-platform artifact lib<name>-<os>-<arch>.<ext> from
-DIRECTORY (e.g. CI-built blobs committed in a repo — the Shirakumo pattern,
-docs/distribution.md). The end user needs no Rust toolchain."
+  "Load the prebuilt per-platform artifact lib<name>-<os>-<arch>.<ext> (on Windows
+<name>-<os>-<arch>.dll) from DIRECTORY (e.g. CI-built blobs committed in a repo —
+the Shirakumo pattern, docs/distribution.md). The end user needs no Rust toolchain."
   (let* ((file (blob-file-name name))
          (path (merge-pathnames file (uiop:ensure-directory-pathname directory))))
     (unless (probe-file path)

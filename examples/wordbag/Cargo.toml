@@ -2,7 +2,7 @@
 name = "wordbag"
 version = "0.1.0"
 edition = "2021"
-description = "rulisp example glue crate — the macro-based twin of the hand-written M1 oracle"
+description = "rulisp example: the test suites' fixture glue crate — the macro-based twin of the hand-written ABI oracle in tests/m1-handwritten"
 publish = false
 
 [lib]

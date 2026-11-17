@@ -9,13 +9,13 @@
 //! value to Rust, so a Lisp handler cannot answer through a callback — it
 //! pulls. See docs/design/v08-plan.md item 2.
 //!
-//! Every bound a server cannot ship without is here, not in a later
-//! commit: a timer on every connection (a half-sent request line or an
-//! idle keep-alive closes at HEAD-MS), a body size and a body time, a
-//! connection cap held as a semaphore permit per accept, a queue that
-//! waits QUEUE-WAIT-MS for a slot before 503, dead slots pruned, a
-//! HANDLER-MS after which an unanswered request is 504, and a dump hook
-//! whose drain is bounded. What stays unbounded is stated in SECURITY.md.
+//! Every bound a server cannot ship without is here: a timer on every
+//! connection (a half-sent request line or an idle keep-alive closes at
+//! HEAD-MS), a body size and a body time, a connection cap held as a
+//! semaphore permit per accept, a queue that waits QUEUE-WAIT-MS for a
+//! slot before 503, dead slots pruned, a HANDLER-MS after which an
+//! unanswered request is 504, and a dump hook whose drain is bounded.
+//! What stays unbounded is stated in SECURITY.md.
 
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
@@ -487,6 +487,10 @@ impl Server {
     /// a free slot before 503 with Retry-After; answer 504 when Lisp has
     /// not responded HANDLER-MS after the request was parked (0 = never:
     /// the REPL default, where a debugger session may hold its client).
+    /// Out-of-range limits are clamped, not refused: QUEUE 1..65536,
+    /// WORKERS 1..64, MAX-CONNECTIONS 1..1048576, BODY-CAP 1 KiB..1 GiB,
+    /// HEAD-MS and BODY-MS 1..3600000, QUEUE-WAIT-MS at most 3600000;
+    /// HANDLER-MS is taken as given.
     #[rulisp(constructor)]
     #[allow(clippy::too_many_arguments)]
     pub fn bind(
@@ -584,8 +588,9 @@ impl Server {
     }
 
     /// (httpd:server-wait s 100): T when a request is parked, NIL on an
-    /// idle tick — never a condition when idle. Waits at most 100 ms
-    /// whatever WAIT-MS says; the loop belongs in Lisp.
+    /// idle tick — never a condition when idle; `httpd:http-error` kind
+    /// "usage" once the server is stopped. Waits at most 100 ms whatever
+    /// WAIT-MS says; the loop belongs in Lisp.
     pub fn wait(&self, wait_ms: u64) -> Result<bool, HttpError> {
         refuse_reentry()?;
         if self.inner.svc.down.load(SeqCst) {

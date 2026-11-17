@@ -71,8 +71,8 @@ pub unsafe extern "C" fn wordbag_rulisp_add(a: i64, b: i64, out: *mut i64) -> i3
     })
 }
 
-/// pub fn opt_scale(k: Option<f64>) -> f64   (v0.6: an optional float
-/// parameter — the value slot must carry a double even when absent)
+/// pub fn opt_scale(k: Option<f64>) -> f64   (an optional float
+/// parameter — the value slot carries a double even when absent)
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_opt_scale(k_present: u8, k: f64, out: *mut f64) -> i32 {
     rt::shim(|| {
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn wordbag_rulisp_echo(
     })
 }
 
-/// pub fn sum(data: &[u8]) -> u64   (v0.2 :bytes — borrowed octets in)
+/// pub fn sum(data: &[u8]) -> u64   (:bytes — borrowed octets in)
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_sum(
     data_ptr: *const u8,
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn wordbag_rulisp_sum(
     })
 }
 
-/// pub fn rev(data: &[u8]) -> Vec<u8>   (v0.2 :bytes — owned octets out)
+/// pub fn rev(data: &[u8]) -> Vec<u8>   (:bytes — owned octets out)
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_rev(
     data_ptr: *const u8,
@@ -548,11 +548,11 @@ pub unsafe extern "C" fn wordbag_rulisp_grenade_free(this: *mut c_void) {
         rt::handle_free::<Grenade>(this)
     }));
     if r.is_err() {
-        eprintln!("rulisp: panic in wordbag_rulisp_grenade_free (caught, handle leaked)");
+        eprintln!("rulisp[wordbag]: panic in grenade_free (swallowed)");
     }
 }
 
-/// pub fn find(data: &[u8], b: u8) -> Option<u64>   (v0.2 (:option ...))
+/// pub fn find(data: &[u8], b: u8) -> Option<u64>   ((:option ...) result)
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_find(
     data_ptr: *const u8,
@@ -575,7 +575,7 @@ pub unsafe extern "C" fn wordbag_rulisp_find(
     })
 }
 
-/// pub fn greet_opt(name: Option<&str>) -> String   (v0.2 optional param)
+/// pub fn greet_opt(name: Option<&str>) -> String   (optional param)
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_greet_opt(
     name_present: u8,
@@ -607,7 +607,7 @@ pub unsafe extern "C" fn wordbag_rulisp_greet_opt(
     })
 }
 
-/// pub fn deltas(xs: &[i64]) -> Vec<i64>   (v0.2 (:vec ...): elements on the
+/// pub fn deltas(xs: &[i64]) -> Vec<i64>   ((:vec ...): elements on the
 /// wire, freed via dealloc(ptr, len * size, align))
 #[no_mangle]
 pub unsafe extern "C" fn wordbag_rulisp_deltas(
@@ -652,7 +652,7 @@ pub unsafe extern "C" fn wordbag_rulisp_scale(
 }
 
 // ---------------------------------------------------------------------------
-// Stored callback (v0.2): Rust keeps a registered Lisp closure and invokes
+// Stored callback: Rust keeps a registered Lisp closure and invokes
 // it later — same thread or a fresh Rust thread (adopted on entry).
 // ---------------------------------------------------------------------------
 

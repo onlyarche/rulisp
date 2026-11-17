@@ -116,8 +116,8 @@ every other Lisp thread stalls for the whole call.")
   (:fn :rust-name "opt_scale" :lisp-name "opt-scale" :symbol "opt_scale"
    :params ((:name "k" :type (:option :f64)))
    :result :f64 :error nil
-   :doc "An optional float parameter: NIL must cross as None (v0.6 — the value
-slot carried a fixnum 0 that SBCL and CCL refuse for :double).")
+   :doc "An optional float parameter: NIL crosses as None; the value slot carries
+a double even when the argument is absent.")
   (:fn :rust-name "opt_scale32" :lisp-name "opt-scale32" :symbol "opt_scale32"
    :params ((:name "k" :type (:option :f32)))
    :result :f32 :error nil

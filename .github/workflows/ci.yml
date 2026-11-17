@@ -97,7 +97,7 @@ jobs:
         run: make compat PREV=v0.8.0
       - name: fetch suite (async HTTPS example; the §7/§10 enforcement §12 cites)
         run: make test-fetch
-      - name: httpd suite (the HTTP server example, v0.8's flagship)
+      - name: httpd suite (the HTTP server example)
         run: make test-httpd
       # docs/stability.md §9: loading the system must need no toolchain.
       # Separate --evals: a form is READ before the previous one runs, so
@@ -264,9 +264,9 @@ jobs:
       - name: fetch suite (best-effort on Windows)
         continue-on-error: true
         run: make test-fetch
-      # the httpd suite's first runs on Windows (httpd.dll will ship in every
-      # release): best-effort, promoted by the written procedure once it has
-      # a streak — counted from its first green run on main
+      # the httpd suite's first runs on Windows (httpd ships as source — no
+      # httpd.dll in a release): best-effort, promoted by the written procedure
+      # once it has a streak — counted from its first green run on main
       - name: httpd suite (best-effort on Windows)
         continue-on-error: true
         run: make test-httpd

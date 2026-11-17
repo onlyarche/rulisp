@@ -1,5 +1,5 @@
 ;;; M4 gate: <lisp> --load tests/run-m4.lisp
-;;; All suites (M1..M4) against the macro-based examples/wordbag.
+;;; 13 suites (M1..M4, v02..v09, wasm); fetch and httpd run separately.
 ;;; Works on non-SBCL implementations too (quicklisp bootstrapped explicitly;
 ;;; SBCL-only tests guard themselves).
 

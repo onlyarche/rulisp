@@ -56,7 +56,7 @@ async fn read_request(sock: &mut TcpStream) -> io::Result<(String, Vec<u8>)> {
         .and_then(|l| l.split_whitespace().nth(1))
         .unwrap_or("/")
         .to_string();
-    // header block = everything after the request line, minus the final CRLF
+    // header block = everything after the request line; the blank line stays
     let block = match buf.iter().position(|&b| b == b'\n') {
         Some(i) => buf[i + 1..].to_vec(),
         None => Vec::new(),

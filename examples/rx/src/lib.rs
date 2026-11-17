@@ -1,7 +1,7 @@
 //! rx: Rust's linear-time `regex` engine for Common Lisp.
 //!
 //! The rulisp quickstart example (docs/quickstart.md): wraps a real
-//! crates.io dependency in ~60 lines of plain Rust. Unlike cl-ppcre's
+//! crates.io dependency in under 70 lines of plain Rust. Unlike cl-ppcre's
 //! backtracking engine, `regex` guarantees linear-time matching — no ReDoS.
 
 use rulisp::prelude::*;
@@ -34,8 +34,8 @@ impl Regex {
         self.inner.replace_all(text, replacement).into_owned()
     }
 
-    /// First match as (:option :string): NIL when there is none — no more
-    /// sentinel values (v0.2).
+    /// First match, or NIL when there is none — `Option<String>` crosses as
+    /// `(:option :string)`.
     pub fn first_match(&self, text: &str) -> Option<String> {
         self.inner.find(text).map(|m| m.as_str().to_owned())
     }

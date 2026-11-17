@@ -14,7 +14,7 @@
 # The artifact's FORMAT decides the reader, not the host: ELF via nm,
 # Mach-O via Apple's nm or rustup's llvm-nm, PE via rustup's llvm-readobj
 # (`rustup component add llvm-tools`) — so a release job on Linux audits
-# all twelve assets it attaches. Exit 1 on any finding, and on a format
+# every asset it attaches. Exit 1 on any finding, and on a format
 # it cannot read: the gate never passes by being unable to look.
 # Self-test: tools/rulisp-audit-selftest.sh builds a fixture that
 # deliberately imports signal() and checks this script rejects it — so

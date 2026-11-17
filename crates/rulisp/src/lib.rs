@@ -117,7 +117,7 @@ pub trait HandleType: Send + Sync + 'static {
 /// Relates a callback's DECLARED argument tuple (the `A` in `Callback<A, ()>`,
 /// whose reference lifetimes are the caller's and irrelevant) to the tuple
 /// actually passed at a call site (which may borrow locals). Encodes the
-/// arguments onto the C trampoline. v1 shapes only — extend by adding impls.
+/// arguments onto the C trampoline. 1-tuples only — extend by adding impls.
 pub trait CbArgsFor<Decl> {
     /// # Safety
     /// `fnptr` must be the trampoline pointer matching this tuple's shape.
@@ -172,10 +172,10 @@ pub struct Callback<'a, A, R> {
     _marker: PhantomData<(*mut (), &'a (), fn(A) -> R)>,
 }
 
-/// A REGISTERED Lisp callback (v0.2): unlike [`Callback`], this one may be
+/// A REGISTERED Lisp callback: unlike [`Callback`], this one may be
 /// stored, cloned and invoked later from any thread — it is two plain
 /// numbers (the per-shape trampoline pointer and a registry id minted by
-/// `rulisp:callback` on the Lisp side, carried in the ABI slot v1 reserved).
+/// `rulisp:callback` on the Lisp side — the trampoline's leading `u64`).
 ///
 /// Lifetime contract: the Lisp `callback-token` keeps the closure
 /// registered. Once the token is unregistered or garbage-collected,

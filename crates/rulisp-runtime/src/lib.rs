@@ -186,7 +186,7 @@ pub fn string_into_raw(s: String) -> (*mut u8, usize) {
     bytes_into_raw(s.into_bytes())
 }
 
-/// Generic transfer of a `Vec<T>` (v0.2 `(:vec ...)`): the caller frees via
+/// Generic transfer of a `Vec<T>` (`(:vec ...)` results): the caller frees via
 /// the crate's `dealloc` with `(ptr, len * size_of::<T>(), align_of::<T>())`.
 /// `len` on the wire counts ELEMENTS. Empty vectors transfer no allocation.
 pub fn vec_into_raw<T>(v: Vec<T>) -> (*mut T, usize) {

@@ -222,7 +222,7 @@ established around the whole exchange.
 :MAX-BYTES caps the body, enforced against bytes RECEIVED (not against a
 Content-Length a hostile peer can omit); 0 means unlimited. It defaults to
 *MAX-BYTES* for a buffered body and to unlimited with :SINK, because the
-sink path never touches the Lisp heap."
+sink path never touches the Lisp heap. :TIMEOUT-MS 0 means no timeout."
   (loop
     (restart-case
         (let ((req (%translating (url)

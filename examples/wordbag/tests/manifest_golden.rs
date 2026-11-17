@@ -1,5 +1,6 @@
-//! M3 gate (a): the macro-assembled manifest must be byte-identical to the
-//! golden snapshot frozen in M2.
+//! The macro-assembled manifest must be byte-identical to
+//! tests/golden/wordbag.manifest.sexp, the hand-written oracle's manifest —
+//! regenerated, with the oracle's own copy, whenever the manifest changes.
 
 #[test]
 fn manifest_matches_golden() {

@@ -1,6 +1,6 @@
 (in-package #:rulisp)
 
-;;; Stored callbacks (v0.2): a Lisp closure registered under a numeric id
+;;; Stored callbacks: a Lisp closure registered under a numeric id
 ;;; that Rust may keep and invoke later, from any thread. The id travels in
 ;;; the ABI slot v1 reserved (the trampoline's leading uint64), so the wire
 ;;; is unchanged — ABI 1.

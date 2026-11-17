@@ -21,7 +21,7 @@
 //!   Lossless for duplicates, order and obs-text octets; a `:string`
 //!   encoding would mangle legal header values into U+FFFD.
 //!
-//! It needs no rulisp feature that 0.2 doesn't already have.
+//! It uses one rulisp feature past 0.3: 0.4's `on_dump` (BOUNDARY §10).
 
 mod error;
 mod testserver;
@@ -279,8 +279,8 @@ impl Drop for Client {
 #[rulisp::export]
 impl Client {
     /// (fetch:make-client 2 16 8 2000) — worker threads, max concurrent
-    /// requests, buffered chunks per request, and the stall timeout in ms
-    /// (how long the transfer may sit with a full buffer before failing).
+    /// requests, buffered chunks per request (clamped to 1..64, 1..4096,
+    /// 1..4096) and the stall timeout in ms for a full buffer (0 = 30 s).
     #[rulisp(constructor)]
     pub fn new(
         worker_threads: u64,
@@ -341,8 +341,8 @@ impl Client {
     }
 
     /// Cancel everything and stop the runtime. Idempotent. GRACE_MS is
-    /// capped like every other wait, so this cannot wedge the image; the
-    /// runtime finishes winding down in the background either way.
+    /// bounded at 5 s, a deliberate exception to the 100 ms cap, so this
+    /// cannot wedge the image; what remains winds down in the background.
     pub fn shutdown(&self, grace_ms: u64) -> Result<(), HttpError> {
         refuse_reentry()?;
         self.inner.down.store(true, Ordering::SeqCst);
@@ -414,7 +414,7 @@ impl Req {
     /// HEADERS and BODY may be NIL. SINK-PATH streams the body straight to
     /// a file, so it never touches the Lisp heap. MAX-BODY-BYTES = 0 means
     /// unlimited; it is enforced against bytes RECEIVED, not against a
-    /// Content-Length a hostile peer can omit.
+    /// Content-Length a hostile peer can omit. TIMEOUT-MS 0 means no timeout.
     #[rulisp(constructor)]
     #[allow(clippy::too_many_arguments)]
     pub fn start(

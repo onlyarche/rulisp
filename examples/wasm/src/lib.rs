@@ -7,13 +7,19 @@
 //! BOUNDARY.md §7. Wasm traps (unreachable, out-of-bounds, div-by-zero)
 //! surface as `wasm:wasm-error` conditions; the image always survives.
 //!
-//! v1 scope: exports taking/returning i32/i64 (Lisp side speaks i64 and
-//! values are coerced per the function's actual signature). Host functions
-//! calling back into Lisp need stored callbacks — a v0.2 rulisp feature.
+//! Exports take and return i32/i64 — Lisp speaks i64 and values are
+//! coerced per the function's actual signature. A guest calls back into
+//! Lisp through `host.notify`, routed to a stored callback (`on_notify`).
 //!
 //! Fuel metering: construct with a fuel budget and every wasm instruction
 //! consumes fuel — runaway guest code traps with a condition instead of
 //! hanging the image. A CPU bound no raw FFI call can ever offer.
+//!
+//! A second handle, `Wasi` (`wasm:make-wasi`), runs a WASI preview1
+//! command module in a sandbox: a fuel budget that must be set, one memory
+//! number, and the directories it is handed, read-only. The comment block
+//! that opens the sandbox's code says why each bound is there;
+//! `Wasi::load`'s docstring and SECURITY.md say what is not bounded.
 
 use std::sync::Mutex;
 
@@ -209,7 +215,7 @@ impl Wasm {
                 wasmi::core::ValType::I32 => Ok(Val::I32(a as i32)),
                 wasmi::core::ValType::I64 => Ok(Val::I64(a)),
                 other => Err(WasmError(format!(
-                    "{name:?}: unsupported parameter type {other:?} (v1 speaks i32/i64)"
+                    "{name:?}: unsupported parameter type {other:?} (only i32 and i64 cross)"
                 ))),
             })
             .collect::<Result<_, _>>()?;
@@ -220,7 +226,7 @@ impl Wasm {
             Some(Val::I32(v)) => Ok(*v as i64),
             Some(Val::I64(v)) => Ok(*v),
             Some(other) => Err(WasmError(format!(
-                "{name:?}: unsupported result type {other:?} (v1 speaks i32/i64)"
+                "{name:?}: unsupported result type {other:?} (only i32 and i64 cross)"
             ))),
         }
     }
@@ -228,7 +234,7 @@ impl Wasm {
 
 
 // ---------------------------------------------------------------------------
-// The WASI sandbox (v0.7): run a command module — anything compiled for
+// The WASI sandbox: run a command module — anything compiled for
 // wasm32-wasip1, or a hand-written .wat — with a CPU budget, one memory
 // number, and nothing of the host it was not given.
 //

@@ -1,5 +1,5 @@
 ;;; v0.5 suite only: <lisp> --load tests/run-v05.lisp
-;;; All suites (M1..M4) against the macro-based examples/wordbag.
+;;; One suite, :rulisp-v05, against the macro-based examples/wordbag.
 ;;; Works on non-SBCL implementations too (quicklisp bootstrapped explicitly;
 ;;; SBCL-only tests guard themselves).
 

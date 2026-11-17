@@ -68,8 +68,8 @@
     (timed "string round trip (1 KiB non-ASCII)" 20000 (funcall echo s))))
 
 ;; --- rx: a real &str consumer (the quickstart crate) over 1 MiB ----------
-;; Digits occur once, at the end: the regex side is a memchr sweep, so the
-;; row is the :string boundary cost on a 1 MiB argument, not regex work.
+;; Digits occur once, at the end, so the regex finds one match and the row is
+;; the :string boundary cost on a 1 MiB argument, not regex work.
 (defvar *rx*
   (rulisp:use-crate (asdf:system-relative-pathname :rulisp "../examples/rx/")
                     :profile :release))

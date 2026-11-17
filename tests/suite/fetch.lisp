@@ -581,3 +581,51 @@ fresh client works."
     ;; overwrites it, so remove it (and the script) here
     (uiop:delete-file-if-exists exe)
     (uiop:delete-file-if-exists script)))
+
+;;; ---------------------------------------------------------------------------
+;;; The exports nothing above calls, and the veneer never does.
+;;; ---------------------------------------------------------------------------
+
+(test fetch.progress-accessors
+  "REQ-ID, REQ-SETTLED, REQ-FAILED, REQ-HEAD-DONE, REQ-HEADER and
+REQ-BUFFERED are what a caller driving the pull loop itself polls. The
+veneer uses none of them, so a failure here is an export that drifted with
+nothing else to notice."
+  (ensure-fetch)
+  (let ((c (fc "MAKE-CLIENT" 1 4 4 3000)))
+    (unwind-protect
+         (let ((base (fc "CLIENT-START-TEST-SERVER" c)))
+           ;; a transfer that succeeds, left unread until it settles: the
+           ;; body fits the buffer, so the states below do not race a reader
+           (let ((r (fc "MAKE-REQ" c "GET" (format nil "~A/bytes/1000" base)
+                        nil nil nil 10000 0)))
+             (unwind-protect
+                  (progn
+                    (is (= 1 (fc "REQ-ID" r))) ; ids count from 1 per client
+                    (loop repeat 200 until (fc "REQ-WAIT" r 100))
+                    (is (fc "REQ-SETTLED" r))
+                    (is (not (fc "REQ-DONE" r))) ; settled is not yet drained
+                    (is (= 1000 (fc "REQ-BUFFERED" r)))
+                    (is (fc "REQ-HEAD-DONE" r))
+                    (is (not (fc "REQ-FAILED" r)))
+                    ;; the name is matched case-insensitively
+                    (is (equal "1000" (fc "REQ-HEADER" r "Content-Length")))
+                    (is (null (fc "REQ-HEADER" r "x-absent")))
+                    (is (= 1000 (length (slurp r))))
+                    (is (= 0 (fc "REQ-BUFFERED" r)))
+                    ;; and the id is the one the ready queue hands out
+                    (is (eql 1 (fc "CLIENT-NEXT-READY" c 0))))
+               (rulisp:free r)))
+           ;; a transfer that fails: 100000 bytes against a 10-byte cap
+           (let ((r (fc "MAKE-REQ" c "GET" (format nil "~A/bytes/100000" base)
+                        nil nil nil 10000 10)))
+             (unwind-protect
+                  (progn
+                    (is (= 2 (fc "REQ-ID" r)))
+                    (loop repeat 200 until (fc "REQ-WAIT" r 100))
+                    (is (fc "REQ-SETTLED" r))
+                    (is (fc "REQ-FAILED" r))
+                    (is (equal "too-large" (fc "REQ-ERROR-KIND" r))))
+               (rulisp:free r))))
+      (fc "CLIENT-SHUTDOWN" c 200)
+      (rulisp:free c))))

@@ -1,7 +1,7 @@
 ;;;; A Lisp veneer over the generated HTTPD package.
 ;;;;
-;;;; The generated bindings are the substrate: nine positional limits, a
-;;;; wait, a take, a respond, one condition whose message is "kind: detail".
+;;;; The generated bindings are the substrate: an address, eight positional
+;;;; limits, a wait, a take, a respond, one condition saying "kind: detail".
 ;;;; This is what you actually type — a server with keyword defaults, a
 ;;;; serve loop with the debugger in the handler's frame, header alists,
 ;;;; query parameters, a path matcher, and a stop that walks the documented

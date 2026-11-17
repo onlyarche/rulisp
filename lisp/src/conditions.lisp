@@ -94,8 +94,8 @@ CRATE-NOT-LOADED-NAME is the crate or path."))
              (format s "cargo build failed~@[ (~A)~]:~%~A"
                      (build-error-command c) (build-error-stderr c))))
   (:documentation "cargo build failed inside use-crate. BUILD-ERROR-COMMAND is
-the command line, BUILD-ERROR-STDERR cargo's stderr. Signaled with the
-RETRY-BUILD restart, which runs the build again."))
+the command line, BUILD-ERROR-STDERR cargo's stderr. A build that ran has the
+RETRY-BUILD restart; a missing or nameless Cargo.toml: no command, no restart."))
 
 (define-condition manifest-error (rulisp-error)
   ((message :initarg :message :initform "" :reader manifest-error-message))
