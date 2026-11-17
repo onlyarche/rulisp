@@ -66,8 +66,8 @@ which stops being true in the compat tree at every version bump.
   has been wire-additive. Bumping it is a major event, not a minor one.
 - The **manifest schema** is a named integer too (`:schema` = 1). The
   loader accepts any schema ≤ the one it knows; adding a key never bumps it
-  (§11's ignore-unknown-keys rule). See §7 for which keys are allowed to
-  ride on that rule.
+  (BOUNDARY §11's ignore-unknown-keys rule). See §7 for which keys are
+  allowed to ride on that rule.
 
 ## 3. Deprecation
 
@@ -76,8 +76,8 @@ again for 0.8: no rename or removal found necessary — 33 of the 47
 exports are used by README, BOUNDARY, the quickstart, the suite or the
 fetch and httpd veneers; the other fourteen (`rulisp-error`,
 `invalid-handle-error`, the eleven condition readers and `crate-name`)
-are the condition protocol and one accessor, pinned by the golden and
-otherwise named only in DESIGN.md or the CHANGELOG — the 0.8 review
+are the condition protocol and one accessor, pinned by the golden
+(docs/usage.md §Handling conditions names the protocol) — the 0.8 review
 counted them where the earlier reviews had written "every export";
 argument conventions are consistent (paths positional, `:package`
 keyword throughout); and a class name in a `handler-case` cannot be
@@ -172,7 +172,9 @@ every 0.5 crate on the 0.4.0 loaders that support it fully.)
 1.0 means: the four surfaces above are frozen under the rules above for
 the whole 1.x line — a glue crate written against 1.0, and a Lisp
 application written against 1.0, keep working on every 1.x without
-change. Exit criteria, all checkable:
+change. The examples are not among the four: they, their packages and
+Lisp veneers (`web:`, `http:`, `wasm:`, `rx:`, …) are patterns to copy,
+not a frozen surface. Exit criteria, all checkable:
 
 1. `abi_version()` still 1, unchanged since 0.1.0. Checked:
    `tools/check-1.0.sh` greps the constant on both sides.
@@ -231,6 +233,6 @@ Every capability, host and performance claim in README.md and the
 docs/ pages, each with what enforces or demonstrates it — a suite test,
 a trybuild case, a CI job or step, a bench row, or a code site — is
 [docs/claims.md](claims.md), built by the v0.5 docs audit. It is a
-separate file because it is some three hundred rows; the next audit is
+separate file because it is long; the next audit is
 a diff of that file against the pages. A claim it marks **unverified**
 is worded as such on its page.

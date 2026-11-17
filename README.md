@@ -38,7 +38,7 @@ rulisp::module! {
 ```
 
 ```lisp
-CL-USER> (asdf:load-system :rulisp)
+CL-USER> (ql:quickload :rulisp)
 CL-USER> (rulisp:use-crate #p"~/src/wordbag/")   ; cargo build + load
 #<RULISP:CRATE "wordbag" gen 1 abi 1 :: 4 fns, 1 handle, package WORDBAG>
 
@@ -91,7 +91,7 @@ The hard problems are handled structurally, not by convention:
 crate (the finished example is [`examples/rx/`](https://github.com/onlyarche/rulisp/tree/main/examples/rx)). [docs/usage.md](https://github.com/onlyarche/rulisp/blob/main/docs/usage.md) explains
 the two ways to consume rulisp — running a prebuilt glue library (no Rust
 toolchain needed) vs building your own. For something bigger,
-[`examples/wasm/`](https://github.com/onlyarche/rulisp/tree/main/examples/wasm) gives Common Lisp a WebAssembly runtime
+[`examples/wasm/`](https://github.com/onlyarche/rulisp/tree/main/examples/wasm) (how to load and call it: [docs/usage.md](https://github.com/onlyarche/rulisp/blob/main/docs/usage.md#webassembly-from-the-repl)) gives Common Lisp a WebAssembly runtime
 in a few hundred lines of glue: load `.wat`/`.wasm` modules from the REPL, call
 their exports under a fuel-metered CPU budget (runaway guest code traps as
 a condition instead of hanging the image), move byte buffers in and out of
@@ -115,13 +115,13 @@ suite runs on every CI host.
 [`examples/fetch/`](https://github.com/onlyarche/rulisp/tree/main/examples/fetch) is an async HTTPS client
 on tokio and rustls: the pattern for a crate that owns threads (capped
 waits, no signal handlers, a declared dump hook), with its own suite in
-CI. [`examples/httpd/`](https://github.com/onlyarche/rulisp/tree/main/examples/httpd) is the pattern for Rust events with
+CI — [docs/fetch.md](https://github.com/onlyarche/rulisp/blob/main/docs/fetch.md) has the calls, the error kinds and the limits. [`examples/httpd/`](https://github.com/onlyarche/rulisp/tree/main/examples/httpd) is the pattern for Rust events with
 Lisp handlers, worked through as an HTTP/1.1 and h2c server: axum, hyper
 and tokio hold the connections and enforce the limits before Lisp sees a
 byte, Lisp threads take requests off a queue, and every request gets an
 answer, even from a handler that fails — [docs/httpd.md](https://github.com/onlyarche/rulisp/blob/main/docs/httpd.md)
-explains the split. The full contract is in [BOUNDARY.md](https://github.com/onlyarche/rulisp/blob/main/BOUNDARY.md);
-architecture and rationale in [DESIGN.md](https://github.com/onlyarche/rulisp/blob/main/DESIGN.md) (Korean). Measured boundary costs, with the method:
+explains the split. The full contract is in [BOUNDARY.md](https://github.com/onlyarche/rulisp/blob/main/BOUNDARY.md).
+[DESIGN.md](https://github.com/onlyarche/rulisp/blob/main/DESIGN.md) (Korean) is the v0.1 plan of 2026-07 — the architecture and its rationale as designed then, not kept current: BOUNDARY.md and docs/stability.md are the normative text. Measured boundary costs, with the method:
 [docs/benchmarks.md](https://github.com/onlyarche/rulisp/blob/main/docs/benchmarks.md). What is stable, what 1.0 will
 promise, and how hosts are supported: [docs/stability.md](https://github.com/onlyarche/rulisp/blob/main/docs/stability.md). Release
 history: [CHANGELOG.md](https://github.com/onlyarche/rulisp/blob/main/CHANGELOG.md). Reporting a vulnerability and the
@@ -158,8 +158,9 @@ Requirements: a Rust toolchain (`cargo`), CFFI-capable Lisp, Quicklisp
 (deps: cffi, babel, trivial-garbage, bordeaux-threads).
 
 ```sh
-make test-m4    # full gate: cargo tests + every suite but fetch, on SBCL
+make test-m4    # full gate: cargo tests + every suite but fetch and httpd, on SBCL
 make test-fetch # the async HTTPS example (hermetic)
+make test-httpd # the HTTP server example (hermetic)
 make test-ccl   # the m4 suites on Clozure CL
 ```
 

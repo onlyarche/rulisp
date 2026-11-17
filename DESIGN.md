@@ -1,5 +1,8 @@
 # rulisp 구현 계획
 
+> **기록 문서.** 2026-07의 v0.1 구현 계획이며(§11의 변경 기록은 v0.2, 2026-07-29까지) 이후 갱신하지 않음. 규범 문서는 BOUNDARY.md와 docs/stability.md.\
+> **A record, not the current text:** the v0.1 implementation plan of 2026-07 (§11 logs changes through v0.2, 2026-07-29), not updated since. The normative text is BOUNDARY.md and docs/stability.md.
+
 > 출처: 2026-07-14, 5방향 웹 리서치(도구 호출 274회, 소스 검증) → 3개 독립 설계안 → 2인 판정단 → 합성. 판정단 과정에서 재구성된 7대 리스크는 사후에 리서치 원본과 대조 검증되었고(6/7 일치), 차이 4건은 §11에 기록·반영됨.
 
 ## 1. 한 줄 비전 & 스코프 (non-goals 포함)

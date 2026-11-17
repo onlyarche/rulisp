@@ -240,7 +240,7 @@ anchored regex once made it so). The artifact's format picks the reader,
 not the host: ELF through `nm`, Mach-O through Apple's `nm` or rustup's
 `llvm-nm`, PE through rustup's `llvm-readobj` (`rustup component add
 llvm-tools`), so a Linux machine audits a `.dll` and the release job
-re-audits all twelve assets it attaches; a format it cannot read fails
+re-audits every asset it attaches; a format it cannot read fails
 rather than passes.
 
 ## Pattern C — build on the user's machine (developers)

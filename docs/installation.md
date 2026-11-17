@@ -7,7 +7,7 @@ dependencies, and how to verify the install.
 
 | Dependency | Why | Verified with |
 |---|---|---|
-| Rust toolchain (`cargo`, `rustc`) | builds glue crates; invoked by `rulisp:use-crate` at development time only — loading the `rulisp` system itself needs no Rust | 1.78 or newer (the MSRV, checked in CI on exactly that toolchain); tested with 1.97 |
+| Rust toolchain (`cargo`, `rustc`) | builds glue crates; invoked by `rulisp:use-crate` at development time only — loading the `rulisp` system itself needs no Rust | 1.78 or newer (the MSRV, checked in CI on exactly that toolchain); the other CI jobs build with the current stable |
 | A Common Lisp | the host | the support table in [README §Status](../README.md#status) — the CI-required matrix: SBCL 2.1.11+ on Linux (x86-64 and aarch64), macOS and Windows; Clozure CL 1.13 and ECL 21.2.1 on Linux |
 | Quicklisp | pulls the CL dependencies | current dist |
 | CL libraries: `cffi`, `babel`, `trivial-garbage`, `bordeaux-threads` (+ `fiveam` for the test suites) | FFI, UTF-8, finalizers, locks | Quicklisp dist versions |
@@ -37,6 +37,15 @@ Optional second implementation, Clozure CL:
 ```sh
 curl -sL https://github.com/Clozure/ccl/releases/download/v1.13/ccl-1.13-linuxx86.tar.gz | tar xz -C "$HOME"
 # binary: ~/ccl/lx86cl64
+```
+
+Optional third implementation, ECL — the distribution package, as in
+CI. Callbacks need a C compiler there (rulisp compiles their
+trampolines natively, [README §Status](../README.md#status)); the
+`build-essential` of step 1 provides one:
+
+```sh
+sudo apt install -y ecl
 ```
 
 musl-based distros (Alpine): glibc-built artifacts won't load; the usual
@@ -91,6 +100,10 @@ Quicklisp as above. Notes:
 - Check the repository out with LF endings (the shipped `.gitattributes`
   does this): the manifest fixtures are byte-compared, and a CR inside a
   Lisp format string breaks its line continuations.
+- `make test-fetch` and `make test-httpd` are best-effort on Windows:
+  CI runs both there without failing the job on them
+  ([README §Status](../README.md#status), docs/stability.md §5).
+  `make test-m4` is required of the Windows job (its `full gate` step).
 
 ## Getting rulisp
 
@@ -129,8 +142,8 @@ Alternative without `local-projects` — point ASDF at the checkout
 
 ## Verify the installation
 
-Smoke test (builds and loads the bundled `regex` example — first build
-downloads crates.io deps):
+Smoke test (builds and loads the bundled `rx` example, a wrapper of the
+`regex` crate — first build downloads crates.io deps):
 
 ```lisp
 (ql:quickload :rulisp)
@@ -138,16 +151,24 @@ downloads crates.io deps):
 (rx:regex-count (rx:make-regex "[0-9]+") "1 22 333")   ; => 3
 ```
 
+`examples/rx/`, like the other examples and their Lisp veneers, is a
+pattern to copy, not a frozen surface (docs/stability.md §8).
+
 Full test gates, from the repository root:
 
 ```sh
-make test-m4                          # everything, on SBCL
+make test-m4                          # every suite but fetch and httpd, on SBCL
 make test-ccl CCL=~/ccl/lx86cl64      # same suites on Clozure CL (Linux)
-make test-fetch                       # the async HTTP example (hermetic)
+ecl --norc --load tests/run-m4.lisp   # same suites on ECL (Linux)
+make test-ecl-program                 # builds and runs an ECL program-op executable
+make test-fetch                       # the async HTTPS example (hermetic)
 make test-httpd                       # the HTTP server example (hermetic)
 make bench                            # boundary throughput
 cargo test --workspace                # manifest golden + compile-fail tests
 ```
+
+ECL exits 0 even from its debugger: on the `ecl` line read the suite's
+`Pass:`/`Fail:` summary, as CI does, not the exit status.
 
 ## Runtime facts worth knowing
 
@@ -158,6 +179,16 @@ cargo test --workspace                # manifest golden + compile-fail tests
   `retry-build` restart that looks cargo up again: install it, or set
   `RULISP_CARGO` from the debugger, and retry.
 - **Release builds**: `(rulisp:use-crate dir :profile :release)`.
+- **Other `use-crate` keywords**: `:features '("name" …)` passes
+  `--features name,…` to `cargo build`, and `:package "NAME"` names the
+  package the bindings are generated into when the crate is first
+  loaded (default: the crate name, upcased).
+- **Reloading**: `(rulisp:reload-crate "name")` runs no cargo. It loads
+  the artifact again from where it was loaded: a new copy, a new
+  dlopen, regenerated wrappers, generation + 1. Handles of the older
+  generation signal `rulisp:stale-handle-error` on use and can still
+  be freed. After editing Rust, call `use-crate` again instead — it
+  rebuilds, then reloads.
 - **Library cache**: every load dlopens a unique copy under UIOP's
   cache directory — `~/.cache/rulisp/` on Linux and macOS,
   `%LOCALAPPDATA%\cache\rulisp\` on Windows; `$XDG_CACHE_HOME` overrides

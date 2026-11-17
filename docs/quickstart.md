@@ -7,10 +7,10 @@ snippet below is taken from a real session.
 
 ## Prerequisites
 
-A Rust toolchain, SBCL (or CCL) with Quicklisp, and this repository set up
-so ASDF finds the `rulisp` system — full per-platform instructions
-(Linux/macOS/Windows, dependencies, troubleshooting) are in
-[installation.md](installation.md).
+A Rust toolchain; SBCL, CCL or ECL ([README §Status](../README.md#status))
+with Quicklisp; and the `rulisp` system loadable from Ultralisp or a
+checkout — full per-platform instructions (Linux/macOS/Windows,
+dependencies, troubleshooting) are in [installation.md](installation.md).
 
 ## 1. The glue crate
 
@@ -105,7 +105,7 @@ derived one would collide, and duplicate Lisp names are a load-time error.
 ## 2. Load and use it
 
 ```lisp
-CL-USER> (asdf:load-system :rulisp)
+CL-USER> (ql:quickload :rulisp)
 CL-USER> (rulisp:use-crate #p"~/src/rx/")   ; cargo build + dlopen + codegen
 #<RULISP:CRATE "rx" gen 1 abi 1 :: 7 fns, 1 handle, package RX>
 
@@ -194,3 +194,7 @@ library must not be able to take the Lisp image down), run the Rust side
 out of process instead — in-process FFI trades that isolation for
 ~25 ns calls on SBCL (docs/benchmarks.md). See BOUNDARY.md for the full
 contract.
+
+`examples/rx/`, like the other examples and their Lisp veneers, is a
+pattern to copy, not a frozen surface: none is among the four versioned
+surfaces of docs/stability.md §1.

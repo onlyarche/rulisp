@@ -44,8 +44,11 @@ supported approach: the WASI sandbox, `wasm:make-wasi` (since 0.7).
 `wasm:make-wasm`, the plain module runner, is for modules you trust: it
 may run unmetered and bounds no memory.
 
-`examples/httpd` (since 0.8) is a server that listens on a socket: what it
-bounds, and what it does not, is listed after the sandbox's.
+`examples/httpd` (since 0.8) is a server that listens on a socket, and
+`examples/fetch` (since 0.3) a client that connects out: what each
+bounds, and what it does not, is listed after the sandbox's. These are
+examples: they and their Lisp veneers (`wasm:`, `web:`, `http:`) are
+patterns to copy, not a frozen surface (docs/stability.md §8).
 
 ### What the WASI sandbox bounds, and what it does not
 
@@ -96,9 +99,10 @@ It does not bound:
 `examples/httpd` is HTTP/1.1 and h2c on hyper, in front of a Lisp pull
 loop. Each line of the first list is a test in `tests/suite/httpd.lisp`
 (`httpd.*`), found or confirmed by the review that attacked the server
-before it merged (the planned adversarial pass was not run); the
-limits are the nine arguments of `httpd:make-server`, and the veneer's
-`web:server` gives them defaults.
+before it merged (the planned adversarial pass was not run: ROADMAP,
+"Later / exploratory"); the limits are the eight arguments of
+`httpd:make-server` after the address, and the veneer's `web:server`
+gives them defaults.
 
 It bounds:
 
@@ -170,10 +174,96 @@ It does not bound:
 - **attacks nobody ran** — floods past the queue, huge or lying lengths,
   HTTP/2 SETTINGS floods and rapid reset, a handler that frees or stops
   its own server, descriptor exhaustion, a GC storm under load: the
-  planned adversarial pass was not run (ROADMAP v0.8 item 2)
+  planned adversarial pass was not run and is not scheduled, and httpd
+  ships as source until it runs (ROADMAP, "Later / exploratory")
 - **a bug in hyper, axum, tokio or the glue** — in-process, as every
   crate: the crash-isolation bullet above applies
 
+### What the HTTP client bounds, and what it does not
+
+`examples/fetch` is reqwest over rustls on a tokio runtime the crate
+owns; Lisp pulls the results. Each line of the first list names what
+holds it, a test in `tests/suite/fetch.lisp` (`fetch.*`) or the audit
+`make test-fetch` runs, and where there is nothing it says so; the
+limits are the four arguments of `fetch:make-client` and two of
+`fetch:make-req`, and the veneer's `http:client` and `http:request` give
+them defaults (docs/fetch.md has the table).
+
+It bounds:
+
+- **every wait on a Lisp thread** — 100 ms, whatever was asked for; the
+  loop is in Lisp, so Ctrl-C lands within a tick
+  (`fetch.waits-are-capped`). Shutdown is the one exception: it waits up
+  to its grace, 5 s at most, and the dump hook up to 2 s for each client
+  (no test times either)
+- **requests in flight** — MAX-IN-FLIGHT; one more is refused with kind
+  "busy", never queued, and the slot comes back on every ending:
+  completion, cancel, a free in mid-transfer, a request left to the GC
+  (`fetch.admission-refuses-loudly`, `fetch.terminal-state-on-every-
+  path`, `fetch.permit-available-when-done`)
+- **a body on the Lisp heap** — `http:*max-bytes*`, 256 MiB unless you
+  say otherwise, counted in bytes received, so a peer that omits
+  Content-Length gains nothing; twice the body is live while the veneer
+  copies its chunks into one vector (`fetch.buffered-body-is-capped-by-
+  default`, `fetch.body-cap-on-chunked`)
+- **bytes held ahead of the reader** — QUEUE-CHUNKS chunks for each
+  request; the transfer then waits for the reader, and after STALL-MS it
+  fails with kind "stalled" instead of holding the socket (no test)
+- **the ready queue** — 4096 ids, the oldest dropped, since nothing
+  obliges a caller to drain it (`fetch.ready-queue-is-bounded`)
+- **what Lisp can put on the wire** — the veneer refuses an empty or
+  malformed header name and a value with CR, LF or NUL before a byte is
+  sent, and the crate refuses a block whose fields do not end in CRLF
+  (`fetch.header-injection-refused`)
+- **a failure taken for success** — a download whose file cannot be
+  written signals kind "io"; a connection that produced no head reports
+  kind "transport" and no status, never status 0 (`fetch.sink-failure-
+  is-not-silent-success`, `fetch.transport-failure-reports-transport`)
+- **threads in the Lisp** — none: the crate declares no callback, and
+  the Lisp thread count does not change during a transfer
+  (`fetch.manifest-has-no-stored-callbacks`, `fetch.no-thread-adoption`,
+  `fetch.no-adoption-during-transfer`)
+- **signal handlers and OpenSSL** — neither: tokio is built without its
+  `signal` and `process` features and TLS is rustls; before the suite,
+  `make test-fetch` audits the built library for signal imports and the
+  dependency graph for OpenSSL (`examples/fetch/audit.sh`)
+- **a client after shutdown** — a new request is refused at once with
+  kind "usage" (`fetch.after-shutdown-answers-immediately`)
+- **an image dump** — the declared hook shuts every live client down,
+  with requests in flight, and its tokio threads exit; in the restored
+  image the old client signals `rulisp:stale-handle-error` and a fresh
+  one works (`fetch.dump-hook-quiesces`, `fetch.dump-restore-refuses`)
+
+It does not bound:
+
+- **where a request goes** — any `http` or `https` URL you pass,
+  loopback and private addresses included; redirects are followed, ten
+  hops at reqwest's default, to wherever they point; and a proxy named
+  in HTTP_PROXY, HTTPS_PROXY or ALL_PROXY is used. A URL from an
+  untrusted source is yours to check
+- **trust** — the webpki roots compiled into the crate when it was
+  built: no CA can be added, no certificate pinned or presented, and a
+  blob's roots are as old as its build
+- **a download** — with `:sink` the default cap is none, and the path is
+  whatever you pass: created or truncated when the head arrives,
+  whatever the status, and left partial when the transfer fails
+- **time, with `:timeout-ms 0`** — nothing in the example bounds the
+  exchange then: the stall timeout watches a full buffer, not a silent
+  server, and such a request holds its slot until it is cancelled, freed
+  or shut down
+- **OS threads beyond the workers** — THREADS counts tokio's workers;
+  a sink's file writes and DNS lookups run on tokio's blocking pool, at
+  its default size, and one of those inside a system call outlives the
+  shutdown grace
+- **a header block you build yourself** — `fetch:make-req` checks the
+  block's framing, its names, and its values for control octets, but a
+  CRLF inside a value is two fields by then: the veneer's check is the
+  one that stops it
+- **reqwest's and hyper's own limits** — the size of a response head,
+  HTTP/2 settings, gzip decoding: the example sets none of them
+- **a bug in reqwest, hyper, rustls, tokio or the glue** — in-process,
+  as every crate: the crash-isolation bullet above applies
+
 ## Supported versions
 
-The latest release only, while the project is pre-1.0 (docs/stability.md §4 has the full support and deprecation policy).
+The latest release only, while the project is pre-1.0 (docs/stability.md §4 states the supported versions; §3 the deprecation policy).

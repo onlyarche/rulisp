@@ -5,6 +5,10 @@ functions. Read it as the worked example of a pattern, not as a reason to
 move a web app off a Lisp server: **Rust produces events, Lisp handles
 them, and a queue sits between the two.**
 
+The crate and its `web:` veneer are example code. Like the other examples
+and their Lisp veneers, they are a pattern to copy, not a frozen surface:
+none is among the four versioned surfaces of docs/stability.md §1.
+
 Each side does what it is good at:
 
 - **Rust** holds the connections, parses HTTP, runs the timers and the
@@ -54,7 +58,8 @@ Hello from Lisp!
 `serve` runs on the thread that calls it and returns when the server
 stops. Ctrl-C lands within 100 ms, because every wait inside the loop is
 capped there, and `with-server` stops and frees the server on the way out.
-For a REPL that stays yours, start pullers in their own threads:
+For a REPL that stays yours, start pullers in their own threads (four by
+default; `:threads` sets the count):
 
 ```lisp
 (defvar *s* (web:server :port 8080))
@@ -63,12 +68,16 @@ For a REPL that stays yours, start pullers in their own threads:
 (web:stop *s*)
 ```
 
+`stop` joins the pullers and then calls `web:shutdown`, the orderly end on
+its own: stop accepting, wait a bounded time for the connections to close,
+take the runtime down.
+
 ## JSON, routing, files
 
 rulisp ships no JSON reader. Bring the one you like; here it is jzon.
 
 ```lisp
-(ql:quickload :com.inuoe.jzon)
+(ql:quickload '(:com.inuoe.jzon :alexandria))
 (setf *s* (web:server :port 8080))
 (web:start *s*
   (lambda (r)
@@ -97,7 +106,11 @@ $ curl -s -o /dev/null -w '%{http_version} %{http_code}\n' --http2-prior-knowled
 `respond-file` hands the file to the server, which streams it; the bytes
 never enter Lisp. The content type comes from the extension. A missing
 file, a directory or a FIFO signals `web:http-error` with kind `"io"`, and
-the request is still yours to answer.
+the request is still yours to answer. `web:http-error-kind` and
+`web:http-error-detail` read the condition, a string each. The kind is the
+server's token; a handler meets `"io"` from `respond-file`, `"response"`
+for a status or a header the server refuses, and `"usage"` for a second
+answer to the same request.
 
 A request offers `request-method`, `request-path`, `request-query`,
 `query-params` (decoded pairs), `request-headers` (an alist),
@@ -154,6 +167,11 @@ also a warning.
 | `:handler-ms` | 0 | 504; 0 means never, so a debugger session at the REPL can hold its client |
 | `:workers` | 2 | tokio threads, not Lisp threads |
 
+The limits are unsigned integers. Out-of-range values are clamped, not
+refused: `:queue` 1–65536, `:workers` 1–64, `:max-connections` 1–1048576,
+`:body-cap` 1 KiB–1 GiB, `:head-ms` and `:body-ms` 1–3600000,
+`:queue-wait-ms` at most 3600000. `:handler-ms` is taken as given.
+
 Memory for request bodies is bounded by the queue, whatever the protocol:
 at most QUEUE bodies being read and QUEUE parked, plus one per handler,
 each at most BODY-CAP. Each connection also holds up to about 0.4 MB of
@@ -170,17 +188,25 @@ suite uses; it can send half a request or hold a connection open.
 ## Deploying
 
 Load the crate with `use-crate` from a checkout, or with
-`rulisp:load-blob-crate` from a directory of per-platform builds named as
-docs/distribution.md describes. Put
-nginx or caddy in front for TLS. Browsers then speak HTTP/1.1 to the
-proxy; h2c reaches the server from proxies and API clients that use prior
-knowledge, since there is no ALPN without TLS.
+`rulisp:load-blob-crate` from a directory of per-platform builds you make
+yourself (`cargo build --release` for each platform, the artifact renamed
+as docs/distribution.md describes). httpd ships as source: the GitHub
+Release attaches no httpd asset.
+
+The server listens on 127.0.0.1 unless `web:server` is given `:address`,
+a literal IP and not a hostname (IPv6 in brackets, `"[::1]"`; a name
+signals `web:http-error` with kind `"usage"`). A proxy on another host, or
+a container, needs an address it can reach; `:address "0.0.0.0"` listens
+on every IPv4 interface. Put nginx or caddy in front for TLS. Browsers
+then speak HTTP/1.1 to the proxy; h2c reaches the server from proxies and
+API clients that use prior knowledge, since there is no ALPN without TLS.
 
 To ship an image, call `web:stop` **before** `uiop:dump-image`. The
-crate's dump hook stops every server either way, but a puller thread
-still alive at dump time makes SBCL refuse the image, and on CCL an image
-saved that way faulted at exit. In the restored image a server from
-before the dump is stale: start a fresh one in `uiop:*image-entry-point*`.
+crate's dump hook stops every server either way (2 s each at most), but a
+puller thread still alive at dump time makes SBCL refuse the image, and on
+CCL an image saved that way faulted at exit. In the restored image a
+server from before the dump is stale: start a fresh one in
+`uiop:*image-entry-point*`.
 
 ## Not in this example
 
