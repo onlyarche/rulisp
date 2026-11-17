@@ -1,7 +1,7 @@
 # rulisp 1.0.0 — the freeze, planned from a measured rehearsal
 
 **Status:** written at the close of v0.7 (2026-09-30), to be executed
-after 0.8. Nothing here changes the tree today. Every number below was
+after 0.8.1 (the patch decided 2026-11-04). Nothing here changes the tree today. Every number below was
 measured on the 0.7 tree with `cargo-semver-checks 0.50.0` against the
 crates.io 0.6.0 baseline, in a scratch export (`git archive HEAD`), and
 can be measured again with the commands given.

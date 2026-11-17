@@ -32,9 +32,9 @@ additive change regenerates the golden in the same commit (from SBCL,
 or a changed signature fails the test and does not land in a minor.
 
 The Rust surface's gates: `cargo-semver-checks --release-type minor`
-against the latest crates.io release in the `cargo tests` CI job (the
-tree stays at the released version until a release, so "minor" asks
-whether this tree breaks a consumer of that release); the manifest
+(`patch` in a patch cycle) against the latest crates.io release in the
+`cargo tests` CI job (the tree stays at the released version until a
+release, so it asks whether this tree breaks a consumer of it); the manifest
 byte gates `fx.golden-manifest` and `manifest_matches_golden`; and
 `make test-m2` against the hand-written ABI oracle.
 
@@ -60,7 +60,7 @@ which stops being true in the compat tree at every version bump.
   `rulisp = "0.x"` loads under the `rulisp` ASDF system of the same 0.x.
 - Pre-1.0 semver: a **minor** (0.x → 0.x+1) may break the Rust API or the
   Lisp API, with the change and its migration named in CHANGELOG.md; a
-  **patch** never does.
+  **patch** neither breaks nor adds to either.
 - The **C ABI** is a named integer, `abi_version()` = 1 since 0.1.0, exact-
   match checked by the loader. It has not changed and every feature since
   has been wire-additive. Bumping it is a major event, not a minor one.
