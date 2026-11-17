@@ -1,4 +1,4 @@
-CARGO ?= $(HOME)/.cargo/bin/cargo
+CARGO ?= $(firstword $(wildcard $(HOME)/.cargo/bin/cargo) cargo)
 SBCL ?= sbcl
 
 .PHONY: build test-m1 test-m2 test-m3 test-m4 test-fetch test-fetch-ccl test-httpd test-httpd-ccl test-ccl test-ecl-program audit doc check-versions compat dist-dryrun check-1.0 check-dist bench clean clean-cache
