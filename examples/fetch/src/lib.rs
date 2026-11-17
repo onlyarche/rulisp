@@ -350,8 +350,8 @@ impl Client {
         let rt = self.inner.rt.lock().unwrap().take();
         if let Some(rt) = rt {
             // Deliberate exception to the WAIT_CAP_MS rule, bounded at 5 s:
-            // this is the one call whose PURPOSE is to wait, and it is what
-            // a dump hook calls to quiesce foreign threads before
+            // this call's PURPOSE is to wait — to quiesce foreign threads,
+            // as the dump hook (shutdown_all, 2 s per client) does before
             // save-lisp-and-die (BOUNDARY §10). Blocking-pool threads that
             // are mid-syscall may still outlive it — they hold no Lisp
             // state, but a dump taken while one is mid-write can leave a
@@ -559,7 +559,7 @@ impl Req {
         self.sh.st.lock().unwrap().head_done
     }
 
-    /// The response header block, verbatim: name ": " value CRLF, repeated.
+    /// The response header block, re-encoded: name ": " value CRLF, repeated.
     pub fn headers(&self) -> Vec<u8> {
         self.sh.st.lock().unwrap().headers.clone()
     }

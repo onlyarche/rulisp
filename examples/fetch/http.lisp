@@ -214,10 +214,10 @@ on every path — completion, error, cancel, free, GC, shutdown."
                      (max-bytes (if sink 0 *max-bytes*))
                      (expect-success t))
   "Perform one request to completion. Returns (values body status headers),
-where BODY is octets (or NIL with :SINK) and HEADERS is an alist in wire
-order. Signals HTTP-ERROR on transport failures and, unless
-:EXPECT-SUCCESS is NIL, on non-2xx responses; a RETRY-REQUEST restart is
-established around the whole exchange.
+where BODY is octets (or NIL with :SINK) and HEADERS is an alist, one
+name's values adjacent and in wire order. Signals HTTP-ERROR on transport
+failures and, unless :EXPECT-SUCCESS is NIL, on non-2xx responses; a
+RETRY-REQUEST restart is established around the whole exchange.
 
 :MAX-BYTES caps the body, enforced against bytes RECEIVED (not against a
 Content-Length a hostile peer can omit); 0 means unlimited. It defaults to

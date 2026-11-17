@@ -25,8 +25,8 @@ the Lisp for each chunk, and it has no natural backpressure. Pulling
 needs no thread to cross, and a reader that stops asking holds the
 transfer back. The price is the cap. A Lisp thread inside a foreign call
 cannot be interrupted, so no call in the loop waits longer than 100 ms;
-the caller loops, and Ctrl-C lands within a tick. Shutdown alone waits
-longer, up to its grace (Limits).
+the caller loops, and Ctrl-C lands within a tick. Two waits are longer:
+shutdown up to its grace, the dump hook up to 2 s per client (Limits).
 
 **For a plain HTTP request, a Lisp client is the simpler choice.**
 Dexador or Drakma have no Rust seam to cross and need no cargo. Reach for this
@@ -71,8 +71,9 @@ The blob carries the `FETCH` package only. The veneer is one source file,
 
 `http:get` returns `(values body status headers)`. The body is a vector
 of octets; `babel:octets-to-string` makes text of it. The headers are an
-alist in wire order, names in lower case, duplicates kept, values decoded
-as Latin-1 so that every octet survives.
+alist, names in lower case, duplicates kept, values decoded as Latin-1 so
+that every octet survives. A repeated name's values are adjacent and in
+wire order; the names come in reqwest's order, not always the wire's.
 
 `fetch:client-start-test-server` starts the crate's own loopback HTTP/1.1
 server and returns its base URL. rulisp's suite uses it, and so does this
@@ -253,11 +254,11 @@ so does the garbage collector for one you dropped; every ending returns
 the request's slot.
 
 The header block is octets, each field `name: value` and a CRLF.
-`make-req` checks that framing, and refuses a field without a colon, a
-name that is not a token and a value with a control octet other than a
-tab. It cannot see a CRLF that was inside a value: that is two fields by
-then. The veneer's check is the one that stops it, so keep it if you
-build blocks yourself.
+`make-req` checks that framing, trims the whitespace around a name, and
+refuses a field without a colon, a name that is not then a token and a
+value with a control octet other than a tab. It cannot see a CRLF that
+was inside a value: that is two fields by then. The veneer's check is
+the one that stops it, so keep it if you build blocks yourself.
 
 | Function | Returns |
 |---|---|

@@ -199,9 +199,9 @@ CL-USER> (let ((w (wasm:make-wasm (guest "fib.wat") 1000000)))
 positive, and a memory limit in bytes. `wasi-run` runs the module once
 and returns its exit code as a value; `wasi-stdout` and `wasi-stderr`
 return octets, so decode them (babel is loaded with rulisp).
-`wasi-preopen` takes two arguments, a host directory and the path the
-guest sees it under: read-only, and with the other preopens the guest's
-whole filesystem.
+`wasi-preopen` takes the sandbox and two more arguments, a host
+directory and the path the guest sees it under: read-only, and with the
+other preopens the guest's whole filesystem.
 
 ```lisp
 CL-USER> (let ((s (wasm:make-wasi (guest "wasi-hello.wat") 1000000 1048576)))
@@ -244,9 +244,9 @@ sandbox's arguments, environment and stdin (`wasi-arg`, `wasi-env`,
 does not. On ECL, loading this crate needs a C toolchain: its one stored
 callback gets a natively compiled trampoline (README, "Status").
 
-`examples/wasm`, like the other examples and their Lisp veneers — the
-`web:`, `http:` and `rx:` names on this page — is a pattern to copy,
-not a frozen surface (docs/stability.md §8).
+`examples/wasm`, like the other examples, their packages and Lisp
+veneers — the `web:`, `http:` and `rx:` names on this page — is a
+pattern to copy, not a frozen surface (docs/stability.md §8).
 
 ## Events from Rust threads: `rulisp::Inbox`
 
@@ -374,7 +374,7 @@ exported reader:
 
 `rust-error-type` is the Rust error type's name, `rust-error-message`
 its `Display` text and `rust-error-function-name` the Lisp function that
-made the call:
+made the call — here with the `rx` crate loaded in the section above:
 
 ```lisp
 CL-USER> (handler-case (rx:make-regex "(unclosed")

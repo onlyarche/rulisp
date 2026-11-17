@@ -11,12 +11,16 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 47 rows and `lisp/src/package.lisp` are byte-identical to v0.8.0
 (`git diff --quiet v0.8.0 HEAD --` both; `make compat PREV=v0.8.0`:
 API-SUBSET-OK); three loader docstrings are reworded. *Rust API*:
-unchanged — the crates differ from 0.8.0 in ten doc-comment lines, and
-the gate ran `cargo-semver-checks` against crates.io 0.8.0 as a patch
-for the whole cycle. *Manifest schema*: unchanged; the `wordbag` blob's
-manifest differs from 0.8.0's in one `:doc` string. *ABI*: 1. *The
-examples*: docstring and message text only — no function added, renamed
-or removed.
+unchanged — the crates' sources differ from 0.8.0 in ten doc-comment
+lines, and three compile-fail expectations follow Rust 1.100.0's
+wording; the gate (`cargo-semver-checks` against crates.io 0.8.0) is
+set to `patch` from the cycle's first commit and passes as one.
+*Manifest schema*: unchanged; apart from the `:rulisp-version` value,
+which a release changes in every blob, the published blobs' manifests
+differ from 0.8.0's in `:doc` strings only — one in `wordbag` (the
+golden's diff), one in `rx`, four in `fetch`, none in `wasm`. *ABI*: 1.
+*The examples*: docstring and message text only — no function added,
+renamed or removed.
 
 ### Added
 
@@ -63,12 +67,16 @@ or removed.
   deliberate exception to the 100 ms cap, not "capped like every other
   wait"; `fetch:make-client` names its clamps and that a stall timeout
   of 0 means 30 s; `fetch:make-req` and `http:request` say a timeout of
-  0 means none. `httpd:make-server` states that out-of-range limits are
-  clamped, not refused, with each range; `httpd:server-wait` names the
-  "usage" condition of a stopped server. The two `wasm:wasm-error`
-  messages for a type that does not cross end "(only i32 and i64
-  cross)", where they said "(v1 speaks i32/i64)". No export, lambda list
-  or behaviour changed.
+  0 means none. `fetch:req-headers` calls the header block re-encoded,
+  not verbatim, and `http:request` says one name's values are adjacent
+  and in wire order, where it said "an alist in wire order": the names
+  come lower-cased and in reqwest's order. `httpd:make-server` states
+  that out-of-range limits are clamped, not refused, with each range;
+  `httpd:server-wait` names the "usage" condition of a stopped server;
+  `httpd:server-shutdown` calls its grace a bounded exception to the
+  100 ms wait cap. The two `wasm:wasm-error` messages for a type that
+  does not cross end "(only i32 and i64 cross)", where they said "(v1
+  speaks i32/i64)". No export, lambda list or behaviour changed.
 - **Loader docstrings and the crates' rustdoc.** `rulisp:load-blob-crate`
   and `rulisp:load-crate` name the Windows artifact
   (`<name>-<os>-<arch>.dll`; `.so/.dylib/.dll`); `rulisp:build-error`'s
@@ -102,9 +110,13 @@ or removed.
   docs/claims.md: 128 rows re-anchored (the test-name citations into
   `tests/suite/m1.lisp` and `m2.lisp` sat 11 lines low, 25 rows cited
   `lisp/src/build.lisp` at the v0.5.0 tree's lines, the ci.yml line
-  citations name the job and step now), 159 rows added for this cycle's
+  citations name the job and step now), 160 rows added for this cycle's
   sentences, then every citation audited again and 38 more rows
-  corrected; the register is 588 rows, 0 unverified. BOUNDARY §12:
+  corrected; the register is 589 rows, 0 unverified. Four rows cited a
+  test for a bound that test cannot fail on (the ready queue's 4096-id
+  cap, the exit of a client's threads at the dump hook); they cite the
+  code and a hand evaluation now, and SECURITY.md says no test holds
+  either. BOUNDARY §12:
   sixteen ranges in fourteen rows. No normative sentence of BOUNDARY.md
   changed.
 - **docs/releasing.md is a patch's checklist too.** Step 1 names every
@@ -113,9 +125,11 @@ or removed.
   previous tag, the wordbag manifest golden's diff confined to `:doc`
   strings — because an added export is caught by the golden alone, and
   regenerating it turns every gate green; step 9 sets the Rust API
-  gate's `release-type` for the cycle being opened. The gate ran as
-  `patch` this cycle (an added item fails too), and docs/stability.md §2
-  says a patch neither breaks nor adds.
+  gate's `release-type` for the cycle being opened, and step 1 names
+  docs/stability.md §8's "Status as of" sentence as a site re-dated by
+  hand. The gate is `patch` this cycle (an added item fails too, except
+  a free fn or a module, which has no lint — the diff is read), and
+  docs/stability.md §2 says a patch neither breaks nor adds.
 - **Records.** ROADMAP: the 0.8.0 paragraph counts the nine items its
   list marks ✅, v0.7 items 6 and 7 carry their mark, the blob sentence
   dates its four legs, the v0.2 wish list says what became of each
@@ -124,7 +138,8 @@ or removed.
   source-only until it runs. docs/design/v10-plan.md is corrected where
   the tree already contradicted it (the trybuild diff rule, the
   exact-pin pattern, the pages whose words flip, `uiop` in the Quicklisp
-  text) and reads "after 0.8.1". This file's 0.6.0 section has one
+  text), reads "after 0.8.1", and writes its example pin without a
+  version (`"X.Y.Z"`). This file's 0.6.0 section has one
   heading per kind. DESIGN.md opens by saying it is the v0.1 plan of
   2026-07 and that BOUNDARY.md and docs/stability.md are the normative
   text.
@@ -133,6 +148,13 @@ or removed.
   fixture); version-era tags are gone from the examples' comments and
   the oracle's; examples/httpd/Cargo.toml lists tokio's `io-util`, which
   `lib.rs` imports (`Cargo.lock` unchanged).
+- **The compile-fail expectations follow Rust 1.100.0.** `module_typo`,
+  `non_send_handle` and `stored_callback` under
+  `crates/rulisp/tests/ui/` record rustc 1.100.0's wording — CI builds
+  with the current stable, and docs/installation.md says so beside
+  `cargo test --workspace`. None of rulisp's own messages changed. On an
+  older stable (1.97 measured) `cargo test --workspace`, the first step
+  of `make test-m4`, mismatches these three cases.
 
 ### Fixed
 
@@ -162,6 +184,24 @@ or removed.
   generates, `rulisp[wordbag]: panic in grenade_free (swallowed)` — the
   one place the oracle and examples/wordbag differed on stderr.
 - **`make`'s `.PHONY`** lists `test-httpd` and `test-httpd-ccl`.
+- **`make` finds cargo on PATH** when `~/.cargo/bin/cargo` is absent, as
+  the loader and the audit scripts already did: the macOS runner image
+  of 2026-11-12 has none there, and `make test-m4` stopped at its first
+  line. `CARGO=…` still wins.
+- **What the cycle's own review found on the new pages.** docs/fetch.md:
+  the response headers are an alist whose names come in reqwest's order
+  — only one name's values keep the wire's; `make-req` trims the
+  whitespace around a header name before it checks it; two waits exceed
+  the 100 ms cap, shutdown's grace and the dump hook's 2 s per client
+  (SECURITY.md said "the one exception"). SECURITY.md and docs/usage.md
+  no longer call `wasm:` and `rx:` Lisp veneers — they are the crates'
+  packages. docs/usage.md: `wasi-preopen` takes the sandbox and two
+  more arguments, and "Handling conditions" says which crate its `rx:`
+  forms need. docs/installation.md: Quicklisp's init-file step wrote
+  SBCL's only, so an ECL or Clozure CL REPL loads
+  `~/quicklisp/setup.lisp` first. `rulisp:build-error`'s docstring: an
+  attempted build has the `retry-build` restart, a cargo that cannot be
+  run included.
 
 ## 0.8.0 — 2026-10-14
 

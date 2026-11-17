@@ -114,6 +114,9 @@ rulisp is on Ultralisp (Quicklisp itself is planned for 1.0):
 (ql:quickload :rulisp)
 ```
 
+Step 3's `(ql:add-to-init-file)` wrote SBCL's init file only: in an ECL
+or Clozure CL REPL, evaluate `(load "~/quicklisp/setup.lisp")` first.
+
 The dist polls GitHub on its own schedule and can lag a release by days
 (`sh tools/check-dist.sh` in a checkout says which version it serves);
 to be sure of the version you loaded, ask
@@ -164,7 +167,7 @@ make test-ecl-program                 # builds and runs an ECL program-op execut
 make test-fetch                       # the async HTTPS example (hermetic)
 make test-httpd                       # the HTTP server example (hermetic)
 make bench                            # boundary throughput
-cargo test --workspace                # manifest golden + compile-fail tests
+cargo test --workspace                # manifest golden + compile-fail tests (current stable)
 ```
 
 ECL exits 0 even from its debugger: on the `ecl` line read the suite's

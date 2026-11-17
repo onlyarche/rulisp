@@ -621,7 +621,7 @@ impl Server {
         Ok(*done)
     }
 
-    /// Tear the runtime down — fetch's one bounded exception to the wait
+    /// Tear the runtime down — a bounded exception to the 100 ms wait
     /// cap, GRACE-MS at most 5 s.
     pub fn shutdown(&self, grace_ms: u64) -> Result<(), HttpError> {
         refuse_reentry()?;

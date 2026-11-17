@@ -12,6 +12,8 @@ worked; each has a check, so a slip is caught before the next step.
    `describe` transcript and docs/stability.md §2's
    "(X.Y.Z everywhere today)". The script's other two checks hold the
    three crates to one `rust-version`; a bump leaves it alone.
+   docs/stability.md §8's "Status as of X.Y.Z" sentence is outside the
+   script: re-read it and re-date it by hand.
    `make check-versions` must pass; `cargo build` refreshes
    `Cargo.lock`, which is committed. The standalone fixtures
    pin rulisp by path in their own locks: run `cargo update -p rulisp`

@@ -47,8 +47,8 @@ may run unmetered and bounds no memory.
 `examples/httpd` (since 0.8) is a server that listens on a socket, and
 `examples/fetch` (since 0.3) a client that connects out: what each
 bounds, and what it does not, is listed after the sandbox's. These are
-examples: they and their Lisp veneers (`wasm:`, `web:`, `http:`) are
-patterns to copy, not a frozen surface (docs/stability.md §8).
+examples: they, their packages and Lisp veneers (`wasm:`, `web:`, `http:`)
+are patterns to copy, not a frozen surface (docs/stability.md §8).
 
 ### What the WASI sandbox bounds, and what it does not
 
@@ -193,7 +193,7 @@ It bounds:
 
 - **every wait on a Lisp thread** — 100 ms, whatever was asked for; the
   loop is in Lisp, so Ctrl-C lands within a tick
-  (`fetch.waits-are-capped`). Shutdown is the one exception: it waits up
+  (`fetch.waits-are-capped`). Two waits are longer: shutdown waits up
   to its grace, 5 s at most, and the dump hook up to 2 s for each client
   (no test times either)
 - **requests in flight** — MAX-IN-FLIGHT; one more is refused with kind
@@ -210,7 +210,8 @@ It bounds:
   request; the transfer then waits for the reader, and after STALL-MS it
   fails with kind "stalled" instead of holding the socket (no test)
 - **the ready queue** — 4096 ids, the oldest dropped, since nothing
-  obliges a caller to drain it (`fetch.ready-queue-is-bounded`)
+  obliges a caller to drain it (no test reaches the cap:
+  `fetch.ready-queue-is-bounded` makes 40 requests)
 - **what Lisp can put on the wire** — the veneer refuses an empty or
   malformed header name and a value with CR, LF or NUL before a byte is
   sent, and the crate refuses a block whose fields do not end in CRLF
@@ -232,7 +233,9 @@ It bounds:
 - **an image dump** — the declared hook shuts every live client down,
   with requests in flight, and its tokio threads exit; in the restored
   image the old client signals `rulisp:stale-handle-error` and a fresh
-  one works (`fetch.dump-hook-quiesces`, `fetch.dump-restore-refuses`)
+  one works (`fetch.dump-hook-quiesces`, `fetch.dump-restore-refuses`;
+  no test holds the threads' exit: the first counts them against a
+  baseline taken with the client alive)
 
 It does not bound:
 
