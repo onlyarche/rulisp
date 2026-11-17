@@ -7,6 +7,162 @@ system. The C ABI has its own version, checked at load time: **ABI 1 since
 
 ## Unreleased (0.8.1 development)
 
+**Surfaces this cycle.** A patch: none moved. *Lisp API*: the golden's
+47 rows and `lisp/src/package.lisp` are byte-identical to v0.8.0
+(`git diff --quiet v0.8.0 HEAD --` both; `make compat PREV=v0.8.0`:
+API-SUBSET-OK); three loader docstrings are reworded. *Rust API*:
+unchanged — the crates differ from 0.8.0 in ten doc-comment lines, and
+the gate ran `cargo-semver-checks` against crates.io 0.8.0 as a patch
+for the whole cycle. *Manifest schema*: unchanged; the `wordbag` blob's
+manifest differs from 0.8.0's in one `:doc` string. *ABI*: 1. *The
+examples*: docstring and message text only — no function added, renamed
+or removed.
+
+### Added
+
+- **docs/fetch.md.** The HTTPS client example has a page, on the
+  docs/httpd.md model: loading (`use-crate`, then `http.lisp`; a
+  release's `fetch` blob carries the `FETCH` package only),
+  `http:with-client`, `http:get` and `http:download`, the `http-error`
+  readers and its twelve kind tokens, the `retry-request` restart, a
+  limits table (the 100 ms wait cap, `http:client`'s four keywords with
+  their defaults and clamps, `*max-bytes*`, `:timeout-ms`, the ready
+  queue, the shutdown grace, the dump hook) and the generated `FETCH`
+  functions a veneer author drives. Every form on it was run on SBCL
+  against the crate's loopback server.
+- **docs/usage.md: "WebAssembly from the REPL"** — loading
+  `examples/wasm` from a checkout or a release's blobs, `wasm:make-wasm`
+  and `wasm:make-wasi` with their printed results, `wasm:wasm-error` for
+  a trap or an empty fuel budget, and all 19 functions by name; no page
+  showed the example before. **"Handling conditions"** — the condition
+  tree under `rulisp:rulisp-error`, the 21 exported readers by class, a
+  `handler-case` on `rust-error` and one on `build-error`, the
+  `use-value` and `retry-build` restarts, and the `rulisp-version-skew`
+  warning; no user page named a reader before. **"An HTTPS client from
+  the REPL"** points at docs/fetch.md.
+- **SECURITY.md: "What the HTTP client bounds, and what it does not"**,
+  beside the sandbox's and the server's lists: each bound names the
+  `fetch.*` test or the audit that holds it, or says there is none; the
+  other list names what reqwest's defaults leave open — redirects, the
+  proxy environment variables, the compiled-in roots, a download's path
+  and size, `:timeout-ms 0`, a header block built by hand.
+- **Test `fetch.progress-accessors`**: the six `FETCH` exports no test
+  or veneer called (`req-id`, `req-settled`, `req-failed`,
+  `req-head-done`, `req-header`, `req-buffered`), against the crate's
+  loopback server. The fetch suite is 24 tests.
+
+### Changed
+
+- **The examples' docstrings and messages say what the code does.**
+  These are what `(documentation 'rx:regex-first-match 'function)`
+  prints and what a condition reports. `rx:regex-first-match`: "First
+  match, or NIL when there is none", where it said "no more sentinel
+  values (v0.2)". `wordbag:opt-scale` loses its "(v0.6 — the value slot
+  carried a fixnum 0 …)" remark — the one change in the `wordbag` blob's
+  manifest. `fetch:client-shutdown`: the grace is bounded at 5 s, a
+  deliberate exception to the 100 ms cap, not "capped like every other
+  wait"; `fetch:make-client` names its clamps and that a stall timeout
+  of 0 means 30 s; `fetch:make-req` and `http:request` say a timeout of
+  0 means none. `httpd:make-server` states that out-of-range limits are
+  clamped, not refused, with each range; `httpd:server-wait` names the
+  "usage" condition of a stopped server. The two `wasm:wasm-error`
+  messages for a type that does not cross end "(only i32 and i64
+  cross)", where they said "(v1 speaks i32/i64)". No export, lambda list
+  or behaviour changed.
+- **Loader docstrings and the crates' rustdoc.** `rulisp:load-blob-crate`
+  and `rulisp:load-crate` name the Windows artifact
+  (`<name>-<os>-<arch>.dll`; `.so/.dylib/.dll`); `rulisp:build-error`'s
+  says which signals carry the `retry-build` restart (a missing or
+  nameless `Cargo.toml` has neither a command nor the restart). The
+  rustdoc of `rulisp` and `rulisp-runtime` — the docs.rs pages — loses
+  "(v0.2)", "v1 shapes only" and "v0.2:" on ten lines. Comments and
+  docstrings only.
+- **The examples are patterns, not a frozen surface, and the pages say
+  so.** docs/stability.md §8: the examples, their packages and Lisp
+  veneers (`web:`, `http:`, `wasm:`, `rx:`) are not among the four
+  surfaces 1.0 freezes. docs/httpd.md, docs/fetch.md, docs/usage.md,
+  docs/quickstart.md, docs/installation.md and SECURITY.md each carry
+  the sentence where they show one.
+- **docs/httpd.md says what Deploying left out.** `web:server` listens
+  on 127.0.0.1 unless `:address` names a literal IP (IPv6 in brackets; a
+  hostname is `web:http-error` kind "usage"), and the per-platform
+  builds for `load-blob-crate` are your own: the GitHub Release attaches
+  no httpd asset. The limits' ranges are stated (out-of-range values are
+  clamped), with the dump hook's bound, `web:http-error-kind` and
+  `web:http-error-detail`, the kinds a handler meets, `start`'s four
+  pullers and `web:shutdown`.
+- **docs/installation.md covers ECL and says what Windows runs.** An ECL
+  install block and the two ECL gates CI runs; `make test-fetch` and
+  `make test-httpd` are best-effort on Windows; `use-crate`'s
+  `:features` and `:package` keywords and what `reload-crate` does are
+  under Runtime facts — no user page named them. docs/usage.md names the
+  four published blob files and says what the `wordbag` blob is: the
+  suites' fixture.
+- **The registers were re-read against the tree, citation by citation.**
+  docs/claims.md: 128 rows re-anchored (the test-name citations into
+  `tests/suite/m1.lisp` and `m2.lisp` sat 11 lines low, 25 rows cited
+  `lisp/src/build.lisp` at the v0.5.0 tree's lines, the ci.yml line
+  citations name the job and step now), 159 rows added for this cycle's
+  sentences, then every citation audited again and 38 more rows
+  corrected; the register is 588 rows, 0 unverified. BOUNDARY §12:
+  sixteen ranges in fourteen rows. No normative sentence of BOUNDARY.md
+  changed.
+- **docs/releasing.md is a patch's checklist too.** Step 1 names every
+  site `make check-versions` checks; step 3 has the patch rule — the
+  Lisp API golden and `lisp/src/package.lisp` byte-identical to the
+  previous tag, the wordbag manifest golden's diff confined to `:doc`
+  strings — because an added export is caught by the golden alone, and
+  regenerating it turns every gate green; step 9 sets the Rust API
+  gate's `release-type` for the cycle being opened. The gate ran as
+  `patch` this cycle (an added item fails too), and docs/stability.md §2
+  says a patch neither breaks nor adds.
+- **Records.** ROADMAP: the 0.8.0 paragraph counts the nine items its
+  list marks ✅, v0.7 items 6 and 7 carry their mark, the blob sentence
+  dates its four legs, the v0.2 wish list says what became of each
+  bullet, and "Later / exploratory" gains the 0.8 flagship's 1.x
+  findings and the httpd adversarial pass — not scheduled; httpd ships
+  source-only until it runs. docs/design/v10-plan.md is corrected where
+  the tree already contradicted it (the trybuild diff rule, the
+  exact-pin pattern, the pages whose words flip, `uiop` in the Quicklisp
+  text) and reads "after 0.8.1". This file's 0.6.0 section has one
+  heading per kind. DESIGN.md opens by saying it is the v0.1 plan of
+  2026-07 and that BOUNDARY.md and docs/stability.md are the normative
+  text.
+- **Example sources.** examples/wordbag's header says what the crate is
+  (README's snippet is its greet/WordBag corner; the rest is the suites'
+  fixture); version-era tags are gone from the examples' comments and
+  the oracle's; examples/httpd/Cargo.toml lists tokio's `io-util`, which
+  `lib.rs` imports (`Cargo.lock` unchanged).
+
+### Fixed
+
+- **`make test-m4` was described as "every suite but fetch"** in the
+  README and "everything" in docs/installation.md; it runs every suite
+  but fetch and httpd, and both pages list `make test-httpd`.
+- **The README and quickstart transcripts load rulisp with
+  `(ql:quickload :rulisp)`**, as every other page does —
+  `asdf:load-system` does not fetch cffi, babel, trivial-garbage and
+  bordeaux-threads on an image that never loaded them. The quickstart's
+  prerequisites name the three supported Lisps and say the system loads
+  from Ultralisp or a checkout.
+- **Counts and pointers that had aged.** "all twelve assets" in
+  docs/distribution.md and tools/rulisp-audit.sh (sixteen since 0.7.0;
+  both say "every asset it attaches"); docs/stability.md's "(§11's …
+  rule)" names BOUNDARY §11, and its appendix no longer sizes the
+  register at "some three hundred rows"; SECURITY.md pointed at
+  stability §4 for the deprecation policy (§3) and at the closed v0.8
+  item 2 for the httpd adversarial pass (ROADMAP "Later / exploratory");
+  docs/installation.md's smoke test named a `regex` example (it is
+  `rx`).
+- **Transcripts.** docs/usage.md's Case A prints `#<RULISP:CRATE …>`, as
+  the loader does, and its `describe` transcript marks the lines it
+  leaves out. docs/httpd.md's JSON block loads alexandria, which it
+  calls.
+- **The hand-written oracle's `grenade_free`** prints the line the macro
+  generates, `rulisp[wordbag]: panic in grenade_free (swallowed)` — the
+  one place the oracle and examples/wordbag differed on stderr.
+- **`make`'s `.PHONY`** lists `test-httpd` and `test-httpd-ccl`.
+
 ## 0.8.0 — 2026-10-14
 
 **Surfaces this cycle.** *Lisp API*: no export added or removed — the
@@ -258,7 +414,6 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   `rulisp/test` and `rulisp-ecl-smoke` all load. stability.md §9 said
   `rulisp/test` was "excluded from what a dist user loads"; it is not,
   and need not be: only running it needs cargo.
-### Added
 - **The loader's API describes itself, and exports what the docs already
   name.** Fifteen additive exports: `rulisp-version-skew` — the
   style-warning stability.md §7 tells users they may muffle — with its
@@ -273,21 +428,18 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   offered; every exported reader has a docstring;
   `v06.exports-are-documented` keeps it so. `Error::msg`'s Rust doc no
   longer names the nonexistent `<crate>:rust-error`.
-### Added
 - **Lisp API gate.** `tests/golden/lisp-api.sexp` pins every exported
   symbol of `rulisp` with its kind, its superclasses (classes and
   conditions) or its lambda list (functions); `v06.exported-api-golden`
   compares it on every host — lambda lists exactly on SBCL, by parameter
   names on CCL and ECL. An additive export regenerates the golden in the
   same commit; a removal or a changed signature fails.
-### Added
 - **Rust API gate.** Every push runs `cargo-semver-checks` over
   `rulisp`, `rulisp-macros` and `rulisp-runtime` against the latest
   crates.io release with `--release-type minor` — the criterion-3
   question, "does this tree break a consumer of the release", asked
   mechanically. `rulisp::runtime` stays public and is checked with the
   rest; hiding it waits for the 1.0 major.
-### Added
 - **"Required" is a release gate.** The release job refuses to attach
   assets to a tag whose commit's CI run does not have every `(required)`
   job and `MSRV` concluded success — no run, or a run still in progress,
@@ -295,7 +447,6 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   with an injected job listing). `skip-ci-gate` is the documented
   override for a re-run and prints a warning. Until now a tag on a red
   commit produced a release with twelve audited assets.
-### Added
 - **The audit reads every format from every host — the last BOUNDARY
   §12 gap closes.** `tools/rulisp-audit.sh` dispatches on the artifact's
   magic, not on `uname`: ELF through `nm`, Mach-O through Apple's `nm` or
@@ -308,7 +459,6 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   release job re-audits all twelve assets as downloaded, on Linux, before
   attaching them; `workflow_dispatch` gained `publish: false` for a
   build-and-audit-only run.
-### Added
 - **Cross-version gates, pinned to the previous release.** `make compat`
   loads this tree's `wordbag` with the v0.5.0 loader (any warning but
   `rulisp-version-skew` is an error) and runs the v0.5.0 test suite
@@ -331,7 +481,6 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   §4 (a soundness fix, forward), not §3: a style-warning stage would keep
   the hole open one more minor. The v0.5.0 suite, run against this
   loader by `make compat`, only ever read the generation.
-### Changed
 - **`m4.gc-finalization` no longer assumes no collection runs inside its
   constructor loop.** It dropped each of 1000 handles as it made them and
   then asserted all 1000 live; a nursery GC inside the loop finalizes
@@ -352,7 +501,6 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   sweep could never match (its name carries the guessed prefix); a load
   that does not commit now deletes its copy (best-effort on Windows,
   where a mapped DLL cannot be unlinked).
-### Fixed
 - **`Option<f32>` / `Option<f64>` NIL is None, not a host type error.**
   For an optional float parameter the wrapper put the integer 0 in the
   value slot when the argument was NIL, and SBCL's and CCL's foreign-call
@@ -372,7 +520,6 @@ wordbag exports. *C ABI*: 1, unchanged since 0.1.0.
   program name, and each retry looks cargo up again. Migration: code
   that handled the host's error class around `use-crate` handles
   `rulisp:build-error`.
-### Fixed
 - **A crate whose reload failed on image restore could crash the next
   dump.** `%stub-crate` replaced the generated functions but left the
   dumped image's library handle and dump-hook pointer on the crate

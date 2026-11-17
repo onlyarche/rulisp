@@ -53,9 +53,9 @@ What follows from the table:
   `std::vec::Vec`. Hidden, they stop counting and it prints `Vec`. The
   1.0 commit regenerates those two `.stderr` files
   (`TRYBUILD=overwrite cargo test -p rulisp --test compile_fail`) and the
-  diff must be exactly that abbreviation. (The v0.7 panel recorded "cargo
-  test stays green with both hides"; measured again at the cycle's close,
-  it does not.)
+  diff must be only abbreviations of that kind (§2 step 2). (The v0.7
+  panel recorded "cargo test stays green with both hides"; measured
+  again at the cycle's close, it does not.)
 - **The pins must become exact.** `crates/rulisp/Cargo.toml` pins
   `rulisp-macros` and `rulisp-runtime` as the release's version (e.g.
   `"0.8.0"`) — a caret
@@ -75,31 +75,55 @@ One commit, in this order, each step with its check:
    `::rulisp::runtime::…` paths at every call site — hidden is not
    removed, generated code keeps compiling. Check: `cargo doc -D
    warnings` green; the hidden crate's front page says it is an
-   implementation detail of the macros and points at `rulisp`.
-2. **Regenerate the two trybuild expectations** and read the diff: only
-   `std::vec::Vec` → `Vec`. Check: `cargo test --workspace` green.
+   implementation detail of the macros and points at `rulisp`; every
+   line citation of those three files in BOUNDARY §12 and
+   docs/claims.md re-anchored — each attribute line moves what is
+   below it.
+2. **Regenerate the two trybuild expectations** and read the diff: the
+   diff must consist only of std path abbreviations. Of the 10 ui
+   cases at 0.8.1 (8 when §1 was measured) only
+   `non_send_handle.stderr` has `std::vec::Vec` (→ `Vec`);
+   `stored_callback.stderr` has none — its std paths are
+   `std::option::Option` and `std::sync::Mutex`, and the runtime has
+   `Option` variants beside the `Vec` ones, so `Option` is the
+   abbreviation to expect there. Anything else stops the release.
+   Check: `cargo test --workspace` green.
 3. **Exact pins and the version.** `version = "1.0.0"` in the three
    crates, `rulisp-macros = { …, version = "=1.0.0" }` and the same for
-   `rulisp-runtime`; `tools/check-versions.sh` accepts the `=` (its two
-   pin patterns become `version = \"=?$V\"`); every site the script
-   lists: `lisp/rulisp.asd`, README's status line, `rulisp = "1.0"` in
-   docs/quickstart.md and docs/usage.md, the `describe` transcript.
+   `rulisp-runtime`; `tools/check-versions.sh` requires the `=` (its
+   two pin patterns become `version = \"=$V\"`, so a caret pin coming
+   back during 1.x fails the script); every site the script lists:
+   `lisp/rulisp.asd`, README's status line, `rulisp = "1.0"` in
+   docs/quickstart.md and docs/usage.md, the `describe` transcript,
+   stability §2's "(1.0.0 everywhere today)".
    Check: `make check-versions`.
 4. **The gate, for this one push.** `.github/workflows/ci.yml`:
-   `release-type: major` on the Rust API step. Before pushing, by hand:
+   `release-type: major` on the Rust API step — from `patch`, which
+   it ran as through 0.8.1 and the 1.0 cycle's commits before this
+   one. Before pushing, by hand:
    `cargo semver-checks check-release -p rulisp -p rulisp-runtime
    --release-type minor` on the commit — its **only** findings must be
    the five `*_now_doc_hidden` lints on `rulisp-runtime`. Anything else
    is an unintended break and stops the release.
 5. **The words that flip.** Every sentence that says "pre-1.0", "until
-   1.0", "at 1.0", "will promise": README (status paragraph),
-   SECURITY.md ("Supported versions"), docs/stability.md (title, §1's
-   helper paragraph, §2 "Pre-1.0 semver", §3, §4, §8's status line, §9),
-   docs/releasing.md step 8, docs/usage.md's Ultralisp line,
+   1.0", "at 1.0", "will promise", "planned for 1.0", "a 1.0
+   decision": README (status paragraph), SECURITY.md ("Supported
+   versions"), docs/stability.md (title, §1's helper paragraph, §2
+   "Pre-1.0 semver", §3, §4, §8's status line, §9), docs/releasing.md
+   step 8, docs/usage.md's Ultralisp line, docs/installation.md's
+   "Getting rulisp" ("Quicklisp itself is planned for 1.0"),
    docs/claims.md's matching rows, the comment at ci.yml's semver step.
-   `git grep -n -i 'pre-1\.0\|until 1\.0\|before 1\.0\|at 1\.0\|1\.0 will'`
-   finds them; stability §2 gains the 1.x rule in place of the 0.x one
-   (a minor is additive on every surface; a break is 2.0).
+   `git grep -n -i 'pre-1\.0\|until 1\.0\|before 1\.0\|at 1\.0\|1\.0 will\|planned for 1\.0\|1\.0 decision\|follows 0\.8'`
+   finds them, among records that stay as written (CHANGELOG.md,
+   ROADMAP.md's released sections, the earlier plans in docs/design/);
+   stability §2 gains the 1.x rule in place of the 0.x one
+   (a minor is additive on every surface; a break is 2.0). The grep
+   cannot find docs/distribution.md's two sentences that name
+   Ultralisp as rulisp's own channel ("where rulisp itself lives"
+   under "The reality", "goes to Ultralisp" under "Publishing rulisp
+   itself"): they stay true until Quicklisp serves rulisp and change
+   then, with docs/installation.md's install block and docs/usage.md's
+   line — a commit of its own, after §3 step 6.
 6. **CHANGELOG 1.0.0** with its surfaces paragraph: *Rust API* — the
    helpers hidden, the one break, a major by the tool's own rule; nothing
    else. *Lisp API*, *manifest*, *C ABI* — unchanged since 0.6.0 / 1.
@@ -133,8 +157,8 @@ The sequence of docs/releasing.md, with what is different at 1.0:
    > and docstrings from it at load time.
    >
    > Systems: `rulisp` (in `lisp/rulisp.asd`; depends on cffi, babel,
-   > trivial-garbage, bordeaux-threads) and `rulisp/test` (adds fiveam).
-   > That one `.asd` is the only one in the tree.
+   > trivial-garbage, bordeaux-threads, uiop) and `rulisp/test` (adds
+   > fiveam). That one `.asd` is the only one in the tree.
    >
    > Loading either system needs **no Rust toolchain** and opens no
    > foreign library; cargo is used only when a user calls
@@ -150,8 +174,13 @@ The sequence of docs/releasing.md, with what is different at 1.0:
 
 docs/releasing.md step 9, plus what only 1.0 changes:
 
-- `release-type: minor` back in ci.yml — after 1.0.0 is on crates.io, so
-  the baseline the tool fetches is 1.0.0 (a releasing.md step says so).
+- `release-type: minor` in ci.yml (it ran `patch` through 0.8.1 and
+  the 1.0 cycle's earlier commits, `major` for the 1.0 push) — after
+  1.0.0 is on crates.io, so the baseline the tool fetches is 1.0.0
+  (docs/releasing.md step 9 says so); the same commit cuts step 9's
+  sentence about 0.8.1 and 1.0 down to the rule (the cycle's kind:
+  `patch` or `minor`), and docs/stability.md §1's gate sentence back
+  to it.
 - The pins move: `make compat PREV=v1.0.0`, `gh release download v1.0.0`
   on the SBCL/Linux job and on the aarch64 job.
 - From here `make compat`'s API subset check is the Lisp surface's

@@ -8,8 +8,12 @@ worked; each has a check, so a slip is caught before the next step.
    source of truth — then in every site `make check-versions` lists: the
    other two crates, the two path-dependency pins, `lisp/rulisp.asd`, the
    README status line, the `rulisp = "X.Y"` lines in docs/quickstart.md
-   and docs/usage.md. `make check-versions` must pass; `cargo build`
-   refreshes `Cargo.lock`, which is committed. The standalone fixtures
+   and docs/usage.md (major.minor — a patch leaves them), docs/usage.md's
+   `describe` transcript and docs/stability.md §2's
+   "(X.Y.Z everywhere today)". The script's other two checks hold the
+   three crates to one `rust-version`; a bump leaves it alone.
+   `make check-versions` must pass; `cargo build` refreshes
+   `Cargo.lock`, which is committed. The standalone fixtures
    pin rulisp by path in their own locks: run `cargo update -p rulisp`
    with `--manifest-path tests/m1-handwritten/Cargo.toml` and with
    `--manifest-path tests/inbox-fixture/Cargo.toml`, and commit both.
@@ -20,6 +24,19 @@ worked; each has a check, so a slip is caught before the next step.
    replace the value of the golden's `:rulisp-version` key, whatever it
    is, with the running version before comparing byte for byte.
    Regenerate the goldens only when the renderer's output changed.
+   **A patch** adds a check that no gate makes. The Lisp API golden and
+   the package definition are byte-identical to the previous tag —
+   `git diff --quiet vPREV HEAD -- tests/golden/lisp-api.sexp lisp/src/package.lisp`
+   exits 0 — and the wordbag manifest golden differs from that tag's
+   inside `:doc` strings only (read
+   `git diff vPREV HEAD -- tests/golden/wordbag.manifest.sexp`):
+   anything else there means the macros' rendering or the fixture
+   moved. The reason: an added export is caught by the golden alone
+   (`v06.exported-api-golden`, and `make check-1.0`'s export count
+   against its rows), docs/stability.md §1 tells a contributor to
+   regenerate it in the same commit, and `make compat` passes an
+   addition by design — after that every gate is green and the patch
+   has grown a surface.
 4. **Gates.** Push and wait for every required CI job plus `MSRV` and
    `cargo tests` to be green. Never tag on a red run — and the release
    job checks: before it attaches a single asset,
@@ -63,8 +80,7 @@ worked; each has a check, so a slip is caught before the next step.
    release job that failed on a GitHub API error (`gh: Server Error` in
    the gate step, seen in the 0.8.0 rehearsal) is re-run in place, the
    build jobs' results standing:
-   `gh api -X POST repos/onlyarche/rulisp/actions/runs/<run id>/rerun-failed-jobs`
-   (gh 2.4.0 has no `gh run rerun --failed`).
+   `gh api -X POST repos/onlyarche/rulisp/actions/runs/<run id>/rerun-failed-jobs`.
 8. **Ultralisp.** The dist polls GitHub on its own schedule and has
    lagged a tag by days. Run `sh tools/check-dist.sh` until it prints
    the new version; if it has not within a day, the place to look is the
@@ -77,8 +93,18 @@ worked; each has a check, so a slip is caught before the next step.
    `.github/workflows/ci.yml` `make compat PREV=vX.Y.Z` with the step
    name above it, and both `gh release download vX.Y.Z` lines (x86-64
    and aarch64) — they compare every push against the last release, so
-   they cannot be moved at step 1. ROADMAP's stub for the next cycle
-   says the cycle is open.
+   they cannot be moved at step 1. In the same file, set the Rust API
+   gate's `release-type` — and the word in its step name and in the
+   comment above it — to the kind of release the cycle being opened
+   is: `patch` for a patch cycle, `minor` for a minor. After 0.8.1 it
+   stays `patch` up to the 1.0.0 commit (the 1.0 cycle's commits before
+   it are to add no Rust API item), and docs/stability.md §1's gate
+   sentence says so from the commit that opens that cycle — "`minor`
+   (`patch` in a patch cycle)" alone does not cover it. The 1.0.0
+   commit sets `major` for its one push (docs/design/v10-plan.md §2
+   step 4), and the commit that opens 1.1 sets `minor` once crates.io
+   serves 1.0.0 — the release the gate then compares against.
+   ROADMAP's stub for the next cycle says the cycle is open.
 
 **Yanking.** A release found unsound is yanked from crates.io
 (`cargo yank --vers X.Y.Z -p <crate>`, all three crates) and the GitHub
