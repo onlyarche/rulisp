@@ -31,11 +31,11 @@ additive change regenerates the golden in the same commit (from SBCL,
 `(rulisp/test::write-lisp-api-golden)`) with a CHANGELOG line; a removal
 or a changed signature fails the test and does not land in a minor.
 
-The Rust surface's gates: `cargo-semver-checks --release-type minor`
-(`patch` in a patch cycle) against the latest crates.io release in the
-`cargo tests` CI job (the tree stays at the released version until a
-release, so it asks whether this tree breaks a consumer of it); the manifest
-byte gates `fx.golden-manifest` and `manifest_matches_golden`; and
+The Rust surface's gates: `cargo-semver-checks --release-type minor` (`patch`
+in a patch cycle and until the 1.0.0 commit) against the latest crates.io
+release in the `cargo tests` CI job (the tree stays at the released version
+until a release, so it asks whether this tree breaks a consumer of it); the
+manifest byte gates `fx.golden-manifest` and `manifest_matches_golden`; and
 `make test-m2` against the hand-written ABI oracle.
 
 The previous release is the yardstick, on every push: `make compat` in

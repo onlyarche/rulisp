@@ -1,12 +1,12 @@
 # Roadmap
 
-## 1.0 — the freeze (after 0.8.1)
+## 1.0 — the freeze (next)
 
 What the 1.0.0 commit contains, measured in advance with
 cargo-semver-checks, the release-day sequence, the commit that opens
 1.1 and the Quicklisp issue text:
-[docs/design/v10-plan.md](docs/design/v10-plan.md). Opens after 0.8.1;
-its gates will compare against v0.8.1.
+[docs/design/v10-plan.md](docs/design/v10-plan.md). The cycle is
+open; its gates compare against v0.8.1.
 
 ## v0.8.1 — the documents and the examples, tidied
 
