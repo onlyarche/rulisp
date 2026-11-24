@@ -56,7 +56,7 @@ which stops being true in the compat tree at every version bump.
 ## 2. Versions
 
 - The three crates and the ASDF system **share one version** and are
-  released together (0.8.0 everywhere today). A glue crate built against
+  released together (0.8.1 everywhere today). A glue crate built against
   `rulisp = "0.x"` loads under the `rulisp` ASDF system of the same 0.x.
 - Pre-1.0 semver: a **minor** (0.x → 0.x+1) may break the Rust API or the
   Lisp API, with the change and its migration named in CHANGELOG.md; a
@@ -196,12 +196,13 @@ not a frozen surface. Exit criteria, all checkable:
 the mechanical part of criteria 1, 3, 4 and 5 — the ABI constants, the
 gates by name, the export count against the golden, the GAP count, the
 register's footer, the dry-run step — so a criterion cannot lapse
-quietly. Status as of 0.8.0: 1 holds; 2 shipped; 3 holds — three
-cycles (0.6, 0.7, 0.8) with no break on any surface; 0.7 moved none at
-all and 0.8 moved one, additively — the Rust API gained `rulisp::Inbox`
-(CHANGELOG's surfaces paragraphs); 4 holds; 5 mechanical part holds — the
-tarball is down to one `.asd` — and the submission waits for 1.0, which
-follows 0.8. What the 1.0.0 commit contains is written down and measured:
+quietly. Status as of 0.8.1: 1 holds; 2 shipped; 3 holds — three
+cycles (0.6, 0.7, 0.8) and the 0.8.1 patch with no break on any surface;
+0.7 and 0.8.1 moved none at all and 0.8 moved one, additively — the Rust
+API gained `rulisp::Inbox` (CHANGELOG's surfaces paragraphs); 4 holds; 5
+mechanical part holds — the tarball is down to one `.asd` — and the
+submission waits for 1.0, which follows 0.8.1. What the 1.0.0 commit
+contains is written down and measured:
 docs/design/v10-plan.md.
 
 ## 9. Quicklisp prerequisites (listed, not scheduled)

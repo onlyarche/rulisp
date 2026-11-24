@@ -325,7 +325,7 @@ CL-USER> (describe (rulisp:use-crate #p"examples/rx/"))
   Generation:     1 (session 0)
   Artifact:       .../examples/rx/target/debug/librx.so
   ...
-  Built with:     rulisp 0.8.0 (this loader: 0.8.0)
+  Built with:     rulisp 0.8.1 (this loader: 0.8.1)
   ...
   Exports (7):
     (rx:make-regex pattern)

@@ -8,7 +8,10 @@ cargo-semver-checks, the release-day sequence, the commit that opens
 [docs/design/v10-plan.md](docs/design/v10-plan.md). Opens after 0.8.1;
 its gates will compare against v0.8.1.
 
-## v0.8.1 — the documents and the examples, tidied (next)
+## v0.8.1 — the documents and the examples, tidied
+
+**Released as 0.8.1** (2026-11-24): fourteen items ✅, none cut or
+carried; no surface moved.
 
 A patch (docs/stability.md §2): nothing on the four surfaces moves. No
 Rust API item is added or removed (cargo-semver-checks against crates.io
